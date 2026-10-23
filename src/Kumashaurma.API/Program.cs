@@ -174,7 +174,11 @@ app.Use(async (context, next) =>
 
         context.Response.StatusCode = 500;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new { Message = ex.Message, Detail = ex.InnerException?.Message });
+        // Детали ошибки показываем только в разработке, наружу — общее сообщение
+        if (app.Environment.IsDevelopment())
+            await context.Response.WriteAsJsonAsync(new { Message = ex.Message, Detail = ex.InnerException?.Message });
+        else
+            await context.Response.WriteAsJsonAsync(new { Message = "Внутренняя ошибка сервера" });
     }
 });
 

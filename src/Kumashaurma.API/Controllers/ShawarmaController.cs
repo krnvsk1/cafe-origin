@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
@@ -76,6 +77,7 @@ namespace Kumashaurma.API.Controllers
 
         // POST: api/shawarma
         [HttpPost]
+        [Authorize(Roles = "admin,manager")]
         public async Task<ActionResult<Shawarma>> Create([FromBody] CreateShawarmaDto dto)
         {
             if (await _context.Shawarmas.AnyAsync(s => s.Name == dto.Name))
@@ -102,6 +104,7 @@ namespace Kumashaurma.API.Controllers
 
         // PUT: api/shawarma/{id}
         [HttpPut("{id}")]
+        [Authorize(Roles = "admin,manager")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateShawarmaDto dto)
         {
             var shawarma = await _context.Shawarmas.FindAsync(id);
@@ -130,6 +133,7 @@ namespace Kumashaurma.API.Controllers
 
         // DELETE: api/shawarma/{id}
         [HttpDelete("{id}")]
+        [Authorize(Roles = "admin,manager")]
         public async Task<IActionResult> Delete(int id)
         {
             var shawarma = await _context.Shawarmas
@@ -149,6 +153,7 @@ namespace Kumashaurma.API.Controllers
 
         // PUT: api/shawarma/reorder
         [HttpPut("reorder")]
+        [Authorize(Roles = "admin,manager")]
         public async Task<IActionResult> Reorder([FromBody] List<ReorderItem> items)
         {
             foreach (var item in items)

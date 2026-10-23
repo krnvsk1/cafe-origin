@@ -154,6 +154,9 @@ export const useCreateOrder = () => {
     mutationFn: (data) => apiClient.post('/api/orders', data).then(res => res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      // Баллы списываются при создании заказа — обновляем баланс и историю
+      queryClient.invalidateQueries({ queryKey: ['points-balance'] });
+      queryClient.invalidateQueries({ queryKey: ['points-history'] });
     },
   });
 };

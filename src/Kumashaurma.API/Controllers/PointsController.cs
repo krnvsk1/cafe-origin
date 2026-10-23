@@ -214,7 +214,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         /// <summary>
-        /// Потратить баллы на скидку (1 балл = 1 рубль)
+        /// Проверить, можно ли применить баллы как скидку (1 балл = 1 рубль). Списание — при оформлении заказа
         /// </summary>
         [HttpPost("redeem")]
         [Authorize]
@@ -238,29 +238,13 @@ namespace Kumashaurma.API.Controllers
                 if (user.PointsBalance < request.PointsToRedeem)
                     return BadRequest(new { Message = $"Недостаточно баллов. Текущий баланс: {user.PointsBalance}, запрошено: {request.PointsToRedeem}" });
 
-                user.PointsBalance -= request.PointsToRedeem;
-
-                var transaction = new UserPointsTransaction
-                {
-                    UserId = user.Id,
-                    Type = "spent",
-                    Amount = -request.PointsToRedeem,
-                    Description = $"Списание баллов для скидки",
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _context.UserPointsTransactions.Add(transaction);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation("💸 Пользователь {UserId} потратил {Points} баллов на скидку",
-                    userId, request.PointsToRedeem);
-
+                // Здесь баллы только проверяются. Реальное списание происходит
+                // при создании заказа (OrdersController.Create), атомарно с заказом.
                 return Ok(new
                 {
                     PointsRedeemed = request.PointsToRedeem,
                     DiscountAmount = request.PointsToRedeem, // 1 балл = 1 рубль
-                    NewBalance = user.PointsBalance,
-                    TransactionId = transaction.Id
+                    NewBalance = user.PointsBalance - request.PointsToRedeem
                 });
             }
             catch (Exception ex)

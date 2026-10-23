@@ -82,7 +82,16 @@ namespace Kumashaurma.API.Controllers
                     
                 if (order == null)
                     return NotFound(new { Message = $"Заказ с ID {id} не найден" });
-                    
+
+                // Обычный пользователь видит только свои заказы; персонал — все
+                var isStaff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Courier);
+                if (!isStaff)
+                {
+                    var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                    if (!int.TryParse(currentUserIdClaim, out var currentUserId) || order.UserId != currentUserId)
+                        return NotFound(new { Message = $"Заказ с ID {id} не найден" });
+                }
+
                 return Ok(order);
             }
             catch (Exception ex)
@@ -165,6 +174,16 @@ namespace Kumashaurma.API.Controllers
                     if (promoCode == null || !promoCode.IsActive)
                         return BadRequest(new { Message = "Промокод не найден или неактивен" });
                 }
+
+                // Скидка баллами: только для авторизованных и в пределах баланса
+                var requestedPoints = (int)Math.Floor(request.PointsDiscountAmount ?? 0);
+                if (requestedPoints < 0)
+                    return BadRequest(new { Message = "Некорректное количество баллов" });
+                if (requestedPoints > 0 && userId == null)
+                    return BadRequest(new { Message = "Списание баллов доступно только после входа" });
+
+                // Весь заказ сохраняется атомарно: при любой ошибке ничего не запишется
+                await using var dbTransaction = await _context.Database.BeginTransactionAsync();
 
                 // Создаем заказ
                 var newOrder = new Order
@@ -250,11 +269,45 @@ namespace Kumashaurma.API.Controllers
                 }
 
                 newOrder.DiscountAmount = discountAmount;
-                // Скидка баллами (оплачивается через PointsController redeem)
-                var pointsDiscount = request.PointsDiscountAmount ?? 0;
+
+                // Списываем баллы на сервере (1 балл = 1 рубль), не больше баланса и суммы заказа
+                int pointsDiscount = 0;
+                if (requestedPoints > 0)
+                {
+                    var user = await _context.Users.FindAsync(userId!.Value);
+                    if (user == null)
+                        return BadRequest(new { Message = "Пользователь не найден" });
+
+                    var maxByTotal = (int)Math.Floor(Math.Max(0, total - discountAmount));
+                    if (requestedPoints > user.PointsBalance)
+                        return BadRequest(new { Message = $"Недостаточно баллов. Текущий баланс: {user.PointsBalance}" });
+                    if (requestedPoints > maxByTotal)
+                        return BadRequest(new { Message = $"Баллами можно оплатить не более {maxByTotal} ₽" });
+
+                    pointsDiscount = requestedPoints;
+
+                    // Атомарное списание: защищает от двойной траты при параллельных заказах
+                    var updated = await _context.Users
+                        .Where(u => u.Id == user.Id && u.PointsBalance >= pointsDiscount)
+                        .ExecuteUpdateAsync(s => s.SetProperty(u => u.PointsBalance, u => u.PointsBalance - pointsDiscount));
+                    if (updated == 0)
+                        return BadRequest(new { Message = "Недостаточно баллов" });
+
+                    _context.UserPointsTransactions.Add(new UserPointsTransaction
+                    {
+                        UserId = user.Id,
+                        Type = "spent",
+                        Amount = -pointsDiscount,
+                        Description = $"Оплата баллами заказа #{newOrder.Id}",
+                        OrderId = newOrder.Id,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
                 // Обновляем общую сумму заказа (с учётом промокода и баллов)
                 newOrder.Total = Math.Max(0, total - discountAmount - pointsDiscount);
                 await _context.SaveChangesAsync();
+                await dbTransaction.CommitAsync();
 
                 _logger.LogInformation("✅ Заказ создан с ID: {OrderId}, клиент: {CustomerName}, итого: {Total} (скидка промо: {PromoDiscount}, баллы: {PointsDiscount})", 
                     newOrder.Id, newOrder.CustomerName, newOrder.Total, discountAmount, pointsDiscount);
