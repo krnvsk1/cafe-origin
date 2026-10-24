@@ -44,6 +44,7 @@ import { Link } from 'react-router-dom';
 import { useOrders, useMyOrders, useUpdateOrderStatus, useDeleteOrder, useUpdateOrder } from '../api/hooks';
 import { formatScheduled } from '../utils/schedule';
 import { useRepeatOrder, describeRepeatResult } from '../api/reorder';
+import OrderReviewBlock from '../components/OrderReviewBlock';
 import { useAuthStore } from '../store/authStore';
 import type { Order, OrderStatus, OrderItemAddon, UpdateOrderDto } from '../types';
 import { getStatusColor } from '../utils/statusColors';
@@ -318,6 +319,8 @@ const OrderCard: React.FC<{
             </Box>
           </Box>
         </Box>
+
+        {!isAdmin && <OrderReviewBlock order={order} />}
 
         <Collapse in={expanded}>
           <Box sx={{ mt: 3 }}>

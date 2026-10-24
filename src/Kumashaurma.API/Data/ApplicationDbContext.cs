@@ -38,6 +38,9 @@ namespace Kumashaurma.API.Data
         // Favorites
         public DbSet<UserFavorite> UserFavorites { get; set; } = null!;
 
+        // Reviews
+        public DbSet<OrderReview> OrderReviews { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -228,6 +231,23 @@ namespace Kumashaurma.API.Data
                 entity.HasOne(e => e.Shawarma)
                     .WithMany()
                     .HasForeignKey(e => e.ShawarmaId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // OrderReview configuration
+            modelBuilder.Entity<OrderReview>(entity =>
+            {
+                entity.HasIndex(e => e.OrderId).IsUnique();
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.CreatedAt);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.HasOne(e => e.Order)
+                    .WithMany()
+                    .HasForeignKey(e => e.OrderId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
 

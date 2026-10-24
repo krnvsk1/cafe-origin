@@ -23,6 +23,7 @@ import {
   LocalOffer as PromoIcon,
   Star as StarIcon,
   Block as BlockIcon,
+  RateReview as ReviewsIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -48,6 +49,7 @@ import UsersPage from './pages/UserPage';
 import AdminPromoCodesPage from './pages/AdminPromoCodesPage';
 import PointsPage from './pages/PointsPage';
 import AdminStopListPage from './pages/AdminStopListPage';
+import AdminReviewsPage from './pages/AdminReviewsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -185,6 +187,7 @@ function App() {
     { text: 'Товары', icon: <AddIcon />, path: '/admin/menu', roles: ['admin', 'manager'] },
     { text: 'Стоп-лист', icon: <BlockIcon />, path: '/admin/stoplist', roles: ['admin', 'manager'] },
     { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', roles: ['admin', 'manager'] },
+    { text: 'Отзывы', icon: <ReviewsIcon />, path: '/admin/reviews', roles: ['admin', 'manager'] },
     { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', roles: ['admin'] },
     { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', roles: ['admin'] },
   ] as { text: string; icon: React.ReactNode; path: string; roles: string[] }[])
@@ -443,6 +446,7 @@ function App() {
                     <Route path="/admin/menu" element={<AdminMenuPage />} />
                     <Route path="/admin/promocodes" element={<AdminPromoCodesPage />} />
                     <Route path="/admin/stoplist" element={<AdminStopListPage />} />
+                    <Route path="/admin/reviews" element={<AdminReviewsPage />} />
                   </>
                 )}
 
