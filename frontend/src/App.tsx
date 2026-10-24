@@ -27,6 +27,7 @@ import {
   SoupKitchen as KitchenIcon,
   DeliveryDining as DeliveryIcon,
   Map as MapIcon,
+  Insights as InsightsIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -59,6 +60,7 @@ import AdminReviewsPage from './pages/AdminReviewsPage';
 import KitchenPage from './pages/KitchenPage';
 import CourierPage from './pages/CourierPage';
 import AdminDeliveryZonesPage from './pages/AdminDeliveryZonesPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -200,6 +202,7 @@ function App() {
   // Разделы управления: показываются по ролям (и в меню «Управление», и в боковом меню)
   const staffLinks = ([
     { text: 'Дашборд', icon: <DashboardIcon />, path: '/admin/dashboard', roles: ['admin', 'manager'] },
+    { text: 'Аналитика', icon: <InsightsIcon />, path: '/admin/analytics', roles: ['admin', 'manager'] },
     { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', roles: ['admin', 'manager'] },
     { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', roles: ['courier', 'admin', 'manager'] },
     { text: 'Товары', icon: <AddIcon />, path: '/admin/menu', roles: ['admin', 'manager'] },
@@ -469,6 +472,7 @@ function App() {
                     <Route path="/admin/reviews" element={<AdminReviewsPage />} />
                     <Route path="/kitchen" element={<KitchenPage />} />
                     <Route path="/admin/zones" element={<AdminDeliveryZonesPage />} />
+                    <Route path="/admin/analytics" element={<AnalyticsPage />} />
                   </>
                 )}
 
