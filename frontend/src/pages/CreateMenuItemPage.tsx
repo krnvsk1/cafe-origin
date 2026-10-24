@@ -3,195 +3,187 @@ import {
   Typography,
   Box,
   Button,
-  Card,
-  CardContent,
   TextField,
   Autocomplete,
   Alert,
   CircularProgress,
   Snackbar,
   InputAdornment,
-  Chip,
   IconButton,
-  Paper,
-  useTheme,
-  Modal,
+  Switch,
+  ToggleButton,
+  ToggleButtonGroup,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Slider,
   Tooltip,
-  alpha
+  Divider,
+  useTheme,
+  alpha,
 } from '@mui/material';
 import {
-  Save as SaveIcon,
   ArrowBack as ArrowBackIcon,
-  Delete as DeleteIcon,
-  CloudUpload as UploadIcon,
+  DeleteOutline as DeleteIcon,
+  AddPhotoAlternateOutlined as AddPhotoIcon,
   Crop as CropIcon,
-  Info as InfoIcon,
-  Restaurant as FoodIcon,
-  AttachMoney as PriceIcon,
-  Tune as SettingsIcon,
-  Image as ImageIcon,
-  RotateLeft as RotateLeftIcon,
-  ZoomOut as ZoomOutIcon,
-  ZoomIn as ZoomInIcon,
   Close as CloseIcon,
+  Add as AddIcon,
+  ChevronRight as ChevronRightIcon,
+  RotateLeft as RotateLeftIcon,
+  RotateRight as RotateRightIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import { useShawarma, useCreateShawarma, useUpdateShawarma, useDeleteShawarma, useShawarmas, useMenuSections } from '../api/hooks';
-import type { CreateShawarmaDto, ShawarmaImage } from '../types';
-import { useUploadImage, useShawarmaImages, useDeleteImage } from '../api/hooks';
+import {
+  useShawarma,
+  useCreateShawarma,
+  useUpdateShawarma,
+  useDeleteShawarma,
+  useShawarmas,
+  useMenuSections,
+  useUploadImage,
+  useShawarmaImages,
+  useDeleteImage,
+} from '../api/hooks';
+import type { CreateShawarmaDto, Shawarma, ShawarmaImage } from '../types';
 import { resolveMediaUrl } from '../utils/media';
+import MenuItemCard, { BADGES } from '../components/MenuItemCard';
+import { tokens } from '../theme';
 
 interface TempImage {
   file: File;
   preview: string;
 }
 
-const SectionLabel: React.FC<{
-  icon: React.ReactNode;
-  label: string;
-  number: number;
-  hint?: string;
-}> = ({ icon, label, number, hint }) => {
-  const theme = useTheme();
+type Kind = 'card' | 'variant';
+type FieldErrors = Partial<Record<'name' | 'price' | 'description' | 'parentId', string>>;
 
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-      <Box
-        sx={{
-          width: 36,
-          height: 36,
-          borderRadius: 2,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          bgcolor: theme.palette.mode === 'light'
-            ? alpha(theme.palette.primary.main, 0.08)
-            : alpha(theme.palette.primary.main, 0.15),
-          color: 'primary.main',
-          fontSize: '0.85rem',
-          fontWeight: 700,
-        }}
-      >
-        {number}
-      </Box>
-      <Box sx={{ flex: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {icon}
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-            {label}
-          </Typography>
-        </Box>
-        {hint && (
-          <Typography variant="caption" sx={{ color: 'text.secondary', ml: 5 }}>
-            {hint}
-          </Typography>
+/** Белый блок формы с заголовком */
+const Section: React.FC<{
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ title, subtitle, action, children }) => (
+  <Box sx={{ bgcolor: 'background.paper', borderRadius: '24px', p: { xs: 2, sm: 3 } }}>
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2.5 }}>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="h6" component="h2" sx={{ fontSize: '1.15rem' }}>{title}</Typography>
+        {subtitle && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>{subtitle}</Typography>
         )}
       </Box>
+      {action}
     </Box>
-  );
-};
+    {children}
+  </Box>
+);
 
-const ToggleChip: React.FC<{
-  icon?: React.ReactElement;
+/** Подпись над полем — вместо «плавающей» подписи внутри серого поля */
+const Field: React.FC<{
   label: string;
-  checked: boolean;
-  onChange: () => void;
-  disabled?: boolean;
-  color: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success';
-}> = ({ icon, label, checked, onChange, disabled, color }) => {
-  const theme = useTheme();
+  htmlFor?: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}> = ({ label, htmlFor, required, hint, children }) => (
+  <Box>
+    <Typography
+      component="label"
+      htmlFor={htmlFor}
+      sx={{ display: 'block', fontWeight: 600, fontSize: '0.9rem', mb: 0.75 }}
+    >
+      {label}
+      {required && <Box component="span" sx={{ color: tokens.chili, ml: 0.25 }}>*</Box>}
+    </Typography>
+    {children}
+    {hint && (
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+        {hint}
+      </Typography>
+    )}
+  </Box>
+);
 
-  return (
-    <Chip
-      icon={icon}
-      label={label}
-      onClick={onChange}
-      disabled={disabled}
-      variant={checked ? 'filled' : 'outlined'}
-      sx={{
-        px: 1,
-        py: 2.5,
-        borderRadius: 2.5,
-        fontSize: '0.85rem',
-        fontWeight: checked ? 600 : 400,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'all 0.2s ease',
-        bgcolor: checked
-          ? theme.palette.mode === 'light'
-            ? alpha(theme.palette[color].main, 0.1)
-            : alpha(theme.palette[color].main, 0.2)
-          : 'transparent',
-        color: checked ? theme.palette[color].main : 'text.secondary',
-        borderColor: checked ? theme.palette[color].main : theme.palette.divider,
-        borderWidth: 1.5,
-        borderStyle: 'solid',
-        '&:hover': {
-          bgcolor: checked
-            ? theme.palette.mode === 'light'
-              ? alpha(theme.palette[color].main, 0.15)
-              : alpha(theme.palette[color].main, 0.25)
-            : theme.palette.mode === 'light'
-              ? alpha(theme.palette.action.hover, 0.5)
-              : alpha(theme.palette.action.hover, 0.2),
-        },
-        '& .MuiChip-icon': {
-          color: checked ? theme.palette[color].main : 'text.secondary',
-        },
-      }}
-    />
-  );
-};
+/** Строка настройки с переключателем */
+const SettingRow: React.FC<{
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+}> = ({ title, description, checked, onChange, disabled }) => (
+  <Box
+    component="label"
+    sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, cursor: disabled ? 'default' : 'pointer' }}
+  >
+    <Box sx={{ flex: 1 }}>
+      <Typography sx={{ fontWeight: 600 }}>{title}</Typography>
+      <Typography variant="body2" color="text.secondary">{description}</Typography>
+    </Box>
+    <Switch checked={checked} onChange={(e) => onChange(e.target.checked)} disabled={disabled} />
+  </Box>
+);
+
+const BADGE_OPTIONS: { value: CreateShawarmaDto['badge']; label: string; color?: string }[] = [
+  { value: null, label: 'Без метки' },
+  ...Object.entries(BADGES).map(([value, b]) => ({
+    value: value as CreateShawarmaDto['badge'],
+    label: b.label,
+    color: b.color,
+  })),
+];
 
 const CreateMenuItemPage: React.FC = () => {
   const theme = useTheme();
+  const t = tokens[theme.palette.mode];
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = Boolean(id);
+  const numericId = Number(id) || 0;
 
-  // Состояния для загрузки
+  // Фото и кадрирование
   const [uploading, setUploading] = React.useState(false);
   const [dragOver, setDragOver] = React.useState(false);
   const [tempImages, setTempImages] = React.useState<TempImage[]>([]);
   const [cropModalOpen, setCropModalOpen] = React.useState(false);
   const [currentCropImage, setCurrentCropImage] = React.useState<TempImage | null>(null);
-  const [crop, setCrop] = React.useState<Crop>({
-    unit: '%',
-    width: 90,
-    height: 90,
-    x: 5,
-    y: 5,
-  });
+  const [crop, setCrop] = React.useState<Crop>({ unit: '%', width: 90, height: 90, x: 5, y: 5 });
   const [zoom, setZoom] = React.useState(1);
   const [rotation, setRotation] = React.useState(0);
   const [completedCrop, setCompletedCrop] = React.useState<PixelCrop | null>(null);
   const [aspect, setAspect] = React.useState<number | undefined>(1);
   const imgRef = React.useRef<HTMLImageElement | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const [cropProcessing, setCropProcessing] = React.useState(false);
 
-  // Хуки для работы с изображениями (только для режима редактирования)
   const uploadImage = useUploadImage();
-  const { data: images = [], refetch: refetchImages } = useShawarmaImages(Number(id) || 0);
+  const { data: images = [], refetch: refetchImages } = useShawarmaImages(numericId);
   const deleteImage = useDeleteImage();
 
-  // Основные данные товара
-  // Получаем список карточек-категорий (parent_id = null) для привязки
+  // Данные товара
   const { data: allShawarmas = [] } = useShawarmas();
-  const parentCards = allShawarmas.filter(s => s.parentId === null || s.isCard);
-  const { data: menuSections = [] } = useMenuSections();
-  const { data: existingShawarma, isLoading: isLoadingShawarma } = useShawarma(
-    isEditMode ? Number(id) : 0
+  const parentCards = React.useMemo(
+    () => allShawarmas.filter(s => (s.parentId === null || s.parentId === undefined) && s.id !== numericId),
+    [allShawarmas, numericId]
   );
+  const variants = React.useMemo(
+    () => (isEditMode ? allShawarmas.filter(s => s.parentId === numericId) : []),
+    [allShawarmas, isEditMode, numericId]
+  );
+  const { data: menuSections = [] } = useMenuSections();
+  const { data: existingShawarma, isLoading: isLoadingShawarma } = useShawarma(isEditMode ? numericId : 0);
   const createShawarma = useCreateShawarma();
   const updateShawarma = useUpdateShawarma();
   const deleteShawarma = useDeleteShawarma();
 
-  // Читаем parentId из URL для создания дочерней позиции
   const [searchParams] = useSearchParams();
   const urlParentId = searchParams.get('parentId');
 
+  const [kind, setKind] = React.useState<Kind>(urlParentId ? 'variant' : 'card');
   const [formData, setFormData] = React.useState<CreateShawarmaDto>({
     name: '',
     price: 0,
@@ -199,10 +191,13 @@ const CreateMenuItemPage: React.FC = () => {
     isSpicy: false,
     hasCheese: false,
     isAvailable: true,
-    parentId: null,
+    parentId: urlParentId ? Number(urlParentId) : null,
     category: '',
     badge: null,
   });
+  const [errors, setErrors] = React.useState<FieldErrors>({});
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
 
   const [snackbar, setSnackbar] = React.useState({
     open: false,
@@ -224,47 +219,55 @@ const CreateMenuItemPage: React.FC = () => {
         category: existingShawarma.category ?? '',
         badge: existingShawarma.badge ?? null,
       });
+      setKind(existingShawarma.parentId ? 'variant' : 'card');
     }
   }, [existingShawarma]);
 
-  // Предзаполняем parentId из URL при создании дочерней позиции
+  // Переход между товарами без размонтирования — сбрасываем несохранённые фото и ошибки
   React.useEffect(() => {
-    if (!isEditMode && urlParentId) {
-      setFormData(prev => ({ ...prev, parentId: Number(urlParentId) }));
-    }
-  }, [isEditMode, urlParentId]);
+    setTempImages([]);
+    setErrors({});
+    setSaved(false);
+  }, [id]);
 
-  const isPending =
-    createShawarma.isPending ||
-    updateShawarma.isPending ||
-    deleteShawarma.isPending;
+  const isPending = createShawarma.isPending || updateShawarma.isPending || deleteShawarma.isPending || saved;
 
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
     setSnackbar({ open: true, message, severity });
   };
 
-  const handleChange = (field: keyof CreateShawarmaDto, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const handleChange = <K extends keyof CreateShawarmaDto>(field: K, value: CreateShawarmaDto[K]) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (field in errors) setErrors(prev => ({ ...prev, [field]: undefined }));
+  };
+
+  const handleKindChange = (_: unknown, value: Kind | null) => {
+    if (!value) return;
+    setKind(value);
+    setErrors({});
+    if (value === 'card') handleChange('parentId', null);
   };
 
   const validateForm = (): boolean => {
-    if (!formData.name?.trim()) {
-      showSnackbar('Введите название товара', 'error');
-      return false;
+    const next: FieldErrors = {};
+    if (!formData.name?.trim()) next.name = 'Введите название';
+    if (kind === 'variant') {
+      if (!formData.parentId) next.parentId = 'Выберите карточку, к которой относится вариант';
+      if (!formData.price || formData.price <= 0) next.price = 'Укажите цену';
+    } else if (!formData.description?.trim()) {
+      next.description = 'Добавьте описание — его видят гости';
     }
-    // Для дочерней позиции цена обязательна, для карточки-родителя — нет
-    if (formData.parentId !== null && (!formData.price || formData.price <= 0)) {
-      showSnackbar('Введите корректную цену', 'error');
-      return false;
-    }
-    if (!formData.description?.trim()) {
-      showSnackbar('Введите описание товара', 'error');
+    if (formData.price < 0) next.price = 'Цена не может быть отрицательной';
+    setErrors(next);
+    const first = Object.keys(next)[0];
+    if (first) {
+      document.getElementById(`field-${first}`)?.focus();
       return false;
     }
     return true;
   };
 
-  // Функция для кадрирования изображения с учётом зума и поворота
+  // Кадрирование с учётом зума и поворота
   const getCroppedImg = async (
     imageSrc: string,
     pixelCrop: PixelCrop,
@@ -273,9 +276,7 @@ const CreateMenuItemPage: React.FC = () => {
   ): Promise<Blob | null> => {
     const image = new Image();
     image.src = imageSrc;
-    await new Promise((resolve) => {
-      image.onload = resolve;
-    });
+    await new Promise(resolve => { image.onload = resolve; });
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -283,14 +284,10 @@ const CreateMenuItemPage: React.FC = () => {
 
     const cropWidth = pixelCrop.width;
     const cropHeight = pixelCrop.height;
-
     canvas.width = cropWidth;
     canvas.height = cropHeight;
 
     const rad = (currentRotation * Math.PI) / 180;
-
-
-    // Масштаб отображаемого изображения к натуральному
     const elImg = imgRef.current;
     const scaleX = elImg ? image.naturalWidth / (elImg.width / currentZoom) : image.naturalWidth;
     const scaleY = elImg ? image.naturalHeight / (elImg.height / currentZoom) : image.naturalHeight;
@@ -300,7 +297,6 @@ const CreateMenuItemPage: React.FC = () => {
     ctx.rotate(rad);
     ctx.scale(currentZoom, currentZoom);
     ctx.translate(-cropWidth / 2, -cropHeight / 2);
-
     ctx.drawImage(
       image,
       pixelCrop.x * scaleX,
@@ -312,22 +308,22 @@ const CreateMenuItemPage: React.FC = () => {
       cropWidth,
       cropHeight
     );
-
     ctx.restore();
 
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        resolve(blob);
-      }, 'image/jpeg', 0.92);
+    return new Promise(resolve => {
+      canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.92);
     });
   };
 
-  // Обработчик добавления файлов (общий для кнопки и drag-and-drop)
   const addFiles = (files: FileList | File[]) => {
-    Array.from(files).forEach((file) => {
+    Array.from(files).forEach(file => {
       if (!file.type.startsWith('image/')) return;
+      if (file.size > 10 * 1024 * 1024) {
+        showSnackbar(`Файл «${file.name}» больше 10 МБ`, 'warning');
+        return;
+      }
       const preview = URL.createObjectURL(file);
-      setTempImages((prev) => [...prev, { file, preview }]);
+      setTempImages(prev => [...prev, { file, preview }]);
     });
   };
 
@@ -338,26 +334,20 @@ const CreateMenuItemPage: React.FC = () => {
     event.target.value = '';
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(true);
+  const openFilePicker = () => {
+    if (!uploading && !isPending) fileInputRef.current?.click();
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
+  const dropHandlers = {
+    onDragOver: (e: React.DragEvent) => { e.preventDefault(); setDragOver(true); },
+    onDragLeave: (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
+    },
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      addFiles(files);
-    }
-  };
-
-  // Открыть редактор для изображения
   const openCropModal = (image: TempImage) => {
     setCurrentCropImage(image);
     setCrop({ unit: '%', width: 90, height: 90, x: 5, y: 5 });
@@ -373,1005 +363,858 @@ const CreateMenuItemPage: React.FC = () => {
     imgRef.current = e.currentTarget;
   };
 
-  // Сохранить откадрированное изображение
   const handleCropApply = async () => {
     if (!currentCropImage || !completedCrop) return;
-
     setCropProcessing(true);
     try {
-      const croppedBlob = await getCroppedImg(
-        currentCropImage.preview,
-        completedCrop,
-        zoom,
-        rotation
-      );
-
+      const croppedBlob = await getCroppedImg(currentCropImage.preview, completedCrop, zoom, rotation);
       if (croppedBlob) {
-        const croppedFile = new File([croppedBlob], currentCropImage.file.name, {
-          type: 'image/jpeg',
-        });
-
-        setTempImages((prev) =>
-          prev.map((img) =>
-            img === currentCropImage
-              ? { ...img, file: croppedFile, preview: URL.createObjectURL(croppedBlob) }
-              : img
+        const croppedFile = new File([croppedBlob], currentCropImage.file.name, { type: 'image/jpeg' });
+        setTempImages(prev =>
+          prev.map(img =>
+            img === currentCropImage ? { ...img, file: croppedFile, preview: URL.createObjectURL(croppedBlob) } : img
           )
         );
       }
-
       setCropModalOpen(false);
       setCurrentCropImage(null);
     } catch (error) {
       console.error('Ошибка при кадрировании:', error);
-      showSnackbar('Ошибка при обработке изображения', 'error');
+      showSnackbar('Не удалось обработать изображение', 'error');
     } finally {
       setCropProcessing(false);
     }
   };
 
-  // Удалить временное изображение
   const handleDeleteTempImage = (index: number) => {
-    setTempImages((prev) => {
-      const newImages = [...prev];
-      URL.revokeObjectURL(newImages[index].preview);
-      newImages.splice(index, 1);
-      return newImages;
+    setTempImages(prev => {
+      const next = [...prev];
+      URL.revokeObjectURL(next[index].preview);
+      next.splice(index, 1);
+      return next;
     });
   };
 
-  // Загрузить изображения для существующего товара
-  const handleUploadExistingImage = async (file: File) => {
-    if (!id) return;
+  const handleDeleteExistingImage = async (imageId: number) => {
+    try {
+      await deleteImage.mutateAsync(imageId);
+      await refetchImages();
+      showSnackbar('Фото удалено', 'success');
+    } catch (error: any) {
+      showSnackbar(`Не удалось удалить фото: ${error.message}`, 'error');
+    }
+  };
 
+  const uploadTempImages = async (shawarmaId: number) => {
+    if (tempImages.length === 0) return;
     setUploading(true);
     try {
-      await uploadImage.mutateAsync({ shawarmaId: Number(id), file });
-      await refetchImages();
-      showSnackbar('Изображение загружено', 'success');
-    } catch (error: any) {
-      showSnackbar(`Ошибка загрузки: ${error.message}`, 'error');
+      for (const tempImage of tempImages) {
+        await uploadImage.mutateAsync({ shawarmaId, file: tempImage.file });
+      }
     } finally {
       setUploading(false);
     }
   };
 
-  // Удалить существующее изображение
-  const handleDeleteExistingImage = async (imageId: number) => {
-    try {
-      await deleteImage.mutateAsync(imageId);
-      await refetchImages();
-      showSnackbar('Изображение удалено', 'success');
-    } catch (error: any) {
-      showSnackbar(`Ошибка удаления: ${error.message}`, 'error');
-    }
-  };
-
-  // Отправка формы
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    const payload: CreateShawarmaDto = {
+      ...formData,
+      name: formData.name.trim(),
+      description: formData.description?.trim() ?? '',
+      parentId: kind === 'variant' ? formData.parentId : null,
+      // Раздел и метка нужны только карточке на витрине
+      category: kind === 'card' ? formData.category?.trim() ?? '' : '',
+      badge: kind === 'card' ? formData.badge ?? null : null,
+    };
+
     try {
-      if (isEditMode && id) {
-        await updateShawarma.mutateAsync({
-          id: Number(id),
-          ...formData,
-        });
-
-        for (const tempImage of tempImages) {
-          await handleUploadExistingImage(tempImage.file);
-        }
-
-        showSnackbar(`Товар "${formData.name}" обновлен!`, 'success');
-
-        setTimeout(() => {
-          navigate('/admin/menu');
-        }, 1500);
+      if (isEditMode) {
+        await updateShawarma.mutateAsync({ id: numericId, ...payload });
+        await uploadTempImages(numericId);
+        showSnackbar(`«${payload.name}» сохранён`, 'success');
       } else {
-        const result = await createShawarma.mutateAsync({
-          ...formData,
-        });
-
-        for (const tempImage of tempImages) {
-          await uploadImage.mutateAsync({ shawarmaId: result.id, file: tempImage.file });
-        }
-
-        showSnackbar(`Товар "${result.name}" создан!`, 'success');
-
-        setTimeout(() => {
-          navigate('/admin/menu');
-        }, 1500);
+        const result = await createShawarma.mutateAsync(payload);
+        await uploadTempImages(result.id);
+        showSnackbar(`«${result.name}» добавлен в меню`, 'success');
       }
+      setSaved(true);
+      setTimeout(() => navigate('/admin/menu'), 900);
     } catch (error: any) {
-      showSnackbar(`Ошибка: ${error.message || 'Неизвестная ошибка'}`, 'error');
+      const message = error?.response?.data?.message || error?.response?.data?.Message || error.message;
+      showSnackbar(`Не удалось сохранить: ${message || 'неизвестная ошибка'}`, 'error');
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('Вы уверены, что хотите удалить этот товар?')) {
-      return;
-    }
-
     try {
-      await deleteShawarma.mutateAsync(Number(id));
-      showSnackbar('Товар успешно удален', 'success');
-
-      setTimeout(() => {
-        navigate('/admin/menu');
-      }, 1500);
+      await deleteShawarma.mutateAsync(numericId);
+      setConfirmDelete(false);
+      showSnackbar('Товар удалён', 'success');
+      setSaved(true);
+      setTimeout(() => navigate('/admin/menu'), 900);
     } catch (error: any) {
-      showSnackbar(`Ошибка: ${error.message}`, 'error');
+      setConfirmDelete(false);
+      showSnackbar(`Не удалось удалить: ${error.message}`, 'error');
     }
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
-
-  // Общий стиль полей
-  const fieldSx = {
-    '& .MuiOutlinedInput-root': {
-      borderRadius: 3,
-      transition: 'box-shadow 0.2s ease',
-      '&:hover': {
-        boxShadow: `0 0 0 1px ${theme.palette.mode === 'light'
-          ? alpha(theme.palette.primary.main, 0.3)
-          : alpha(theme.palette.primary.main, 0.5)}`,
-      },
-      '&.Mui-focused': {
-        boxShadow: `0 0 0 2px ${alpha(theme.palette.primary.main, 0.25)}`,
-      },
-    },
-    '& .MuiInputLabel-root.Mui-focused': {
-      color: 'primary.main',
-    },
-  };
-
-  // Стиль для карточки-секции
-  const sectionCardSx = {
-    borderRadius: 3,
-    border: `1px solid ${theme.palette.divider}`,
-    boxShadow: 'none',
-    bgcolor: 'background.paper',
-    transition: 'border-color 0.2s ease',
   };
 
   if (isLoadingShawarma) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', gap: 2 }}>
-        <CircularProgress size={40} />
-        <Typography color="text.secondary">Загрузка товара...</Typography>
+        <CircularProgress size={36} />
+        <Typography color="text.secondary">Загружаем товар…</Typography>
       </Box>
     );
   }
 
   const allImages = [
     ...tempImages.map((img, i) => ({
-      type: 'temp' as const,
+      key: `temp-${i}`,
       preview: img.preview,
       onDelete: () => handleDeleteTempImage(i),
-      onCrop: () => openCropModal(img),
-      id: i,
+      onCrop: (() => openCropModal(img)) as (() => void) | undefined,
+      isPrimary: false,
+      isNew: true,
     })),
     ...images.map((image: ShawarmaImage) => ({
-      type: 'existing' as const,
+      key: `img-${image.id}`,
       preview: resolveMediaUrl(image.filePath),
       onDelete: () => handleDeleteExistingImage(image.id),
-      onCrop: null,
-      id: image.id,
+      onCrop: undefined as (() => void) | undefined,
       isPrimary: image.isPrimary,
+      isNew: false,
     })),
   ];
+  // Главное фото на витрине: отмеченное главным, иначе первое
+  const coverImage = allImages.find(i => i.isPrimary)?.preview
+    || (images[0] ? resolveMediaUrl(images[0].filePath) : '')
+    || tempImages[0]?.preview;
+
+  const parentCard = parentCards.find(c => c.id === formData.parentId) ?? null;
+
+  const previewItem: Shawarma = {
+    id: 0,
+    name: formData.name.trim() || 'Название товара',
+    price: formData.price || 0,
+    description: formData.description || '',
+    isSpicy: !!formData.isSpicy,
+    hasCheese: !!formData.hasCheese,
+    isAvailable: formData.isAvailable ?? true,
+    badge: formData.badge ?? null,
+    category: formData.category,
+    createdAt: '',
+    primaryImage: coverImage || undefined,
+    children: variants,
+  };
+
+  const title = isEditMode
+    ? (kind === 'variant' ? 'Вариант товара' : 'Редактирование')
+    : (kind === 'variant' ? 'Новый вариант' : 'Новый товар');
+
+  const submitLabel = saved
+    ? 'Сохранено'
+    : isPending || uploading
+      ? 'Сохраняем…'
+      : isEditMode ? 'Сохранить' : kind === 'variant' ? 'Добавить вариант' : 'Добавить в меню';
+
+  const actions = (
+    <>
+      <Button
+        variant="contained"
+        color="secondary"
+        size="large"
+        fullWidth
+        onClick={handleSubmit}
+        disabled={isPending || uploading}
+        startIcon={isPending && !saved ? <CircularProgress size={18} color="inherit" /> : undefined}
+      >
+        {submitLabel}
+      </Button>
+      <Button
+        size="large"
+        fullWidth
+        onClick={() => navigate('/admin/menu')}
+        disabled={isPending}
+        sx={{ color: 'text.secondary' }}
+      >
+        Отмена
+      </Button>
+    </>
+  );
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 1100, mx: 'auto' }}>
+    <Box sx={{ py: { xs: 2, sm: 3 }, maxWidth: 1120, mx: 'auto', pb: { xs: 14, md: 6 } }}>
       {/* Шапка */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
         <Tooltip title="Назад к меню">
           <IconButton
             onClick={() => navigate('/admin/menu')}
             disabled={isPending}
-            sx={{
-              border: `1px solid ${theme.palette.divider}`,
-              borderRadius: 2.5,
-              '&:hover': {
-                bgcolor: theme.palette.mode === 'light'
-                  ? alpha(theme.palette.primary.main, 0.06)
-                  : alpha(theme.palette.primary.main, 0.12),
-              },
-            }}
+            aria-label="Назад к меню"
+            sx={{ bgcolor: 'background.paper', width: 44, height: 44 }}
           >
-            <ArrowBackIcon fontSize="small" />
+            <ArrowBackIcon />
           </IconButton>
         </Tooltip>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h5" component="h1" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
-            {isEditMode ? 'Редактирование товара' : 'Новый товар'}
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.6rem', sm: '2rem' } }}>
+            {title}
           </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
-            {isEditMode
-              ? 'Внесите изменения и сохраните'
-              : 'Заполните информацию о товаре для добавления в меню'}
-          </Typography>
+          {isEditMode && existingShawarma && (
+            <Typography color="text.secondary" noWrap>
+              {kind === 'variant' && parentCard ? `${parentCard.name} · ` : ''}{existingShawarma.name}
+            </Typography>
+          )}
         </Box>
       </Box>
 
-      {/* Основной контент: две колонки */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, alignItems: 'start' }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 340px' },
+          gap: { xs: 2, md: 3 },
+          alignItems: 'start',
+        }}
+      >
         {/* Левая колонка — форма */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {/* Секция 1: Основная информация */}
-          <Card sx={sectionCardSx}>
-            <CardContent sx={{ p: 3 }}>
-              <SectionLabel
-                number={1}
-                icon={<FoodIcon sx={{ fontSize: 20, color: 'primary.main' }} />}
-                label="Основная информация"
-                hint="Название, цена и категория товара"
-              />
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* Что создаём */}
+          <Section
+            title="Тип позиции"
+            subtitle={kind === 'card'
+              ? 'Карточка — то, что гость видит в меню. Размеры и порции добавляются к ней вариантами.'
+              : 'Вариант — размер или порция внутри карточки, например «Большая» или «400 г».'}
+          >
+            <ToggleButtonGroup
+              exclusive
+              value={kind}
+              onChange={handleKindChange}
+              disabled={isPending || (isEditMode && variants.length > 0)}
+              sx={{ display: 'flex', '& .MuiToggleButton-root': { flex: 1, py: 1.1 } }}
+            >
+              <ToggleButton value="card">Карточка в меню</ToggleButton>
+              <ToggleButton value="variant">Вариант карточки</ToggleButton>
+            </ToggleButtonGroup>
 
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
+            {kind === 'variant' && (
+              <Box sx={{ mt: 2.5 }}>
+                <Field label="Карточка" htmlFor="field-parentId" required>
+                  <Autocomplete
+                    options={parentCards}
+                    value={parentCard}
+                    onChange={(_e, value) => handleChange('parentId', value?.id ?? null)}
+                    disabled={isPending}
+                    getOptionLabel={option => option.name}
+                    groupBy={option => option.category || 'Без раздела'}
+                    isOptionEqualToValue={(option, value) => option.id === value.id}
+                    noOptionsText="Ничего не найдено"
+                    renderInput={params => (
+                      <TextField
+                        {...params}
+                        id="field-parentId"
+                        placeholder="Начните вводить название"
+                        error={!!errors.parentId}
+                        helperText={errors.parentId}
+                      />
+                    )}
+                  />
+                </Field>
+              </Box>
+            )}
+          </Section>
+
+          {/* Основное */}
+          <Section title="Основное">
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              <Field label={kind === 'variant' ? 'Название варианта' : 'Название'} htmlFor="field-name" required>
                 <TextField
+                  id="field-name"
                   fullWidth
-                  label="Название товара"
-                  placeholder="Например: Классическая шаурма"
-                  value={formData.name || ''}
-                  onChange={(e) => handleChange('name', e.target.value)}
+                  placeholder={kind === 'variant' ? 'Например: Большая, 400 г, 30 см' : 'Например: Шаурма классическая'}
+                  value={formData.name}
+                  onChange={e => handleChange('name', e.target.value)}
                   disabled={isPending}
-                  required
-                  autoFocus
-                  sx={fieldSx}
+                  error={!!errors.name}
+                  helperText={errors.name}
+                  slotProps={{ htmlInput: { maxLength: 100 } }}
                 />
+              </Field>
 
-                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '200px 1fr' }, gap: 2.5 }}>
+                <Field
+                  label="Цена"
+                  htmlFor="field-price"
+                  required={kind === 'variant'}
+                  hint={kind === 'card' && !errors.price ? 'Если есть варианты, цена берётся из них' : undefined}
+                >
                   <TextField
-                    label="Цена"
+                    id="field-price"
+                    fullWidth
                     type="number"
                     placeholder="0"
                     value={formData.price || ''}
-                    onChange={(e) => handleChange('price', parseFloat(e.target.value) || 0)}
+                    onChange={e => handleChange('price', parseFloat(e.target.value) || 0)}
                     disabled={isPending}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start" sx={{ color: 'text.secondary' }}>
-                          <PriceIcon sx={{ fontSize: 18, mr: 0.5 }} />
-                        </InputAdornment>
-                      ),
-                      inputProps: { min: 0, step: 10 },
-                    }}
-                    required={formData.parentId !== null}
-                    helperText={formData.parentId === null ? 'Необязательно для карточки (вычисляется из дочерних)' : undefined}
-                    sx={fieldSx}
-                  />
-
-                  <Autocomplete
-                    options={parentCards}
-                    value={formData.parentId ? parentCards.find(c => c.id === formData.parentId) || null : null}
-                    onChange={(_e, value) => handleChange('parentId', value?.id ?? null)}
-                    disabled={isPending}
-                    getOptionLabel={(option) => option.name}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Родительская карточка"
-                        placeholder="Не выбрана = карточка-категория"
-                        sx={fieldSx}
-                        slotProps={{
-                          inputLabel: { shrink: true },
-                        }}
-                      />
-                    )}
-                    isOptionEqualToValue={(option, value) => option.id === value.id}
-                    sx={{
-                      '& .MuiAutocomplete-inputRoot': {
-                        borderRadius: 3,
-                      },
+                    error={!!errors.price}
+                    helperText={errors.price}
+                    slotProps={{
+                      input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> },
+                      htmlInput: { min: 0, step: 10, inputMode: 'numeric' },
                     }}
                   />
-                </Box>
+                </Field>
 
-                <TextField
-                  fullWidth
-                  label="Описание"
-                  placeholder="Состав и особенности блюда..."
-                  value={formData.description || ''}
-                  onChange={(e) => handleChange('description', e.target.value)}
-                  disabled={isPending}
-                  multiline
-                  rows={3}
-                  required
-                  sx={fieldSx}
-                />
-
-                {formData.parentId === null && (
-                  <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                {kind === 'card' && (
+                  <Field label="Раздел меню" htmlFor="field-category" hint="По разделам строятся вкладки на витрине">
                     <Autocomplete
                       freeSolo
                       options={menuSections}
                       value={formData.category || ''}
+                      inputValue={formData.category || ''}
                       onInputChange={(_e, value) => handleChange('category', value)}
                       disabled={isPending}
-                      sx={{ flex: 1 }}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Раздел меню"
-                          placeholder="Например, Пиццы"
-                          helperText="Позиции группируются по разделам на витрине"
-                          sx={fieldSx}
-                        />
+                      renderInput={params => (
+                        <TextField {...params} id="field-category" placeholder="Например: Шаурма" />
                       )}
                     />
-                    <TextField
-                      select
-                      label="Метка на карточке"
-                      value={formData.badge ?? ''}
-                      onChange={(e) => handleChange('badge', e.target.value || null)}
-                      disabled={isPending}
-                      sx={{ ...fieldSx, flex: 1 }}
-                      SelectProps={{ native: true }}
-                      InputLabelProps={{ shrink: true }}
-                    >
-                      <option value="">Без метки</option>
-                      <option value="hit">Хит</option>
-                      <option value="new">Новинка</option>
-                      <option value="promo">Акция</option>
-                      <option value="lean">Постное</option>
-                    </TextField>
-                  </Box>
+                  </Field>
                 )}
               </Box>
-            </CardContent>
-          </Card>
 
-          {/* Секция 2: Характеристики */}
-          <Card sx={sectionCardSx}>
-            <CardContent sx={{ p: 3 }}>
-              <SectionLabel
-                number={2}
-                icon={<SettingsIcon sx={{ fontSize: 20, color: 'primary.main' }} />}
-                label="Характеристики"
-                hint="Дополнительные свойства товара"
+              <Field
+                label={kind === 'variant' ? 'Описание варианта' : 'Описание'}
+                htmlFor="field-description"
+                required={kind === 'card'}
+                hint={!errors.description
+                  ? (kind === 'variant' ? 'Необязательно — по умолчанию показывается описание карточки' : 'Состав и особенности блюда')
+                  : undefined}
+              >
+                <TextField
+                  id="field-description"
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  placeholder="Лаваш, курица, свежие овощи, фирменный соус…"
+                  value={formData.description || ''}
+                  onChange={e => handleChange('description', e.target.value)}
+                  disabled={isPending}
+                  error={!!errors.description}
+                  helperText={errors.description}
+                  slotProps={{ htmlInput: { maxLength: 500 } }}
+                />
+              </Field>
+
+              {kind === 'card' && (
+                <Field label="Метка на карточке">
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {BADGE_OPTIONS.map(opt => {
+                      const selected = (formData.badge ?? null) === opt.value;
+                      return (
+                        <Box
+                          key={opt.label}
+                          component="button"
+                          type="button"
+                          onClick={() => handleChange('badge', opt.value)}
+                          disabled={isPending}
+                          aria-pressed={selected}
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 0.75,
+                            px: 1.75,
+                            height: 40,
+                            borderRadius: '12px',
+                            border: '1.5px solid',
+                            borderColor: selected ? 'text.primary' : 'transparent',
+                            bgcolor: selected ? 'background.paper' : t.surfaceMuted,
+                            color: 'text.primary',
+                            font: 'inherit',
+                            fontWeight: 600,
+                            fontSize: '0.9rem',
+                            cursor: 'pointer',
+                            transition: 'border-color 0.15s ease, background-color 0.15s ease',
+                            '&:hover': { borderColor: selected ? 'text.primary' : t.line },
+                            '&:focus-visible': { outline: `2px solid ${theme.palette.text.primary}`, outlineOffset: 2 },
+                          }}
+                        >
+                          {opt.color && (
+                            <Box component="span" sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: opt.color }} />
+                          )}
+                          {opt.label}
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Field>
+              )}
+            </Box>
+          </Section>
+
+          {/* Свойства */}
+          <Section title="Свойства">
+            <Box sx={{ mt: -1.5 }}>
+              <SettingRow
+                title="В наличии"
+                description="Выключите, чтобы временно убрать позицию из заказа"
+                checked={formData.isAvailable ?? true}
+                onChange={v => handleChange('isAvailable', v)}
+                disabled={isPending}
               />
+              <Divider />
+              <SettingRow
+                title="Острое"
+                description="На карточке появится метка «Острое»"
+                checked={!!formData.isSpicy}
+                onChange={v => handleChange('isSpicy', v)}
+                disabled={isPending}
+              />
+              <Divider />
+              <SettingRow
+                title="С сыром"
+                description="Пометка для гостей, которые ищут блюда с сыром"
+                checked={!!formData.hasCheese}
+                onChange={v => handleChange('hasCheese', v)}
+                disabled={isPending}
+              />
+            </Box>
+          </Section>
 
-              <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mt: 1 }}>
-                <ToggleChip
-                  label="Острая"
-                  checked={formData.isSpicy || false}
-                  onChange={() => handleChange('isSpicy', !formData.isSpicy)}
+          {/* Варианты карточки */}
+          {isEditMode && kind === 'card' && (
+            <Section
+              title="Варианты"
+              subtitle={variants.length === 0
+                ? 'Добавьте размеры или порции — гость выберет нужный при заказе'
+                : 'Размеры и порции, которые гость выбирает в карточке'}
+              action={
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={() => navigate(`/admin/create?parentId=${numericId}`)}
                   disabled={isPending}
-                  color="error"
-                />
-                <ToggleChip
-                  label="С сыром"
-                  checked={formData.hasCheese || false}
-                  onChange={() => handleChange('hasCheese', !formData.hasCheese)}
-                  disabled={isPending}
-                  color="warning"
-                />
-                <ToggleChip
-                  label="Доступен"
-                  checked={formData.isAvailable ?? true}
-                  onChange={() => handleChange('isAvailable', !formData.isAvailable)}
-                  disabled={isPending}
-                  color="success"
-                />
-              </Box>
-            </CardContent>
-          </Card>
+                  sx={{ bgcolor: t.surfaceMuted, flexShrink: 0 }}
+                >
+                  Добавить
+                </Button>
+              }
+            >
+              {variants.length > 0 && (
+                <Box sx={{ mx: { xs: -1, sm: -1.5 } }}>
+                  {variants.map(v => (
+                    <Box
+                      key={v.id}
+                      component="button"
+                      type="button"
+                      onClick={() => navigate(`/admin/edit/${v.id}`)}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        width: '100%',
+                        px: { xs: 1, sm: 1.5 },
+                        py: 1.25,
+                        border: 0,
+                        borderRadius: '14px',
+                        bgcolor: 'transparent',
+                        color: 'text.primary',
+                        font: 'inherit',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          flexShrink: 0,
+                          bgcolor: v.isAvailable ? tokens.herb : t.line,
+                        }}
+                        title={v.isAvailable ? 'В наличии' : 'Нет в наличии'}
+                      />
+                      <Typography sx={{ flex: 1, fontWeight: 500 }} noWrap>{v.name}</Typography>
+                      {!v.isAvailable && (
+                        <Typography variant="body2" color="text.secondary">нет в наличии</Typography>
+                      )}
+                      <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{v.price} ₽</Typography>
+                      <ChevronRightIcon sx={{ color: 'text.secondary' }} />
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Section>
+          )}
+
+          {isEditMode && (
+            <Box sx={{ display: 'flex', justifyContent: { xs: 'center', md: 'flex-start' } }}>
+              <Button
+                startIcon={<DeleteIcon />}
+                onClick={() => setConfirmDelete(true)}
+                disabled={isPending}
+                sx={{ color: tokens.chili, '&:hover': { bgcolor: alpha(tokens.chili, 0.08) } }}
+              >
+                Удалить {kind === 'variant' ? 'вариант' : 'товар'}
+              </Button>
+            </Box>
+          )}
         </Box>
 
-        {/* Правая колонка — Изображения */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <Card sx={sectionCardSx}>
-            <CardContent sx={{ p: 3 }}>
-              <SectionLabel
-                number={3}
-                icon={<ImageIcon sx={{ fontSize: 20, color: 'primary.main' }} />}
-                label="Фотографии"
-                hint="Загрузите одно или несколько изображений"
-              />
+        {/* Правая колонка — фото, предпросмотр, кнопки */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, position: { md: 'sticky' }, top: { md: 88 } }}>
+          <Section
+            title="Фото"
+            subtitle={allImages.length > 0 ? 'Первое фото — обложка на витрине' : undefined}
+          >
+            <input ref={fileInputRef} type="file" hidden multiple accept="image/*" onChange={handleFileSelect} />
 
-              {/* Drag & Drop зона */}
+            {allImages.length === 0 ? (
               <Box
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
+                {...dropHandlers}
+                role="button"
+                tabIndex={0}
+                onClick={openFilePicker}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFilePicker(); } }}
                 sx={{
-                  mt: 1,
-                  border: `2px dashed ${dragOver
-                    ? theme.palette.primary.main
-                    : theme.palette.divider}`,
-                  borderRadius: 3,
-                  p: 3,
+                  aspectRatio: '4 / 3',
+                  borderRadius: '18px',
+                  border: '2px dashed',
+                  borderColor: dragOver ? 'text.primary' : t.line,
+                  bgcolor: dragOver ? alpha(tokens.saffron, 0.15) : t.surfaceMuted,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 1.5,
-                  cursor: uploading || isPending ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.25s ease',
-                  bgcolor: dragOver
-                    ? theme.palette.mode === 'light'
-                      ? alpha(theme.palette.primary.main, 0.04)
-                      : alpha(theme.palette.primary.main, 0.08)
-                    : theme.palette.mode === 'light'
-                      ? alpha(theme.palette.text.primary, 0.01)
-                      : alpha(theme.palette.text.primary, 0.02),
-                  opacity: uploading || isPending ? 0.5 : 1,
-                }}
-                onClick={() => {
-                  if (!uploading && !isPending) {
-                    document.getElementById('image-upload-input')?.click();
-                  }
+                  gap: 1,
+                  textAlign: 'center',
+                  px: 2,
+                  cursor: isPending ? 'default' : 'pointer',
+                  outline: 'none',
+                  transition: 'all 0.15s ease',
+                  '&:hover, &:focus-visible': { borderColor: 'text.secondary' },
                 }}
               >
-                {uploading ? (
-                  <>
-                    <CircularProgress size={32} />
-                    <Typography variant="body2" color="text.secondary">Загрузка...</Typography>
-                  </>
-                ) : (
-                  <>
-                    <Box
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 2.5,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        bgcolor: theme.palette.mode === 'light'
-                          ? alpha(theme.palette.primary.main, 0.08)
-                          : alpha(theme.palette.primary.main, 0.15),
-                        color: 'primary.main',
-                      }}
-                    >
-                      <UploadIcon sx={{ fontSize: 24 }} />
-                    </Box>
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        Перетащите фото сюда
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        или нажмите для выбора файла
-                      </Typography>
-                    </Box>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.7 }}>
-                      JPG, PNG до 10 МБ
-                    </Typography>
-                  </>
-                )}
-
-                <input
-                  id="image-upload-input"
-                  type="file"
-                  hidden
-                  multiple
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                />
+                <AddPhotoIcon sx={{ fontSize: 36, color: 'text.secondary' }} />
+                <Typography sx={{ fontWeight: 600 }}>Добавить фото</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Перетащите сюда или нажмите. JPG или PNG до 10 МБ
+                </Typography>
               </Box>
-
-              {/* Миниатюры загруженных изображений */}
-              {allImages.length > 0 && (
-                <Box sx={{ mt: 2.5 }}>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 1, display: 'block' }}>
-                    {allImages.length} {allImages.length === 1 ? 'фото' : allImages.length < 5 ? 'фото' : 'фото'}
-                  </Typography>
-                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5 }}>
-                    {allImages.map((img) => (
-                      <Paper
-                        key={`${img.type}-${img.id}`}
-                        elevation={0}
+            ) : (
+              <Box
+                {...dropHandlers}
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: 1,
+                  borderRadius: '18px',
+                  outline: dragOver ? `2px dashed ${theme.palette.text.primary}` : 'none',
+                  outlineOffset: 4,
+                }}
+              >
+                {allImages.map((img, index) => (
+                  <Box
+                    key={img.key}
+                    sx={{
+                      position: 'relative',
+                      aspectRatio: '1',
+                      borderRadius: '14px',
+                      overflow: 'hidden',
+                      bgcolor: t.surfaceMuted,
+                      '&:hover .photo-actions, &:focus-within .photo-actions': { opacity: 1 },
+                    }}
+                  >
+                    <Box component="img" src={img.preview} alt="" sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    {(img.isPrimary || (index === 0 && !allImages.some(i => i.isPrimary))) && (
+                      <Box
                         sx={{
-                          position: 'relative',
-                          aspectRatio: '1',
-                          borderRadius: 2.5,
-                          border: (img as any).isPrimary
-                            ? `2px solid ${theme.palette.primary.main}`
-                            : `1px solid ${theme.palette.divider}`,
-                          overflow: 'hidden',
-                          transition: 'all 0.2s ease',
-                          '&:hover': { boxShadow: `0 4px 12px ${alpha('#000', 0.15)}` },
+                          position: 'absolute', left: 6, bottom: 6, px: 0.75, py: 0.125,
+                          borderRadius: '6px', bgcolor: tokens.saffron, color: '#21201F',
+                          fontSize: '0.68rem', fontWeight: 700,
                         }}
                       >
-                        <img
-                          src={img.preview}
-                          alt=""
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                          }}
-                        />
-                        {/* Оверлей при наведении */}
-                        <Box
-                          sx={{
-                            position: 'absolute',
-                            inset: 0,
-                            bgcolor: alpha('#000', 0.4),
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 0.5,
-                            opacity: 0,
-                            transition: 'opacity 0.2s ease',
-                            '&:hover': { opacity: 1 },
-                          }}
-                          className="image-overlay"
+                        Обложка
+                      </Box>
+                    )}
+                    {img.isNew && (
+                      <Box
+                        sx={{
+                          position: 'absolute', left: 6, top: 6, px: 0.75, py: 0.125,
+                          borderRadius: '6px', bgcolor: 'rgba(33,32,31,0.72)', color: '#fff',
+                          fontSize: '0.68rem', fontWeight: 600,
+                        }}
+                      >
+                        Новое
+                      </Box>
+                    )}
+                    <Box
+                      className="photo-actions"
+                      sx={{
+                        position: 'absolute', top: 4, right: 4, display: 'flex', flexDirection: 'column', gap: 0.5,
+                        opacity: { xs: 1, md: 0 }, transition: 'opacity 0.15s ease',
+                      }}
+                    >
+                      <IconButton
+                        size="small"
+                        aria-label="Удалить фото"
+                        onClick={img.onDelete}
+                        disabled={isPending}
+                        sx={{ width: 28, height: 28, bgcolor: 'rgba(255,255,255,0.94)', color: tokens.chili, '&:hover': { bgcolor: '#fff' } }}
+                      >
+                        <CloseIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                      {img.onCrop && (
+                        <IconButton
+                          size="small"
+                          aria-label="Кадрировать"
+                          onClick={img.onCrop}
+                          disabled={isPending}
+                          sx={{ width: 28, height: 28, bgcolor: 'rgba(255,255,255,0.94)', color: '#21201F', '&:hover': { bgcolor: '#fff' } }}
                         >
-                          {img.onCrop && (
-                            <Tooltip title="Кадрировать">
-                              <IconButton
-                                size="small"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  img.onCrop!();
-                                }}
-                                sx={{
-                                  bgcolor: 'rgba(255,255,255,0.95)',
-                                  color: 'text.primary',
-                                  '&:hover': { bgcolor: 'white' },
-                                  width: 32,
-                                  height: 32,
-                                }}
-                              >
-                                <CropIcon sx={{ fontSize: 16 }} />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          <Tooltip title="Удалить">
-                            <IconButton
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                img.onDelete();
-                              }}
-                              sx={{
-                                bgcolor: 'rgba(255,255,255,0.95)',
-                                color: 'error.main',
-                                '&:hover': { bgcolor: 'white' },
-                                width: 32,
-                                height: 32,
-                              }}
-                            >
-                              <DeleteIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                        {(img as any).isPrimary && (
-                          <Chip
-                            label="Главное"
-                            size="small"
-                            sx={{
-                              position: 'absolute',
-                              bottom: 4,
-                              left: 4,
-                              height: 20,
-                              fontSize: '0.65rem',
-                              fontWeight: 600,
-                              bgcolor: 'primary.main',
-                              color: 'white',
-                            }}
-                          />
-                        )}
-                      </Paper>
-                    ))}
+                          <CropIcon sx={{ fontSize: 15 }} />
+                        </IconButton>
+                      )}
+                    </Box>
+                  </Box>
+                ))}
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={openFilePicker}
+                  disabled={isPending}
+                  aria-label="Добавить ещё фото"
+                  sx={{
+                    aspectRatio: '1',
+                    borderRadius: '14px',
+                    border: '2px dashed',
+                    borderColor: t.line,
+                    bgcolor: 'transparent',
+                    color: 'text.secondary',
+                    display: 'grid',
+                    placeItems: 'center',
+                    cursor: 'pointer',
+                    '&:hover': { borderColor: 'text.secondary', color: 'text.primary' },
+                  }}
+                >
+                  {uploading ? <CircularProgress size={22} /> : <AddIcon />}
+                </Box>
+              </Box>
+            )}
+          </Section>
+
+          {kind === 'card' ? (
+            <Section title="На витрине">
+              <Box sx={{ maxWidth: 220, mx: 'auto', pointerEvents: 'none', bgcolor: 'background.default', borderRadius: '26px', p: 0.5 }} aria-hidden>
+                <MenuItemCard item={previewItem} onOpen={() => {}} />
+              </Box>
+            </Section>
+          ) : (
+            parentCard && (
+              <Section title="В карточке">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box sx={{ width: 56, height: 56, borderRadius: '14px', overflow: 'hidden', bgcolor: t.surfaceMuted, flexShrink: 0, display: 'grid', placeItems: 'center' }}>
+                    {parentCard.primaryImage || parentCard.images?.[0]
+                      ? <Box component="img" src={resolveMediaUrl(parentCard.primaryImage || parentCard.images?.[0]?.filePath)} alt="" sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <Typography aria-hidden sx={{ fontSize: 28 }}>🌯</Typography>}
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 600 }} noWrap>{parentCard.name}</Typography>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {formData.name.trim() || 'Вариант'} · {formData.price || 0} ₽
+                    </Typography>
                   </Box>
                 </Box>
-              )}
+              </Section>
+            )
+          )}
 
-              {isEditMode && images.length === 0 && tempImages.length === 0 && (
-                <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, px: 1 }}>
-                  <InfoIcon sx={{ fontSize: 16, color: 'text.secondary', opacity: 0.6 }} />
-                  <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.7 }}>
-                    У товара пока нет фотографий
-                  </Typography>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
+          {/* Кнопки — на компьютере в колонке */}
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, flexDirection: 'column', gap: 1 }}>
+            {actions}
+          </Box>
         </Box>
       </Box>
 
-      {/* Кнопки действий */}
+      {/* Кнопки — на телефоне закреплены снизу */}
       <Box
         sx={{
-          display: 'flex',
-          gap: 2,
-          mt: 3,
-          justifyContent: 'flex-end',
-          p: 2.5,
-          borderRadius: 3,
-          border: `1px solid ${theme.palette.divider}`,
+          display: { xs: 'flex', md: 'none' },
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: theme.zIndex.appBar,
+          gap: 1,
+          px: 2,
+          pt: 1.5,
+          pb: 'calc(12px + env(safe-area-inset-bottom))',
           bgcolor: 'background.paper',
-          boxShadow: `0 -2px 8px ${alpha('#000', 0.04)}`,
+          borderTop: `1px solid ${t.line}`,
+          flexDirection: 'row-reverse',
+          '& > .MuiButton-root:last-of-type': { width: 'auto', flexShrink: 0 },
         }}
       >
-        {isEditMode && (
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={handleDelete}
-            disabled={isPending}
-            sx={{
-              borderRadius: 2.5,
-              px: 2.5,
-              textTransform: 'none',
-              fontWeight: 600,
-              borderWidth: 1.5,
-              '&:hover': { borderWidth: 1.5 },
-              mr: 'auto',
-            }}
-          >
-            Удалить товар
-          </Button>
-        )}
-        <Button
-          variant="outlined"
-          onClick={() => navigate('/admin/menu')}
-          disabled={isPending}
-          sx={{
-            borderRadius: 2.5,
-            px: 3,
-            textTransform: 'none',
-            fontWeight: 600,
-            borderWidth: 1.5,
-            '&:hover': { borderWidth: 1.5 },
-          }}
-        >
-          Отмена
-        </Button>
-        <Button
-          variant="contained"
-          startIcon={isPending ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
-          onClick={handleSubmit}
-          disabled={isPending}
-          sx={{
-            borderRadius: 2.5,
-            px: 4,
-            textTransform: 'none',
-            fontWeight: 600,
-            boxShadow: `0 2px 8px ${alpha(theme.palette.primary.main, 0.3)}`,
-            '&:hover': {
-              boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`,
-            },
-          }}
-        >
-          {isPending
-            ? 'Сохранение...'
-            : isEditMode
-              ? 'Сохранить'
-              : 'Создать товар'}
-        </Button>
+        {actions}
       </Box>
 
-      {/* Модальное окно для кадрирования */}
-      <Modal
+      {/* Подтверждение удаления */}
+      <Dialog open={confirmDelete} onClose={() => !deleteShawarma.isPending && setConfirmDelete(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Удалить «{formData.name}»?</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary">
+            {kind === 'card' && variants.length > 0
+              ? `Вместе с карточкой пропадут её варианты (${variants.length}). Отменить это нельзя.`
+              : 'Позиция пропадёт из меню. Отменить это нельзя.'}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+          <Button onClick={() => setConfirmDelete(false)} disabled={deleteShawarma.isPending} sx={{ color: 'text.secondary' }}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDelete}
+            disabled={deleteShawarma.isPending}
+            startIcon={deleteShawarma.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}
+          >
+            Удалить
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Кадрирование */}
+      <Dialog
         open={cropModalOpen}
         onClose={() => !cropProcessing && setCropModalOpen(false)}
-        closeAfterTransition
-        slotProps={{
-          backdrop: {
-            sx: {
-              bgcolor: alpha('#000', 0.6),
-              backdropFilter: 'blur(4px)',
-            },
-          },
-        }}
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1300,
-        }}
+        maxWidth="sm"
+        fullWidth
       >
-        <Paper
-          sx={{
-            width: '92vw',
-            maxWidth: 680,
-            borderRadius: 3,
-            outline: 'none',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            maxHeight: '92vh',
-          }}
-        >
-          {/* Шапка модала */}
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              px: 3,
-              py: 2,
-              borderBottom: `1px solid ${theme.palette.divider}`,
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Box
-                sx={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor: alpha(theme.palette.primary.main, 0.1),
-                  color: 'primary.main',
-                }}
-              >
-                <CropIcon sx={{ fontSize: 18 }} />
-              </Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                Кадрирование
-              </Typography>
-            </Box>
-            <IconButton
-              size="small"
-              onClick={() => !cropProcessing && setCropModalOpen(false)}
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', pr: 1.5 }}>
+          <Box sx={{ flex: 1 }}>Кадрирование</Box>
+          <IconButton aria-label="Закрыть" onClick={() => !cropProcessing && setCropModalOpen(false)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        {currentCropImage && (
+          <>
+            <Box
               sx={{
-                borderRadius: 2,
-                color: 'text.secondary',
-                '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.08) },
+                height: { xs: 280, sm: 360 },
+                bgcolor: t.surfaceMuted,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
               }}
             >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Box>
+              <Box sx={{ transform: `scale(${zoom}) rotate(${rotation}deg)`, transition: 'transform 0.15s ease' }}>
+                <ReactCrop crop={crop} onChange={c => setCrop(c)} onComplete={c => setCompletedCrop(c)} aspect={aspect}>
+                  <img
+                    ref={imgRef}
+                    src={currentCropImage.preview}
+                    onLoad={onImageLoad}
+                    style={{ maxWidth: '100%', maxHeight: 360, display: 'block' }}
+                    alt=""
+                  />
+                </ReactCrop>
+              </Box>
+            </Box>
 
-          {currentCropImage && (
-            <>
-              {/* Область с изображением */}
-              <Box
-                sx={{
-                  position: 'relative',
-                  width: '100%',
-                  height: { xs: 280, sm: 380 },
-                  bgcolor: 'action.hover',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  overflow: 'hidden',
-                }}
+            <DialogContent sx={{ pt: '20px !important', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Пропорции</Typography>
+                <ToggleButtonGroup
+                  exclusive
+                  size="small"
+                  value={aspect ?? 'free'}
+                  onChange={(_, v) => {
+                    if (v === null) return;
+                    setAspect(v === 'free' ? undefined : v);
+                    setCrop({ unit: '%', width: 90, height: 90, x: 5, y: 5 });
+                  }}
+                  sx={{ display: 'flex', '& .MuiToggleButton-root': { flex: 1 } }}
+                >
+                  <ToggleButton value={1}>1:1</ToggleButton>
+                  <ToggleButton value={4 / 3}>4:3</ToggleButton>
+                  <ToggleButton value={16 / 9}>16:9</ToggleButton>
+                  <ToggleButton value="free">Свободно</ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+                <Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Масштаб</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {Math.round(zoom * 100)}%
+                    </Typography>
+                  </Box>
+                  <Slider
+                    value={zoom}
+                    min={0.5}
+                    max={3}
+                    step={0.1}
+                    onChange={(_, val) => setZoom(val as number)}
+                    aria-label="Масштаб"
+                  />
+                </Box>
+                <Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>Поворот</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <IconButton size="small" aria-label="Повернуть влево" onClick={() => setRotation(r => (r - 90 + 360) % 360)}>
+                        <RotateLeftIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" aria-label="Повернуть вправо" onClick={() => setRotation(r => (r + 90) % 360)}>
+                        <RotateRightIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                  <Slider
+                    value={rotation}
+                    min={0}
+                    max={359}
+                    step={1}
+                    onChange={(_, val) => setRotation(val as number)}
+                    aria-label="Поворот"
+                  />
+                </Box>
+              </Box>
+            </DialogContent>
+
+            <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+              <Button onClick={() => setCropModalOpen(false)} disabled={cropProcessing} sx={{ color: 'text.secondary' }}>
+                Отмена
+              </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={handleCropApply}
+                disabled={cropProcessing || !completedCrop}
+                startIcon={cropProcessing ? <CircularProgress size={16} color="inherit" /> : undefined}
               >
-                <Box
-                  sx={{
-                    transform: `scale(${zoom}) rotate(${rotation}deg)`,
-                    transition: 'transform 0.15s ease',
-                    transformOrigin: 'center center',
-                  }}
-                >
-                  <ReactCrop
-                    crop={crop}
-                    onChange={(c) => setCrop(c)}
-                    onComplete={(c) => setCompletedCrop(c)}
-                    aspect={aspect}
-                  >
-                    <img
-                      ref={imgRef}
-                      src={currentCropImage.preview}
-                      onLoad={onImageLoad}
-                      style={{
-                        maxWidth: '100%',
-                        maxHeight: '100%',
-                        display: 'block',
-                      }}
-                      alt=""
-                    />
-                  </ReactCrop>
-                </Box>
-              </Box>
-
-              {/* Панель инструментов */}
-              <Box sx={{ px: 3, pt: 2, pb: 1 }}>
-                {/* Соотношение сторон */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, minWidth: 90 }}>
-                    Пропорции:
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 0.75 }}>
-                    {[{ label: 'Свобод', value: undefined }, { label: '1:1', value: 1 }, { label: '4:3', value: 4 / 3 }, { label: '16:9', value: 16 / 9 }].map(
-                      (opt) => (
-                        <Chip
-                          key={opt.label}
-                          label={opt.label}
-                          size="small"
-                          clickable
-                          onClick={() => {
-                            setAspect(opt.value);
-                            setCrop({ unit: '%', width: 90, height: 90, x: 5, y: 5 });
-                          }}
-                          variant={aspect === opt.value ? 'filled' : 'outlined'}
-                          sx={{
-                            height: 28,
-                            fontSize: '0.72rem',
-                            fontWeight: aspect === opt.value ? 600 : 400,
-                            borderRadius: 1.5,
-                            borderColor: aspect === opt.value ? 'primary.main' : theme.palette.divider,
-                            borderWidth: 1.5,
-                            borderStyle: 'solid',
-                          }}
-                        />
-                      )
-                    )}
-                  </Box>
-                </Box>
-
-                {/* Зум и поворот — компактная строка */}
-                <Box sx={{ display: 'flex', gap: 3 }}>
-                  {/* Зум */}
-                  <Box sx={{ flex: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                        Масштаб
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
-                        {Math.round(zoom * 100)}%
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <IconButton
-                        size="small"
-                        onClick={() => setZoom((z) => Math.max(0.5, z - 0.2))}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <ZoomOutIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                      <Slider
-                        value={zoom}
-                        min={0.5}
-                        max={3}
-                        step={0.1}
-                        onChange={(_, val) => setZoom(val as number)}
-                        sx={{ flex: 1, mx: 0.5 }}
-                      />
-                      <IconButton
-                        size="small"
-                        onClick={() => setZoom((z) => Math.min(3, z + 0.2))}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <ZoomInIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                    </Box>
-                  </Box>
-
-                  {/* Поворот */}
-                  <Box sx={{ flex: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                        Поворот
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Chip
-                          label="-90°"
-                          size="small"
-                          clickable
-                          onClick={() => setRotation((r) => (r - 90 + 360) % 360)}
-                          sx={{
-                            height: 22,
-                            fontSize: '0.68rem',
-                            borderRadius: 1.5,
-                            borderColor: theme.palette.divider,
-                            borderWidth: 1,
-                            borderStyle: 'solid',
-                          }}
-                        />
-                        <Chip
-                          label="+90°"
-                          size="small"
-                          clickable
-                          onClick={() => setRotation((r) => (r + 90) % 360)}
-                          sx={{
-                            height: 22,
-                            fontSize: '0.68rem',
-                            borderRadius: 1.5,
-                            borderColor: theme.palette.divider,
-                            borderWidth: 1,
-                            borderStyle: 'solid',
-                          }}
-                        />
-                      </Box>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <IconButton
-                        size="small"
-                        onClick={() => setRotation((r) => (r - 15 + 360) % 360)}
-                        sx={{ width: 28, height: 28 }}
-                      >
-                        <RotateLeftIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                      <Slider
-                        value={rotation}
-                        min={0}
-                        max={359}
-                        step={1}
-                        onChange={(_, val) => setRotation(val as number)}
-                        sx={{ flex: 1, mx: 0.5 }}
-                      />
-                      <IconButton
-                        size="small"
-                        onClick={() => setRotation(0)}
-                        sx={{ width: 28, height: 28 }}
-                        title="Сбросить"
-                      >
-                        <RotateLeftIcon sx={{ fontSize: 16, opacity: 0.5 }} />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                </Box>
-              </Box>
-
-              {/* Кнопки */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  gap: 1.5,
-                  justifyContent: 'flex-end',
-                  px: 3,
-                  py: 2,
-                  borderTop: `1px solid ${theme.palette.divider}`,
-                  bgcolor: theme.palette.mode === 'light'
-                    ? alpha(theme.palette.text.primary, 0.01)
-                    : alpha(theme.palette.text.primary, 0.02),
-                }}
-              >
-                <Button
-                  variant="outlined"
-                  onClick={() => setCropModalOpen(false)}
-                  disabled={cropProcessing}
-                  sx={{
-                    borderRadius: 2.5,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    px: 3,
-                    borderWidth: 1.5,
-                    '&:hover': { borderWidth: 1.5 },
-                  }}
-                >
-                  Отмена
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={handleCropApply}
-                  disabled={cropProcessing || !completedCrop}
-                  startIcon={cropProcessing ? <CircularProgress size={16} color="inherit" /> : <CropIcon sx={{ fontSize: 16 }} />}
-                  sx={{
-                    borderRadius: 2.5,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    px: 3,
-                    boxShadow: `0 2px 8px ${alpha(theme.palette.primary.main, 0.3)}`,
-                    '&:hover': {
-                      boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.4)}`,
-                    },
-                  }}
-                >
-                  {cropProcessing ? 'Применение...' : 'Применить'}
-                </Button>
-              </Box>
-            </>
-          )}
-        </Paper>
-      </Modal>
+                Применить
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
 
       <Snackbar
         open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
+        autoHideDuration={5000}
+        onClose={() => setSnackbar(s => ({ ...s, open: false }))}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ bottom: { xs: 96, md: 24 } }}
       >
         <Alert
-          onClose={handleCloseSnackbar}
+          onClose={() => setSnackbar(s => ({ ...s, open: false }))}
           severity={snackbar.severity}
-          sx={{
-            width: '100%',
-            borderRadius: 3,
-            border: `1px solid ${theme.palette.divider}`,
-          }}
+          variant="filled"
+          sx={{ width: '100%' }}
         >
           {snackbar.message}
         </Alert>

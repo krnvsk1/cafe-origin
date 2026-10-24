@@ -173,7 +173,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
   );
 };
 
-const BADGES: Record<string, { label: string; color: string }> = {
+export const BADGES: Record<string, { label: string; color: string }> = {
   hit: { label: 'Хит', color: tokens.chili },
   new: { label: 'Новинка', color: tokens.herb },
   promo: { label: 'Акция', color: '#7A4DFF' },
