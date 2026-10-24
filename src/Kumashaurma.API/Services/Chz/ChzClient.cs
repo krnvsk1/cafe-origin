@@ -143,17 +143,20 @@ namespace Kumashaurma.API.Services.Chz
             DateTime from, int maxCodes = 20000, CancellationToken ct = default)
         {
             var result = new List<BalanceCode>();
+            const string fmt = "yyyy-MM-dd'T'HH:mm:ss.fff'Z'";
+            var to = DateTime.UtcNow;
+            // ЧЗ требует lastEmissionDate и в первом запросе: сортировка по убыванию даты эмиссии,
+            // поэтому начинаем «с будущего» — первая страница начнётся с самых свежих кодов
             string sgtin = "0";
-            string? lastDate = null;
+            string lastDate = to.AddDays(1).ToString(fmt);
             while (true)
             {
-                var pagination = new Dictionary<string, object> { ["perPage"] = 1000, ["sgtin"] = sgtin };
-                if (lastDate != null) pagination["lastEmissionDate"] = lastDate;
+                var pagination = new Dictionary<string, object> { ["perPage"] = 1000, ["sgtin"] = sgtin, ["lastEmissionDate"] = lastDate };
                 var body = new
                 {
                     filter = new
                     {
-                        emissionDatePeriod = new { from = from.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"), to = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'") },
+                        emissionDatePeriod = new { from = from.ToUniversalTime().ToString(fmt), to = to.ToString(fmt) },
                         states = new[] { new { status = "INTRODUCED" } },
                         productGroups = new[] { productGroup }
                     },
@@ -167,9 +170,9 @@ namespace Kumashaurma.API.Services.Chz
                 result.AddRange(page.Select(p => p.Code));
                 if (isLast || page.Count == 0) return (result, false);
                 if (result.Count >= maxCodes) return (result, true);
+                if (page[^1].RawDate == null) return (result, true);
                 sgtin = page[^1].Code.Cis;
-                lastDate = page[^1].RawDate;
-                if (lastDate == null) return (result, true);
+                lastDate = page[^1].RawDate!;
             }
         }
 
