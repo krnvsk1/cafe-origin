@@ -88,8 +88,10 @@ export const loadCryptoPro = async (): Promise<Plugin> => {
   // или не запущен, внутри cadesplugin_api падает «reading 'CreateObjectAsync'»
   try {
     const about = await plugin.CreateObjectAsync('CAdESCOM.About');
-    const version = await about.PluginVersion;
-    console.info('[КриптоПро] плагин', version ? await version.toString() : '?');
+    try {
+      const version = await about.PluginVersion;
+      console.info('[КриптоПро] плагин', version ? await version.toString() : '?');
+    } catch { /* версия — только для журнала */ }
   } catch (e) {
     console.error('[КриптоПро] нет связи с плагином', e);
     throw new Error(
