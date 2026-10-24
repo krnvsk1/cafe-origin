@@ -112,6 +112,11 @@ namespace Kumashaurma.API.Models
         [Column("picked_up_at")]
         public DateTime? PickedUpAt { get; set; }
 
+        // Когда продукты списаны со склада по техкартам (null — не списаны или возвращены)
+        [Column("stock_deducted_at")]
+        [JsonIgnore]
+        public DateTime? StockDeductedAt { get; set; }
+
         // Navigation properties
         [JsonIgnore]
         public AppUser? Courier { get; set; }

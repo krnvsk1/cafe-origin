@@ -41,14 +41,17 @@ namespace Kumashaurma.API.Services
         private readonly YooKassaClient _yooKassa;
         private readonly ReferralOptions _referral;
         private readonly ILogger<OrderStatusService> _logger;
+        private readonly IInventoryService _inventory;
 
         public OrderStatusService(
             ApplicationDbContext context,
             IOrderEventBus events,
             YooKassaClient yooKassa,
             IOptions<ReferralOptions> referral,
-            ILogger<OrderStatusService> logger)
+            ILogger<OrderStatusService> logger,
+            IInventoryService inventory)
         {
+            _inventory = inventory;
             _referral = referral.Value;
             _context = context;
             _events = events;
@@ -85,6 +88,17 @@ namespace Kumashaurma.API.Services
             {
                 await RefundPointsAsync(order);
                 await RefundPaymentAsync(order);
+            }
+
+            // Склад: продукты списываются по техкартам, когда заказ взят в работу,
+            // и возвращаются при отмене. Ошибка склада не должна мешать работе с заказом.
+            try
+            {
+                await _inventory.OnOrderStatusChangedAsync(order, oldStatus, newStatus);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Не удалось провести складское движение по заказу #{OrderId}", order.Id);
             }
 
             await _context.SaveChangesAsync();

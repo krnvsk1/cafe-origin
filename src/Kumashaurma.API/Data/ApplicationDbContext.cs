@@ -44,6 +44,15 @@ namespace Kumashaurma.API.Data
         // Delivery zones
         public DbSet<DeliveryZone> DeliveryZones { get; set; } = null!;
 
+        // Склад и техкарты
+        public DbSet<StockItem> StockItems { get; set; } = null!;
+        public DbSet<Supplier> Suppliers { get; set; } = null!;
+        public DbSet<StockDocument> StockDocuments { get; set; } = null!;
+        public DbSet<StockDocumentLine> StockDocumentLines { get; set; } = null!;
+        public DbSet<StockMovement> StockMovements { get; set; } = null!;
+        public DbSet<TechCard> TechCards { get; set; } = null!;
+        public DbSet<TechCardLine> TechCardLines { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -273,6 +282,91 @@ namespace Kumashaurma.API.Data
             modelBuilder.Entity<DeliveryZone>(entity =>
             {
                 entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            });
+
+            // Склад
+            modelBuilder.Entity<StockItem>(entity =>
+            {
+                entity.HasIndex(e => e.Name);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            });
+
+            modelBuilder.Entity<Supplier>(entity =>
+            {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            });
+
+            modelBuilder.Entity<StockDocument>(entity =>
+            {
+                entity.HasIndex(e => new { e.Type, e.Date });
+                entity.HasIndex(e => e.SupplierId);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.HasOne(e => e.Supplier)
+                    .WithMany()
+                    .HasForeignKey(e => e.SupplierId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                entity.HasMany(e => e.Lines)
+                    .WithOne(l => l.Document)
+                    .HasForeignKey(l => l.DocumentId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<StockDocumentLine>(entity =>
+            {
+                entity.HasIndex(e => e.DocumentId);
+                entity.HasIndex(e => e.StockItemId);
+                entity.HasOne(e => e.StockItem)
+                    .WithMany()
+                    .HasForeignKey(e => e.StockItemId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<StockMovement>(entity =>
+            {
+                entity.HasIndex(e => new { e.StockItemId, e.CreatedAt });
+                entity.HasIndex(e => e.DocumentId);
+                entity.HasIndex(e => e.OrderId);
+                entity.HasIndex(e => new { e.Type, e.CreatedAt });
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.HasOne(e => e.StockItem)
+                    .WithMany()
+                    .HasForeignKey(e => e.StockItemId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<TechCard>(entity =>
+            {
+                // У каждой позиции меню, добавки и полуфабриката — не больше одной карты
+                entity.HasIndex(e => e.ShawarmaId).IsUnique();
+                entity.HasIndex(e => e.AddonId).IsUnique();
+                entity.HasIndex(e => e.StockItemId).IsUnique();
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.HasOne(e => e.Shawarma)
+                    .WithMany()
+                    .HasForeignKey(e => e.ShawarmaId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Addon)
+                    .WithMany()
+                    .HasForeignKey(e => e.AddonId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.StockItem)
+                    .WithMany()
+                    .HasForeignKey(e => e.StockItemId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasMany(e => e.Lines)
+                    .WithOne(l => l.TechCard)
+                    .HasForeignKey(l => l.TechCardId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<TechCardLine>(entity =>
+            {
+                entity.HasIndex(e => e.TechCardId);
+                entity.HasIndex(e => e.StockItemId);
+                entity.HasOne(e => e.StockItem)
+                    .WithMany()
+                    .HasForeignKey(e => e.StockItemId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             // Shawarma self-referencing hierarchy (parent_id)
