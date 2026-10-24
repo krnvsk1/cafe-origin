@@ -197,7 +197,7 @@ function App() {
     { text: 'Зоны доставки', icon: <MapIcon />, path: '/admin/zones', perms: [P.Zones] },
     { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', perms: [P.PromoCodes] },
     { text: 'Отзывы', icon: <ReviewsIcon />, path: '/admin/reviews', perms: [P.Reviews] },
-    { text: 'Склад', icon: <InventoryIcon />, path: '/admin/inventory', perms: [P.InventoryView, P.TechCards] },
+    { text: 'Склад', icon: <InventoryIcon />, path: '/admin/inventory', perms: [P.InventoryView, P.TechCards, P.Chz] },
     { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', perms: [P.Menu] },
     { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', perms: [P.UsersView, P.UsersRoles] },
     { text: 'Роли и доступы', icon: <RolesIcon />, path: '/admin/roles', perms: [P.Roles] },
@@ -390,8 +390,8 @@ function App() {
                 {can(P.Zones) && <Route path="/admin/zones" element={<AdminDeliveryZonesPage />} />}
                 {can(P.PromoCodes) && <Route path="/admin/promocodes" element={<AdminPromoCodesPage />} />}
                 {can(P.Reviews) && <Route path="/admin/reviews" element={<AdminReviewsPage />} />}
-                {can(P.InventoryView, P.TechCards) && <Route path="/admin/inventory" element={<InventoryPage />} />}
-                {can(P.InventoryView, P.TechCards) && <Route path="/admin/inventory/:tab" element={<InventoryPage />} />}
+                {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory" element={<InventoryPage />} />}
+                {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory/:tab" element={<InventoryPage />} />}
                 {can(P.UsersView, P.UsersRoles) && <Route path="/admin/users" element={<UsersPage />} />}
                 {can(P.Roles) && <Route path="/admin/roles" element={<RolesPage />} />}
 

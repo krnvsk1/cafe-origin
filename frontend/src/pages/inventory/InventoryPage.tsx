@@ -9,6 +9,7 @@ import DishesTab from './DishesTab';
 import SuppliersTab from './SuppliersTab';
 import ReportsTab from './ReportsTab';
 import EgaisTab from './EgaisTab';
+import ChzTab from './ChzTab';
 import TechCardEditor from './TechCardEditor';
 import DocumentEditor from './DocumentEditor';
 import { useCan, P } from '../../auth/permissions';
@@ -19,6 +20,7 @@ const TABS = [
   { value: 'writeoffs', label: 'Списания' },
   { value: 'counts', label: 'Инвентаризация' },
   { value: 'egais', label: 'ЕГАИС' },
+  { value: 'chz', label: 'Честный знак' },
   { value: 'dishes', label: 'Блюда и техкарты' },
   { value: 'items', label: 'Номенклатура' },
   { value: 'suppliers', label: 'Поставщики' },
@@ -36,7 +38,9 @@ const InventoryPage: React.FC = () => {
   const can = useCan();
   // Только техкарты (без доступа к складу) — показываем одну вкладку «Блюда»
   const canView = can(P.InventoryView);
-  const tabs = canView ? TABS : TABS.filter(t => t.value === 'dishes');
+  const tabs = canView
+    ? TABS.filter(t => t.value !== 'chz' || can(P.Chz))
+    : TABS.filter(t => (t.value === 'dishes' && can(P.TechCards)) || (t.value === 'chz' && can(P.Chz)));
   const tab: TabValue = (tabs.find(t => t.value === tabParam)?.value ?? tabs[0].value);
   const { data: summary } = useInventorySummary();
 
@@ -112,6 +116,7 @@ const InventoryPage: React.FC = () => {
       {tab === 'writeoffs' && <DocumentsTab type="writeoff" />}
       {tab === 'counts' && <DocumentsTab type="inventory" />}
       {tab === 'egais' && <EgaisTab />}
+      {tab === 'chz' && <ChzTab />}
       {tab === 'dishes' && <DishesTab onOpenCard={(target, id) => setCard({ target, id })} />}
       {tab === 'items' && <StockTab mode="catalog" onOpenDocument={setOpenDocId} onOpenSemiCard={openSemiCard} />}
       {tab === 'suppliers' && <SuppliersTab />}
