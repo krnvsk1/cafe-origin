@@ -24,6 +24,8 @@ import {
   Star as StarIcon,
   Block as BlockIcon,
   RateReview as ReviewsIcon,
+  SoupKitchen as KitchenIcon,
+  DeliveryDining as DeliveryIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -51,6 +53,8 @@ import AdminPromoCodesPage from './pages/AdminPromoCodesPage';
 import PointsPage from './pages/PointsPage';
 import AdminStopListPage from './pages/AdminStopListPage';
 import AdminReviewsPage from './pages/AdminReviewsPage';
+import KitchenPage from './pages/KitchenPage';
+import CourierPage from './pages/CourierPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -185,6 +189,8 @@ function App() {
   // Разделы управления: показываются по ролям (и в меню «Управление», и в боковом меню)
   const staffLinks = ([
     { text: 'Дашборд', icon: <DashboardIcon />, path: '/admin/dashboard', roles: ['admin', 'manager'] },
+    { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', roles: ['admin', 'manager'] },
+    { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', roles: ['courier', 'admin', 'manager'] },
     { text: 'Товары', icon: <AddIcon />, path: '/admin/menu', roles: ['admin', 'manager'] },
     { text: 'Стоп-лист', icon: <BlockIcon />, path: '/admin/stoplist', roles: ['admin', 'manager'] },
     { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', roles: ['admin', 'manager'] },
@@ -449,6 +455,7 @@ function App() {
                     <Route path="/admin/promocodes" element={<AdminPromoCodesPage />} />
                     <Route path="/admin/stoplist" element={<AdminStopListPage />} />
                     <Route path="/admin/reviews" element={<AdminReviewsPage />} />
+                    <Route path="/kitchen" element={<KitchenPage />} />
                   </>
                 )}
 
@@ -457,6 +464,10 @@ function App() {
                     <Route path="/admin/create" element={<CreateMenuItemPage />} />
                     <Route path="/admin/users" element={<UsersPage />} />
                   </>
+                )}
+
+                {isAuthenticated && (hasRole('courier') || isAdmin) && (
+                  <Route path="/courier" element={<CourierPage />} />
                 )}
 
                 <Route path="/admin/edit/:id" element={

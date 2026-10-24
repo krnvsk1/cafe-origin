@@ -56,6 +56,9 @@ namespace Kumashaurma.API.Services
 
             order.Status = newStatus;
 
+            if (newStatus == OrderStatuses.OnTheWay && order.PickedUpAt == null)
+                order.PickedUpAt = DateTime.UtcNow;
+
             if (OrderStatuses.IsCompleted(newStatus) && order.CompletedAt == null)
             {
                 order.CompletedAt = DateTime.UtcNow;

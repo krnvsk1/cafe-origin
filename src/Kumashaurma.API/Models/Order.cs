@@ -68,7 +68,18 @@ namespace Kumashaurma.API.Models
         [Column("scheduled_for")]
         public DateTime? ScheduledFor { get; set; }
 
+        // Курьер, взявший заказ
+        [Column("courier_id")]
+        public int? CourierId { get; set; }
+
+        // Когда курьер забрал заказ (статус «В пути»)
+        [Column("picked_up_at")]
+        public DateTime? PickedUpAt { get; set; }
+
         // Navigation properties
+        [JsonIgnore]
+        public AppUser? Courier { get; set; }
+
         [JsonIgnore]
         public AppUser? User { get; set; }
         [JsonIgnore]

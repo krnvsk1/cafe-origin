@@ -252,6 +252,10 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at");
 
+                    b.Property<int?>("CourierId")
+                        .HasColumnType("integer")
+                        .HasColumnName("courier_id");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -284,6 +288,10 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("phone");
 
+                    b.Property<DateTime?>("PickedUpAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("picked_up_at");
+
                     b.Property<int?>("PromoCodeId")
                         .HasColumnType("integer")
                         .HasColumnName("promo_code_id");
@@ -307,6 +315,8 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("user_id");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CourierId");
 
                     b.HasIndex("CreatedAt");
 
@@ -1070,6 +1080,11 @@ namespace Kumashaurma.API.Migrations
 
             modelBuilder.Entity("Kumashaurma.API.Models.Order", b =>
                 {
+                    b.HasOne("Kumashaurma.API.Models.AppUser", "Courier")
+                        .WithMany()
+                        .HasForeignKey("CourierId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Kumashaurma.API.Models.PromoCode", "PromoCode")
                         .WithMany("Orders")
                         .HasForeignKey("PromoCodeId")
@@ -1079,6 +1094,8 @@ namespace Kumashaurma.API.Migrations
                         .WithMany("Orders")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Courier");
 
                     b.Navigation("PromoCode");
 

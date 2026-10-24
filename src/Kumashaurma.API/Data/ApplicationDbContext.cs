@@ -183,6 +183,16 @@ namespace Kumashaurma.API.Data
                     .OnDelete(DeleteBehavior.SetNull);
             });
 
+            // Order -> Courier configuration
+            modelBuilder.Entity<Order>(entity =>
+            {
+                entity.HasIndex(e => e.CourierId);
+                entity.HasOne(e => e.Courier)
+                    .WithMany()
+                    .HasForeignKey(e => e.CourierId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
             // Order -> PromoCode configuration
             modelBuilder.Entity<Order>(entity =>
             {
