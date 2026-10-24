@@ -37,8 +37,9 @@ jobs:
         continue-on-error: true
         run: |
           cd src/Kumashaurma.API
-          dotnet ef migrations add SyncModelSnapshot 2>&1 | tail -5
-          { echo '## Generated migration'; echo '```'; cat Migrations/*_SyncModelSnapshot.cs; echo '```';
+          NAME="AutoSync${GITHUB_RUN_NUMBER}"
+          dotnet ef migrations add "$NAME" 2>&1 | tail -5
+          { echo '## Generated migration'; echo '```'; cat Migrations/*_${NAME}.cs; echo '```';
             echo '## Snapshot diff'; echo '```diff'; git diff -U2 Migrations/ApplicationDbContextModelSnapshot.cs; echo '```'; } > ../../migration.md
       - name: Publish migration
         if: steps.ef.outcome == 'failure'
