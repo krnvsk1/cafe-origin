@@ -177,9 +177,21 @@ namespace Kumashaurma.API.Controllers
                 });
             }
 
+            // Реферальный код друга (если указан и существует)
+            int? referredBy = null;
+            if (!string.IsNullOrWhiteSpace(dto.ReferralCode))
+            {
+                var code = dto.ReferralCode.Trim().ToUpperInvariant();
+                referredBy = await _userManager.Users
+                    .Where(u => u.ReferralCode == code)
+                    .Select(u => (int?)u.Id)
+                    .FirstOrDefaultAsync();
+            }
+
             // Создаём пользователя
             var user = new AppUser
             {
+                ReferredByUserId = referredBy,
                 UserName = normalizedPhone,
                 PhoneNumber = normalizedPhone,
                 FirstName = dto.FirstName,

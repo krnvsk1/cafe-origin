@@ -202,6 +202,19 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("points_balance");
 
+                    b.Property<string>("ReferralCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("referral_code");
+
+                    b.Property<DateTime?>("ReferralRewardedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("referral_rewarded_at");
+
+                    b.Property<int?>("ReferredByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("referred_by_user_id");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
@@ -234,6 +247,11 @@ namespace Kumashaurma.API.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
+
+                    b.HasIndex("ReferralCode")
+                        .IsUnique();
+
+                    b.HasIndex("ReferredByUserId");
 
                     b.HasIndex("TelegramUserId")
                         .IsUnique();

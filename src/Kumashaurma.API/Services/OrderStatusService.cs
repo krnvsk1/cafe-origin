@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
+using Kumashaurma.API.Options;
+using Microsoft.Extensions.Options;
 
 namespace Kumashaurma.API.Services
 {
@@ -37,10 +39,17 @@ namespace Kumashaurma.API.Services
         private readonly ApplicationDbContext _context;
         private readonly IOrderEventBus _events;
         private readonly YooKassaClient _yooKassa;
+        private readonly ReferralOptions _referral;
         private readonly ILogger<OrderStatusService> _logger;
 
-        public OrderStatusService(ApplicationDbContext context, IOrderEventBus events, YooKassaClient yooKassa, ILogger<OrderStatusService> logger)
+        public OrderStatusService(
+            ApplicationDbContext context,
+            IOrderEventBus events,
+            YooKassaClient yooKassa,
+            IOptions<ReferralOptions> referral,
+            ILogger<OrderStatusService> logger)
         {
+            _referral = referral.Value;
             _context = context;
             _events = events;
             _yooKassa = yooKassa;
@@ -65,6 +74,7 @@ namespace Kumashaurma.API.Services
             {
                 order.CompletedAt = DateTime.UtcNow;
                 await AwardPointsAsync(order);
+                await AwardReferralAsync(order);
             }
             else if (OrderStatuses.IsCompleted(oldStatus) && !OrderStatuses.IsCompleted(newStatus))
             {
@@ -82,6 +92,49 @@ namespace Kumashaurma.API.Services
             _logger.LogInformation("🔄 Заказ #{OrderId}: {Old} → {New}", order.Id, oldStatus, newStatus);
             _events.Publish(new OrderEvent("status", order.Id, order.UserId, newStatus, oldStatus, DateTime.UtcNow));
             return true;
+        }
+
+        // Первый полученный заказ приглашённого друга: бонусы обоим (один раз)
+        private async Task AwardReferralAsync(Order order)
+        {
+            if (!_referral.Enabled || !order.UserId.HasValue || order.Total < _referral.MinOrderAmount) return;
+
+            var invitee = await _context.Users.FindAsync(order.UserId.Value);
+            if (invitee?.ReferredByUserId == null || invitee.ReferralRewardedAt != null) return;
+            if (invitee.ReferredByUserId == invitee.Id) return;
+
+            var inviter = await _context.Users.FindAsync(invitee.ReferredByUserId.Value);
+            invitee.ReferralRewardedAt = DateTime.UtcNow;
+
+            if (_referral.InviteeBonus > 0)
+            {
+                invitee.PointsBalance += _referral.InviteeBonus;
+                _context.UserPointsTransactions.Add(new UserPointsTransaction
+                {
+                    UserId = invitee.Id,
+                    Type = "referral",
+                    Amount = _referral.InviteeBonus,
+                    Description = "Бонус за первый заказ по приглашению",
+                    OrderId = order.Id,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            if (inviter != null && _referral.InviterBonus > 0)
+            {
+                inviter.PointsBalance += _referral.InviterBonus;
+                _context.UserPointsTransactions.Add(new UserPointsTransaction
+                {
+                    UserId = inviter.Id,
+                    Type = "referral",
+                    Amount = _referral.InviterBonus,
+                    Description = $"Бонус за приглашённого друга ({invitee.FirstName})",
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            _logger.LogInformation("🤝 Реферальный бонус: пригласивший {InviterId}, друг {InviteeId}, заказ #{OrderId}",
+                invitee.ReferredByUserId, invitee.Id, order.Id);
         }
 
         // Отмена заказа: возвращаем баллы, списанные на оплату этого заказа

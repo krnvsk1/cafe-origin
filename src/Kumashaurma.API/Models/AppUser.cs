@@ -30,6 +30,17 @@ namespace Kumashaurma.API.Models
         [Column("points_balance")]
         public int PointsBalance { get; set; } = 0;
 
+        // Реферальная программа: свой код, кто пригласил, когда начислен бонус за первый заказ
+        [MaxLength(20)]
+        [Column("referral_code")]
+        public string? ReferralCode { get; set; }
+
+        [Column("referred_by_user_id")]
+        public int? ReferredByUserId { get; set; }
+
+        [Column("referral_rewarded_at")]
+        public DateTime? ReferralRewardedAt { get; set; }
+
         // Привязанный Telegram (ID пользователя Telegram = ID личного чата с ботом)
         [Column("telegram_user_id")]
         public long? TelegramUserId { get; set; }

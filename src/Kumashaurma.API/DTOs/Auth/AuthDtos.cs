@@ -33,6 +33,10 @@ namespace Kumashaurma.API.DTOs.Auth
 
         [StringLength(100, ErrorMessage = "Last name cannot exceed 100 characters")]
         public string? LastName { get; set; }
+
+        // Код пригласившего друга (необязательно)
+        [StringLength(20)]
+        public string? ReferralCode { get; set; }
     }
 
     public class RefreshTokenDto

@@ -151,6 +151,7 @@ builder.Services.AddAuthorization();
 
 // Настройки заведения
 builder.Services.Configure<RestaurantOptions>(builder.Configuration.GetSection(RestaurantOptions.SectionName));
+builder.Services.Configure<ReferralOptions>(builder.Configuration.GetSection(ReferralOptions.SectionName));
 
 // Custom Services
 builder.Services.AddScoped<ISmsService, SmsService>();

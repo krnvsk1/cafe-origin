@@ -24,6 +24,7 @@ import {
 } from '@mui/icons-material';
 import { usePointsBalance, usePointsHistory } from '../api/hooks';
 import { useAuthStore } from '../store/authStore';
+import ReferralCard from '../components/ReferralCard';
 import type { PointsTransaction } from '../types';
 
 const getTransactionTypeConfig = (
@@ -58,6 +59,20 @@ const getTransactionTypeConfig = (
         color: '#e65100',
         bg: themeMode === 'light' ? '#fff3e0' : '#bf360c40',
         label: 'Списано админом',
+      };
+    case 'referral':
+      return {
+        icon: <StarIcon fontSize="small" />,
+        color: '#7c3aed',
+        bg: themeMode === 'light' ? '#f3e8ff' : '#4c1d9540',
+        label: 'За приглашение',
+      };
+    case 'refund':
+      return {
+        icon: <ShoppingIcon fontSize="small" />,
+        color: '#2e7d32',
+        bg: themeMode === 'light' ? '#e8f5e9' : '#1b5e2040',
+        label: 'Возврат за отмену',
       };
     case 'expired':
       return {
@@ -248,6 +263,8 @@ const PointsPage: React.FC = () => {
           />
         </Box>
       </Paper>
+
+      <ReferralCard />
 
       {/* Transaction History */}
       <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>

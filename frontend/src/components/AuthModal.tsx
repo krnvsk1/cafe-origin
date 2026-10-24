@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon, Phone as PhoneIcon, Sms as SmsIcon, Person as PersonIcon } from '@mui/icons-material';
 import { apiClient } from '../api/client';
+import { getStoredReferral, clearStoredReferral } from '../utils/referral';
 import { useAuthStore } from '../store/authStore';
 
 interface AuthModalProps {
@@ -172,10 +173,12 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
         phone,
         firstName: firstName.trim(),
         lastName: lastName.trim() || undefined,
+        referralCode: getStoredReferral() ?? undefined,
       });
 
       if (response.data.success && response.data.accessToken && response.data.user) {
         setAuth(response.data.user, response.data.accessToken, response.data.refreshToken || "");
+        clearStoredReferral();
         onClose();
         resetForm();
       } else {

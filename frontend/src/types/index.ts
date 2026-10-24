@@ -309,7 +309,7 @@ export interface Shawarma {
   export interface PointsTransaction {
     id: number;
     userId: number;
-    type: 'earned' | 'spent' | 'admin_grant' | 'admin_deduct' | 'expired';
+    type: 'earned' | 'spent' | 'admin_grant' | 'admin_deduct' | 'expired' | 'referral' | 'refund';
     amount: number;
     description?: string | null;
     orderId?: number | null;

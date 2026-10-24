@@ -42,6 +42,7 @@ import AuthModal from './components/AuthModal';
 import ProfileMenu from './components/ProfileMenu';
 import LiveOrdersListener from './components/LiveOrdersListener';
 import { initTelegramMiniApp } from './utils/telegram';
+import { captureReferralFromUrl } from './utils/referral';
 
 // Страницы
 import DashboardPage from './pages/DashboardPage';
@@ -132,8 +133,10 @@ function App() {
     }
   }, [orderOpen, isAuthenticated, user]);
 
-  // Открыто как мини-приложение Telegram — разворачиваем и пробуем войти
+  // Открыто как мини-приложение Telegram — разворачиваем и пробуем войти;
+  // запоминаем реферальный код из ссылки ?ref=
   useEffect(() => {
+    captureReferralFromUrl();
     void initTelegramMiniApp();
   }, []);
 
