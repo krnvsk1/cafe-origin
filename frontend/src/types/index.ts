@@ -12,6 +12,8 @@ export interface Shawarma {
   hasCheese: boolean;
   isAvailable: boolean;
   isPromo?: boolean;
+  category?: string;          // Раздел меню (Пиццы, Бургеры…)
+  badge?: 'hit' | 'new' | 'promo' | 'lean' | null;
   createdAt: string;
   updatedAt?: string | null;
   images?: ShawarmaImage[];
@@ -43,6 +45,8 @@ export interface Shawarma {
     isPromo?: boolean;
     parentId?: number | null;
     sortOrder?: number;
+    category?: string;
+    badge?: string | null;
   };
 
   export interface CartItem extends Shawarma {

@@ -500,3 +500,12 @@ export const useStartPayment = () => {
     },
   });
 };
+
+// Разделы меню (Пиццы, Бургеры…) — для выбора при создании позиции
+export const useMenuSections = () => {
+  return useQuery<string[]>({
+    queryKey: ['menu-sections'],
+    queryFn: () => apiClient.get('/api/shawarma/sections').then(res => res.data),
+    staleTime: 60 * 1000,
+  });
+};

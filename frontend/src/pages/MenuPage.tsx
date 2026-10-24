@@ -33,7 +33,12 @@ import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { tokens } from '../theme';
 
-type Filter = 'all' | 'favorites' | 'spicy' | 'cheese';
+// Сетка карточек: 2 колонки на телефоне, 3 на планшете и ноутбуке, 4 на широком экране
+const gridSx = {
+  display: 'grid',
+  gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' },
+  gap: { xs: 1.25, sm: 2 },
+} as const;
 
 /** «Обложка» заведения — как карточка ресторана в сервисах доставки */
 const RestaurantHero: React.FC = () => {
@@ -131,7 +136,8 @@ const MenuPage: React.FC = () => {
 
   const [selectedProduct, setSelectedProduct] = useState<Shawarma | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
+  const [activeSection, setActiveSection] = useState('');
 
   // Избранное
   const { data: favoriteIds = [] } = useFavoriteIds();
@@ -156,34 +162,61 @@ const MenuPage: React.FC = () => {
       .filter(item => item.children.length > 0);
   }, [menuItems]);
 
-  const hasSpicy = cards.some(c => c.isSpicy || c.children?.some(ch => ch.isSpicy));
-  const hasCheese = cards.some(c => c.hasCheese || c.children?.some(ch => ch.hasCheese));
-
-  // Фильтр и поиск (по названию карточки и её вариантов)
+  // Поиск (по названию, вариантам и составу) и избранное
   const visibleCards = useMemo(() => {
     let list = cards;
-    if (filter === 'favorites') list = list.filter(c => favoriteSet.has(c.id));
-    if (filter === 'spicy') list = list.filter(c => c.isSpicy || c.children?.some(ch => ch.isSpicy));
-    if (filter === 'cheese') list = list.filter(c => c.hasCheese || c.children?.some(ch => ch.hasCheese));
-
+    if (onlyFavorites) list = list.filter(c => favoriteSet.has(c.id));
     const q = searchQuery.trim().toLowerCase();
     if (!q) return list;
     return list.filter(card =>
       card.name.toLowerCase().includes(q) ||
-      (card.children || []).some(child =>
-        child.name.toLowerCase().includes(q) || child.description?.toLowerCase().includes(q)));
-  }, [cards, filter, favoriteSet, searchQuery]);
+      card.description?.toLowerCase().includes(q) ||
+      (card.children || []).some(child => child.name.toLowerCase().includes(q)));
+  }, [cards, onlyFavorites, favoriteSet, searchQuery]);
+
+  // Разделы меню в порядке первого появления
+  const sections = useMemo(() => {
+    const map = new Map<string, Shawarma[]>();
+    visibleCards.forEach(card => {
+      const key = card.category?.trim() || 'Меню';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(card);
+    });
+    return Array.from(map.entries()).map(([title, items], i) => ({ id: `section-${i}`, title, items }));
+  }, [visibleCards]);
+
+  // Подсветка вкладки раздела, который сейчас на экране
+  React.useEffect(() => {
+    if (sections.length < 2) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter(e => e.isIntersecting).sort((x, y) => x.boundingClientRect.top - y.boundingClientRect.top);
+        if (visible[0]) setActiveSection(visible[0].target.id);
+      },
+      { rootMargin: '-160px 0px -55% 0px' }
+    );
+    sections.forEach(s => {
+      const el = document.getElementById(s.id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [sections]);
+
+  // Активную вкладку держим в зоне видимости
+  const tabsRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const tab = tabsRef.current?.querySelector(`[data-section="${activeSection}"]`) as HTMLElement | null;
+    tab?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [activeSection]);
+
+  const scrollToSection = (id: string) => {
+    setActiveSection(id);
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const handleAddToCart = (product: Shawarma, quantity: number, selectedAddons: SelectedAddon[], instructions: string, selectedChild?: Shawarma) => {
     addToCart(product, quantity, selectedAddons, instructions, selectedChild);
   };
-
-  const filters: { key: Filter; label: string; icon?: React.ReactElement; show: boolean }[] = [
-    { key: 'all', label: 'Всё меню', show: true },
-    { key: 'favorites', label: 'Избранное', icon: <FavoriteIcon />, show: isAuthenticated && (favoriteIds.length > 0 || filter === 'favorites') },
-    { key: 'spicy', label: 'Острое', show: hasSpicy },
-    { key: 'cheese', label: 'С сыром', show: hasCheese },
-  ];
 
   return (
     <>
@@ -238,26 +271,31 @@ const MenuPage: React.FC = () => {
               }}
             />
             <Box
+              ref={tabsRef}
               role="tablist"
-              aria-label="Фильтры меню"
-              sx={{ display: 'flex', gap: 1, overflowX: 'auto', '&::-webkit-scrollbar': { display: 'none' } }}
+              aria-label="Разделы меню"
+              sx={{ display: 'flex', gap: 1, overflowX: 'auto', flex: 1, minWidth: 0, scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}
             >
-              {filters.filter(f => f.show).map(f => (
+              {isAuthenticated && (favoriteIds.length > 0 || onlyFavorites) && (
                 <Chip
-                  key={f.key}
+                  icon={<FavoriteIcon />}
+                  label="Избранное"
+                  onClick={() => setOnlyFavorites(v => !v)}
+                  color={onlyFavorites ? 'primary' : 'default'}
+                  aria-pressed={onlyFavorites}
+                  sx={{ height: 40, px: 0.5, fontWeight: 600, flexShrink: 0, bgcolor: onlyFavorites ? undefined : 'background.paper' }}
+                />
+              )}
+              {sections.length > 1 && sections.map(section => (
+                <Chip
+                  key={section.id}
                   role="tab"
-                  aria-selected={filter === f.key}
-                  icon={f.icon}
-                  label={f.label}
-                  onClick={() => setFilter(f.key)}
-                  color={filter === f.key ? 'primary' : 'default'}
-                  sx={{
-                    height: 40,
-                    px: 0.5,
-                    fontWeight: 600,
-                    flexShrink: 0,
-                    bgcolor: filter === f.key ? undefined : 'background.paper',
-                  }}
+                  data-section={section.id}
+                  aria-selected={activeSection === section.id}
+                  label={section.title}
+                  onClick={() => scrollToSection(section.id)}
+                  color={activeSection === section.id ? 'primary' : 'default'}
+                  sx={{ height: 40, px: 0.5, fontWeight: 600, flexShrink: 0, bgcolor: activeSection === section.id ? undefined : 'background.paper' }}
                 />
               ))}
             </Box>
@@ -284,36 +322,42 @@ const MenuPage: React.FC = () => {
             </Alert>
           )}
 
-          <Box
-            sx={{
-              mt: 1,
-              display: 'grid',
-              gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' },
-              gap: { xs: 1.25, sm: 2 },
-            }}
-          >
-            {isLoading && Array.from({ length: 8 }).map((_, i) => (
-              <Box key={i} sx={{ bgcolor: 'background.paper', borderRadius: '24px', p: 1.25 }}>
-                <Skeleton variant="rounded" sx={{ aspectRatio: '1 / 1', height: 'auto', borderRadius: '18px' }} />
-                <Skeleton width="40%" height={32} sx={{ mt: 1 }} />
-                <Skeleton width="80%" />
-                <Skeleton variant="rounded" height={40} sx={{ mt: 1, borderRadius: '14px' }} />
-              </Box>
-            ))}
+          {isLoading && (
+            <Box sx={gridSx}>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Box key={i} sx={{ bgcolor: 'background.paper', borderRadius: '24px', p: 1.25 }}>
+                  <Skeleton variant="rounded" sx={{ aspectRatio: '1 / 1', height: 'auto', borderRadius: '18px' }} />
+                  <Skeleton width="40%" height={32} sx={{ mt: 1 }} />
+                  <Skeleton width="80%" />
+                  <Skeleton variant="rounded" height={40} sx={{ mt: 1, borderRadius: '14px' }} />
+                </Box>
+              ))}
+            </Box>
+          )}
 
-            {visibleCards.map(card => (
-              <MenuItemCard
-                key={card.id}
-                item={card}
-                onOpen={() => setSelectedProduct(card)}
-                inCartCount={inCart.get(card.id) ?? 0}
-                isFavorite={favoriteSet.has(card.id)}
-                onToggleFavorite={isAuthenticated
-                  ? () => toggleFavorite.mutate({ shawarmaId: card.id, isFavorite: !favoriteSet.has(card.id) })
-                  : undefined}
-              />
-            ))}
-          </Box>
+          {sections.map(section => (
+            <Box key={section.id} id={section.id} component="section" sx={{ scrollMarginTop: { xs: 180, md: 150 }, mt: { xs: 2, md: 3 } }}>
+              {sections.length > 1 && (
+                <Typography variant="h4" component="h2" sx={{ mb: { xs: 1.5, md: 2 }, fontSize: { xs: '1.5rem', md: '2rem' } }}>
+                  {section.title}
+                </Typography>
+              )}
+              <Box sx={gridSx}>
+                {section.items.map(card => (
+                  <MenuItemCard
+                    key={card.id}
+                    item={card}
+                    onOpen={() => setSelectedProduct(card)}
+                    inCartCount={inCart.get(card.id) ?? 0}
+                    isFavorite={favoriteSet.has(card.id)}
+                    onToggleFavorite={isAuthenticated
+                      ? () => toggleFavorite.mutate({ shawarmaId: card.id, isFavorite: !favoriteSet.has(card.id) })
+                      : undefined}
+                  />
+                ))}
+              </Box>
+            </Box>
+          ))}
 
           {!isLoading && !error && visibleCards.length === 0 && (
             <Box sx={{ textAlign: 'center', py: 8 }}>
@@ -328,7 +372,7 @@ const MenuPage: React.FC = () => {
               {cards.length === 0 && isAdminRole ? (
                 <Button component={Link} to="/admin/create" variant="contained" startIcon={<AddIcon />}>Добавить позицию</Button>
               ) : cards.length > 0 && (
-                <Button variant="outlined" onClick={() => { setSearchQuery(''); setFilter('all'); }}>Показать всё меню</Button>
+                <Button variant="outlined" onClick={() => { setSearchQuery(''); setOnlyFavorites(false); }}>Показать всё меню</Button>
               )}
             </Box>
           )}

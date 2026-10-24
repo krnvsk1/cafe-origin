@@ -39,6 +39,9 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
   const price = priceOf(item);
   const description = item.description || item.children?.[0]?.description || '';
   const spicy = item.isSpicy || item.children?.some(c => c.isSpicy);
+  const badge = item.badge ? BADGES[item.badge] : undefined;
+  // Единственный вариант с весом/размером (например «400 г») показываем под названием
+  const sizeNote = item.children?.length === 1 && item.children[0].name !== 'Стандарт' ? item.children[0].name : '';
   const cheese = item.hasCheese || item.children?.some(c => c.hasCheese);
 
   return (
@@ -85,10 +88,11 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
           </Box>
         )}
 
-        {(spicy || cheese) && (
-          <Box sx={{ position: 'absolute', left: 8, bottom: 8, display: 'flex', gap: 0.5 }}>
-            {spicy && <Tag label="Острая" color={tokens.chili} />}
-            {cheese && <Tag label="С сыром" color="#E8890C" />}
+        {(badge || spicy || cheese) && (
+          <Box sx={{ position: 'absolute', left: 8, top: 8, display: 'flex', gap: 0.5, flexWrap: 'wrap', pr: 5 }}>
+            {badge && <Tag label={badge.label} color={badge.color} solid />}
+            {spicy && <Tag label="Острое" color={tokens.chili} />}
+            {cheese && !badge && <Tag label="С сыром" color="#B86A00" />}
           </Box>
         )}
 
@@ -131,6 +135,9 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
         >
           {item.name}
         </Typography>
+        {sizeNote && (
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', mt: 0.25 }}>{sizeNote}</Typography>
+        )}
         {description && (
           <Typography
             variant="body2"
@@ -166,15 +173,22 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
   );
 };
 
-const Tag: React.FC<{ label: string; color: string }> = ({ label, color }) => (
+const BADGES: Record<string, { label: string; color: string }> = {
+  hit: { label: 'Хит', color: tokens.chili },
+  new: { label: 'Новинка', color: tokens.herb },
+  promo: { label: 'Акция', color: '#7A4DFF' },
+  lean: { label: 'Постное', color: '#4E7D2E' },
+};
+
+const Tag: React.FC<{ label: string; color: string; solid?: boolean }> = ({ label, color, solid }) => (
   <Box
     component="span"
     sx={{
       px: 1,
       py: 0.25,
       borderRadius: '8px',
-      bgcolor: 'rgba(255,255,255,0.94)',
-      color,
+      bgcolor: solid ? color : 'rgba(255,255,255,0.94)',
+      color: solid ? '#fff' : color,
       fontSize: '0.72rem',
       fontWeight: 700,
     }}

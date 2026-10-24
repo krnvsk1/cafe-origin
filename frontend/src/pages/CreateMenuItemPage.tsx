@@ -39,7 +39,7 @@ import {
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import { useShawarma, useCreateShawarma, useUpdateShawarma, useDeleteShawarma, useShawarmas } from '../api/hooks';
+import { useShawarma, useCreateShawarma, useUpdateShawarma, useDeleteShawarma, useShawarmas, useMenuSections } from '../api/hooks';
 import type { CreateShawarmaDto, ShawarmaImage } from '../types';
 import { useUploadImage, useShawarmaImages, useDeleteImage } from '../api/hooks';
 import { resolveMediaUrl } from '../utils/media';
@@ -180,6 +180,7 @@ const CreateMenuItemPage: React.FC = () => {
   // Получаем список карточек-категорий (parent_id = null) для привязки
   const { data: allShawarmas = [] } = useShawarmas();
   const parentCards = allShawarmas.filter(s => s.parentId === null || s.isCard);
+  const { data: menuSections = [] } = useMenuSections();
   const { data: existingShawarma, isLoading: isLoadingShawarma } = useShawarma(
     isEditMode ? Number(id) : 0
   );
@@ -199,6 +200,8 @@ const CreateMenuItemPage: React.FC = () => {
     hasCheese: false,
     isAvailable: true,
     parentId: null,
+    category: '',
+    badge: null,
   });
 
   const [snackbar, setSnackbar] = React.useState({
@@ -218,6 +221,8 @@ const CreateMenuItemPage: React.FC = () => {
         hasCheese: existingShawarma.hasCheese,
         isAvailable: existingShawarma.isAvailable,
         parentId: existingShawarma.parentId ?? null,
+        category: existingShawarma.category ?? '',
+        badge: existingShawarma.badge ?? null,
       });
     }
   }, [existingShawarma]);
@@ -677,6 +682,44 @@ const CreateMenuItemPage: React.FC = () => {
                   required
                   sx={fieldSx}
                 />
+
+                {formData.parentId === null && (
+                  <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+                    <Autocomplete
+                      freeSolo
+                      options={menuSections}
+                      value={formData.category || ''}
+                      onInputChange={(_e, value) => handleChange('category', value)}
+                      disabled={isPending}
+                      sx={{ flex: 1 }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Раздел меню"
+                          placeholder="Например, Пиццы"
+                          helperText="Позиции группируются по разделам на витрине"
+                          sx={fieldSx}
+                        />
+                      )}
+                    />
+                    <TextField
+                      select
+                      label="Метка на карточке"
+                      value={formData.badge ?? ''}
+                      onChange={(e) => handleChange('badge', e.target.value || null)}
+                      disabled={isPending}
+                      sx={{ ...fieldSx, flex: 1 }}
+                      SelectProps={{ native: true }}
+                      InputLabelProps={{ shrink: true }}
+                    >
+                      <option value="">Без метки</option>
+                      <option value="hit">Хит</option>
+                      <option value="new">Новинка</option>
+                      <option value="promo">Акция</option>
+                      <option value="lean">Постное</option>
+                    </TextField>
+                  </Box>
+                )}
               </Box>
             </CardContent>
           </Card>

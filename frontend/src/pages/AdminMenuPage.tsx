@@ -61,6 +61,7 @@ import {
   useLinkAddonToShawarma
 } from '../hooks/useAddons';
 import type { AddonCategory, Addon } from '../types';
+import MenuImportButton from '../components/MenuImportButton';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -277,11 +278,12 @@ const AdminMenuPage: React.FC = () => {
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Заголовок */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Typography variant="h4" component="h1" fontWeight={700}>
           Управление меню
         </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <MenuImportButton />
           <Button
             variant="contained"
             startIcon={<FastfoodIcon />}
