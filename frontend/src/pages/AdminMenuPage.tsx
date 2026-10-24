@@ -23,7 +23,7 @@ import {
   Snackbar,
   Tab,
   Tabs,
-  Grid,
+  Grid2 as Grid,
   Card,
   CardContent,
   Divider,

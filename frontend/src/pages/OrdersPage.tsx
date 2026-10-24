@@ -7,7 +7,7 @@ import {
   CardContent,
   CircularProgress,
   Alert,
-  Grid,
+  Grid2 as Grid,
   Chip,
   IconButton,
   Collapse,

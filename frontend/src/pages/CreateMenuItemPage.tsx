@@ -7,8 +7,6 @@ import {
   CardContent,
   TextField,
   Autocomplete,
-  FormControlLabel,
-  Switch,
   Alert,
   CircularProgress,
   Snackbar,
@@ -30,24 +28,19 @@ import {
   Crop as CropIcon,
   Info as InfoIcon,
   Restaurant as FoodIcon,
-  LocalOffer as CategoryIcon,
   AttachMoney as PriceIcon,
-  Description as DescIcon,
   Tune as SettingsIcon,
   Image as ImageIcon,
-  ImageOutlined as ImageIconOutlined,
   RotateLeft as RotateLeftIcon,
   ZoomOut as ZoomOutIcon,
   ZoomIn as ZoomInIcon,
-  AspectRatio as AspectRatioIcon,
   Close as CloseIcon,
-  Add as AddIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { useShawarma, useCreateShawarma, useUpdateShawarma, useDeleteShawarma, useShawarmas } from '../api/hooks';
-import type { CreateShawarmaDto, ShawarmaImage, Shawarma } from '../types';
+import type { CreateShawarmaDto, ShawarmaImage } from '../types';
 import { useUploadImage, useShawarmaImages, useDeleteImage } from '../api/hooks';
 import { resolveMediaUrl } from '../utils/media';
 
@@ -102,12 +95,12 @@ const SectionLabel: React.FC<{
 };
 
 const ToggleChip: React.FC<{
-  icon?: React.ReactNode;
+  icon?: React.ReactElement;
   label: string;
   checked: boolean;
   onChange: () => void;
   disabled?: boolean;
-  color: string;
+  color: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success';
 }> = ({ icon, label, checked, onChange, disabled, color }) => {
   const theme = useTheme();
 
@@ -290,11 +283,7 @@ const CreateMenuItemPage: React.FC = () => {
     canvas.height = cropHeight;
 
     const rad = (currentRotation * Math.PI) / 180;
-    const absRot = Math.abs(currentRotation);
 
-    // Рассчитываем размер изображения с учётом поворота
-    const rotW = absRot % 180 === 90 ? image.naturalHeight : image.naturalWidth;
-    const rotH = absRot % 180 === 90 ? image.naturalWidth : image.naturalHeight;
 
     // Масштаб отображаемого изображения к натуральному
     const elImg = imgRef.current;
@@ -653,7 +642,7 @@ const CreateMenuItemPage: React.FC = () => {
                   <Autocomplete
                     options={parentCards}
                     value={formData.parentId ? parentCards.find(c => c.id === formData.parentId) || null : null}
-                    onChange={(e, value) => handleChange('parentId', value?.id ?? null)}
+                    onChange={(_e, value) => handleChange('parentId', value?.id ?? null)}
                     disabled={isPending}
                     getOptionLabel={(option) => option.name}
                     renderInput={(params) => (

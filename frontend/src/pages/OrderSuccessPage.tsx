@@ -6,7 +6,6 @@ import {
   Paper,
   CircularProgress,
   useTheme,
-  useMediaQuery,
   Chip,
   Divider,
 } from '@mui/material';
@@ -45,7 +44,6 @@ const OrderSuccessPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   const orderId = Number(id);
   const { data: order, isLoading, error } = useOrder(orderId);

@@ -163,10 +163,10 @@ const CartModal: React.FC<CartModalProps> = ({
   // Re-validate promo when total changes
   React.useEffect(() => {
     if (appliedPromo && items.length > 0) {
-      validatePromo.mutate({
+      validatePromo.mutateAsync({
         code: promoCode.trim(),
         orderAmount: totalPrice,
-      }).then(result => {
+      }).then((result: PromoCodeValidation) => {
         if (result.valid) {
           setAppliedPromo(result);
           onPromoApplied?.(result);
@@ -488,7 +488,7 @@ const CartModal: React.FC<CartModalProps> = ({
           )}
           {!appliedPromo && validatePromo.isError && (
             <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
-              {validatePromo.error?.response?.data?.message || validatePromo.error?.message || 'Промокод не найден'}
+              {(validatePromo.error as any)?.response?.data?.message || validatePromo.error?.message || 'Промокод не найден'}
             </Typography>
           )}
         </Paper>

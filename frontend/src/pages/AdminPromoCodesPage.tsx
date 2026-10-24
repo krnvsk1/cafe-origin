@@ -30,10 +30,11 @@ import {
   Tooltip,
   CircularProgress,
   useTheme,
-  Grid,
+  Grid2 as Grid,
   alpha,
   LinearProgress,
 } from '@mui/material';
+import type { Theme } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -423,7 +424,7 @@ const AdminPromoCodesPage: React.FC = () => {
 
 const PromoCodeTableRow: React.FC<{
   promo: PromoCode;
-  theme: ReturnType<typeof useTheme>;
+  theme: Theme;
   copiedId: number | null;
   onEdit: (promo: PromoCode) => void;
   onDelete: (promo: PromoCode) => void;
@@ -562,7 +563,7 @@ const PromoCodeTableRow: React.FC<{
 
 const PromoCodeCard: React.FC<{
   promo: PromoCode;
-  theme: ReturnType<typeof useTheme>;
+  theme: Theme;
   copiedId: number | null;
   onEdit: (promo: PromoCode) => void;
   onDelete: (promo: PromoCode) => void;

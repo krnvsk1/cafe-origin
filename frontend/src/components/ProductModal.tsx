@@ -17,7 +17,7 @@ import {
   alpha,
   useTheme,
   useMediaQuery,
-  Grid,
+  Grid2 as Grid,
   Snackbar,
   Alert
 } from '@mui/material';

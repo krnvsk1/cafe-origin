@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Container,
   Typography,
@@ -15,7 +15,7 @@ import {
   Badge,
   Fab,
   Zoom,
-  Grid,
+  Grid2 as Grid,
   Divider,
   List,
   ListItem,
@@ -98,7 +98,7 @@ const MenuPage: React.FC = () => {
 
   // === ИЕРАРХИЧЕСКАЯ ГРУППИРОВКА ===
   // Отделяем карточки (parent_id = null) и одиночные товары (без parent_id и без children)
-  const { cards, soloItems } = useMemo(() => {
+  const { cards } = useMemo(() => {
     const cardsList: Shawarma[] = [];
     const soloList: Shawarma[] = [];
 
@@ -131,14 +131,6 @@ const MenuPage: React.FC = () => {
   };
 
   const categoryRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const setCategoryRef = useCallback((id: string, element: HTMLElement | null) => {
-    if (element) {
-      categoryRefs.current.set(id, element);
-    } else {
-      categoryRefs.current.delete(id);
-    }
-  }, []);
-
   const categoryListRef = useRef<HTMLUListElement>(null);
   const chipContainerRef = useRef<HTMLDivElement>(null);
 
@@ -161,7 +153,7 @@ const MenuPage: React.FC = () => {
 
   // Навигационные категории — названия карточек
   const navCategories = useMemo<NavCategory[]>(() => {
-    return filteredCards.map((card, idx) => ({
+    return filteredCards.map((card) => ({
       id: `card-${card.id}`,
       name: card.name,
       count: (card.children || []).length,

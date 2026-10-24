@@ -1,0 +1,80 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Restore
+        run: dotnet restore Kumashaurma.sln
+      - name: Build
+        run: dotnet build Kumashaurma.sln --no-restore -c Release 2>&1 | tee build.txt; exit ${PIPESTATUS[0]}
+      - name: Test
+        run: dotnet test Kumashaurma.sln --no-build -c Release
+      - name: Check EF model snapshot
+        id: ef
+        continue-on-error: true
+        run: |
+          dotnet tool install --global dotnet-ef --version 9.0.*
+          cd src/Kumashaurma.API
+          dotnet ef migrations has-pending-model-changes 2>&1 | tee ../../ef.txt; exit ${PIPESTATUS[0]}
+      - name: Generate sync migration
+        if: steps.ef.outcome == 'failure'
+        continue-on-error: true
+        run: |
+          cd src/Kumashaurma.API
+          dotnet ef migrations add SyncModelSnapshot 2>&1 | tail -5
+          { echo '## Generated migration'; echo '```'; cat Migrations/*_SyncModelSnapshot.cs; echo '```';
+            echo '## Snapshot diff'; echo '```diff'; git diff -U2 Migrations/ApplicationDbContextModelSnapshot.cs; echo '```'; } > ../../migration.md
+      - name: Publish migration
+        if: steps.ef.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head -c 64000 migration.md > m.md
+          gh api repos/${{ github.repository }}/check-runs -f name="migration-report" -f head_sha="${{ github.sha }}" \
+            -f status=completed -f conclusion=neutral -f "output[title]=Sync migration" -F "output[summary]=@m.md"
+      - name: Publish report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '## dotnet build (warnings/errors)'; grep -E "warning|error" build.txt | grep -v "^ *$" | sort -u | tail -150 || true;
+            echo; echo '## EF has-pending-model-changes'; tail -60 ef.txt 2>/dev/null || true; } > report.md
+          gh api repos/${{ github.repository }}/check-runs -f name="backend-report" -f head_sha="${{ github.sha }}" \
+            -f status=completed -f conclusion=neutral -f "output[title]=Backend report" -F "output[summary]=@report.md"
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build 2>&1 | tee build.txt; exit ${PIPESTATUS[0]}
+      - name: Publish report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '## npm run build'; grep -E "error TS|error " build.txt | head -300 || true; } > report.md
+          gh api repos/${{ github.repository }}/check-runs -f name="frontend-report" -f head_sha="${{ github.sha }}" \
+            -f status=completed -f conclusion=neutral -f "output[title]=Frontend report" -F "output[summary]=@report.md"

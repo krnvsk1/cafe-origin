@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { 
   Typography, Box, Button, Card, CardContent, 
-  Grid, Alert, Paper,
+  Grid2 as Grid, Alert, Paper,
   LinearProgress, Chip, useTheme
 } from '@mui/material';
 import { 

@@ -8,14 +8,12 @@ import {
   ListItemIcon,
   ListItemText,
   Chip,
-  CircularProgress,
   Divider,
   useTheme,
   Skeleton,
 } from '@mui/material';
 import {
   Star as StarIcon,
-  Add as AddIcon,
   Remove as RemoveIcon,
   CardGiftcard as GiftIcon,
   AdminPanelSettings as AdminIcon,
@@ -319,7 +317,6 @@ const PointsPage: React.FC = () => {
           }}
         >
           {groupedTransactions.map((group, groupIdx) => {
-            const config = getTransactionTypeConfig;
             return (
               <Box key={group.date}>
                 {groupIdx > 0 && <Divider />}
