@@ -46,7 +46,7 @@ export interface Shawarma {
     parentId?: number | null;
     sortOrder?: number;
     category?: string;
-    badge?: string | null;
+    badge?: 'hit' | 'new' | 'promo' | 'lean' | null;
   };
 
   export interface CartItem extends Shawarma {
