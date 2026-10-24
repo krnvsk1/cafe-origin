@@ -33,3 +33,4 @@ npm-debug.log*
 frontend/frontend@0.0.0
 frontend/tsc
 frontend/dist/
+xcuserdata/
