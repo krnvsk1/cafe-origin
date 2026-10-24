@@ -134,6 +134,31 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("addon_categories");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("key");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("value");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("app_settings");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.AppUser", b =>
                 {
                     b.Property<int>("Id")
