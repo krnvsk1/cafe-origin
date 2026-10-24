@@ -284,6 +284,103 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.ChzDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("action");
+
+                    b.Property<DateTime>("ActionDate")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("action_date");
+
+                    b.Property<DateTime?>("CheckedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("checked_at");
+
+                    b.Property<string>("ChzDocumentId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("chz_document_id");
+
+                    b.Property<string>("Codes")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("codes");
+
+                    b.Property<int>("CodesCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("codes_count");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("DocumentNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("document_number");
+
+                    b.Property<string>("ProductDocument")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("product_document");
+
+                    b.Property<string>("ProductGroup")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("product_group");
+
+                    b.Property<string>("Result")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("result");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int?>("StockDocumentId")
+                        .HasColumnType("integer")
+                        .HasColumnName("stock_document_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("chz_documents");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.DeliveryZone", b =>
                 {
                     b.Property<int>("Id")
