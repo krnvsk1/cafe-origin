@@ -435,6 +435,10 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("status");
 
+                    b.Property<DateTime?>("StockDeductedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("stock_deducted_at");
+
                     b.Property<decimal>("Total")
                         .HasColumnType("decimal(10,2)")
                         .HasColumnName("total");
@@ -729,12 +733,12 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("id");
 
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
                     b.Property<string>("Badge")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("badge");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Category")
                         .IsRequired()
@@ -928,6 +932,402 @@ namespace Kumashaurma.API.Migrations
                     b.HasIndex("Phone");
 
                     b.ToTable("sms_verification_codes");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.StockDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AttachmentPath")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("attachment_path");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("date");
+
+                    b.Property<string>("Number")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("number");
+
+                    b.Property<DateTime?>("PostedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("posted_at");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("integer")
+                        .HasColumnName("supplier_id");
+
+                    b.Property<decimal>("Total")
+                        .HasColumnType("decimal(14,2)")
+                        .HasColumnName("total");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierId");
+
+                    b.HasIndex("Type", "Date");
+
+                    b.ToTable("stock_documents");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.StockDocumentLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("integer")
+                        .HasColumnName("document_id");
+
+                    b.Property<decimal?>("ExpectedQuantity")
+                        .HasColumnType("decimal(14,3)")
+                        .HasColumnName("expected_quantity");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(14,4)")
+                        .HasColumnName("price");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(14,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<int>("StockItemId")
+                        .HasColumnType("integer")
+                        .HasColumnName("stock_item_id");
+
+                    b.Property<decimal>("Sum")
+                        .HasColumnType("decimal(14,2)")
+                        .HasColumnName("sum");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("StockItemId");
+
+                    b.ToTable("stock_document_lines");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.StockItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AvgCost")
+                        .HasColumnType("decimal(14,4)")
+                        .HasColumnName("avg_cost");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_archived");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("kind");
+
+                    b.Property<decimal>("LastPrice")
+                        .HasColumnType("decimal(14,4)")
+                        .HasColumnName("last_price");
+
+                    b.Property<decimal>("MinQuantity")
+                        .HasColumnType("decimal(14,3)")
+                        .HasColumnName("min_quantity");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(14,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("unit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("stock_items");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.StockMovement", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("BalanceAfter")
+                        .HasColumnType("decimal(14,3)")
+                        .HasColumnName("balance_after");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("DocumentId")
+                        .HasColumnType("integer")
+                        .HasColumnName("document_id");
+
+                    b.Property<int?>("OrderId")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_id");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(14,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<int>("StockItemId")
+                        .HasColumnType("integer")
+                        .HasColumnName("stock_item_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.Property<decimal>("UnitCost")
+                        .HasColumnType("decimal(14,4)")
+                        .HasColumnName("unit_cost");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("StockItemId", "CreatedAt");
+
+                    b.HasIndex("Type", "CreatedAt");
+
+                    b.ToTable("stock_movements");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.Supplier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContactPerson")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("contact_person");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Inn")
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("inn");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_archived");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("phone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("suppliers");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.TechCard", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AddonId")
+                        .HasColumnType("integer")
+                        .HasColumnName("addon_id");
+
+                    b.Property<string>("Instructions")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("instructions");
+
+                    b.Property<decimal?>("OutputWeight")
+                        .HasColumnType("decimal(10,1)")
+                        .HasColumnName("output_weight");
+
+                    b.Property<int?>("ShawarmaId")
+                        .HasColumnType("integer")
+                        .HasColumnName("shawarma_id");
+
+                    b.Property<int?>("StockItemId")
+                        .HasColumnType("integer")
+                        .HasColumnName("stock_item_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<decimal>("YieldQuantity")
+                        .HasColumnType("decimal(14,3)")
+                        .HasColumnName("yield_quantity");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddonId")
+                        .IsUnique();
+
+                    b.HasIndex("ShawarmaId")
+                        .IsUnique();
+
+                    b.HasIndex("StockItemId")
+                        .IsUnique();
+
+                    b.ToTable("tech_cards");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.TechCardLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Gross")
+                        .HasColumnType("decimal(14,4)")
+                        .HasColumnName("gross");
+
+                    b.Property<decimal>("LossPercent")
+                        .HasColumnType("decimal(5,2)")
+                        .HasColumnName("loss_percent");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<int>("StockItemId")
+                        .HasColumnType("integer")
+                        .HasColumnName("stock_item_id");
+
+                    b.Property<int>("TechCardId")
+                        .HasColumnType("integer")
+                        .HasColumnName("tech_card_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StockItemId");
+
+                    b.HasIndex("TechCardId");
+
+                    b.ToTable("tech_card_lines");
                 });
 
             modelBuilder.Entity("Kumashaurma.API.Models.UserAddress", b =>
@@ -1341,6 +1741,89 @@ namespace Kumashaurma.API.Migrations
                     b.Navigation("Shawarma");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.StockDocument", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.StockDocumentLine", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.StockDocument", "Document")
+                        .WithMany("Lines")
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Kumashaurma.API.Models.StockItem", "StockItem")
+                        .WithMany()
+                        .HasForeignKey("StockItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Document");
+
+                    b.Navigation("StockItem");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.StockMovement", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.StockItem", "StockItem")
+                        .WithMany()
+                        .HasForeignKey("StockItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("StockItem");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.TechCard", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.Addon", "Addon")
+                        .WithMany()
+                        .HasForeignKey("AddonId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Kumashaurma.API.Models.Shawarma", "Shawarma")
+                        .WithMany()
+                        .HasForeignKey("ShawarmaId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Kumashaurma.API.Models.StockItem", "StockItem")
+                        .WithMany()
+                        .HasForeignKey("StockItemId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Addon");
+
+                    b.Navigation("Shawarma");
+
+                    b.Navigation("StockItem");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.TechCardLine", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.StockItem", "StockItem")
+                        .WithMany()
+                        .HasForeignKey("StockItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Kumashaurma.API.Models.TechCard", "TechCard")
+                        .WithMany("Lines")
+                        .HasForeignKey("TechCardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StockItem");
+
+                    b.Navigation("TechCard");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.UserAddress", b =>
                 {
                     b.HasOne("Kumashaurma.API.Models.AppUser", "User")
@@ -1486,6 +1969,16 @@ namespace Kumashaurma.API.Migrations
                     b.Navigation("Children");
 
                     b.Navigation("Images");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.StockDocument", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.TechCard", b =>
+                {
+                    b.Navigation("Lines");
                 });
 #pragma warning restore 612, 618
         }
