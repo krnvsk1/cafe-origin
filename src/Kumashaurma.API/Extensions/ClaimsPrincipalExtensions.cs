@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Extensions
 {
@@ -11,8 +12,8 @@ namespace Kumashaurma.API.Extensions
             return int.TryParse(value, out var id) ? id : null;
         }
 
-        /// <summary>Сотрудник: admin, manager или courier</summary>
+        /// <summary>Сотрудник, которому видны все заказы: «Все заказы», «Кухня» или «Доставка»</summary>
         public static bool IsStaff(this ClaimsPrincipal user) =>
-            user.IsInRole("admin") || user.IsInRole("manager") || user.IsInRole("courier");
+            user.HasAnyPermission(Permissions.OrdersView, Permissions.Kitchen, Permissions.Delivery);
     }
 }

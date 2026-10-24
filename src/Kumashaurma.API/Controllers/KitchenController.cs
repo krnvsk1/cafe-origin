@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Services;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -11,7 +12,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/kitchen")]
-    [Authorize(Roles = "admin,manager")]
+    [HasPermission(Permissions.Kitchen)]
     public class KitchenController : ControllerBase
     {
         // Заказ ко времени появляется в работе за столько минут до срока

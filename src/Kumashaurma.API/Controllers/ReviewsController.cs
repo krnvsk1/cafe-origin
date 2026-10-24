@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Extensions;
 using Kumashaurma.API.Models;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -97,7 +98,7 @@ namespace Kumashaurma.API.Controllers
 
         // GET: api/reviews?rating=1&withComment=true&page=1&pageSize=20 — для админки
         [HttpGet]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Reviews)]
         public async Task<IActionResult> GetAll(
             [FromQuery] int? rating,
             [FromQuery] bool? withComment,
@@ -159,7 +160,7 @@ namespace Kumashaurma.API.Controllers
 
         // POST: api/reviews/{id}/reply — ответ заведения
         [HttpPost("{id}/reply")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Reviews)]
         public async Task<IActionResult> Reply(int id, [FromBody] ReplyRequest request)
         {
             var review = await _context.OrderReviews.FindAsync(id);

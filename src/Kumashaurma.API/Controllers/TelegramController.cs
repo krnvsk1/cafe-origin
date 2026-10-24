@@ -12,6 +12,7 @@ using Kumashaurma.API.Extensions;
 using Kumashaurma.API.Models;
 using Kumashaurma.API.Options;
 using Kumashaurma.API.Services;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -148,15 +149,7 @@ namespace Kumashaurma.API.Controllers
                 AccessToken = accessToken,
                 RefreshToken = refreshToken.Token,
                 ExpiresAt = DateTime.UtcNow.AddMinutes(expirationMinutes),
-                User = new UserDto
-                {
-                    Id = user.Id,
-                    Phone = user.PhoneNumber ?? "",
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    PhoneVerified = user.PhoneVerified,
-                    Roles = roles
-                }
+                User = await UserDtoFactory.CreateAsync(user, roles, HttpContext.RequestServices.GetRequiredService<IPermissionService>())
             });
         }
 
@@ -164,7 +157,7 @@ namespace Kumashaurma.API.Controllers
 
         // POST: api/telegram/setup — установить вебхук, кнопку меню и команды (один раз после деплоя)
         [HttpPost("setup")]
-        [Authorize(Roles = "admin")]
+        [HasPermission(Permissions.Settings)]
         public async Task<IActionResult> Setup()
         {
             if (!_options.Enabled) return BadRequest(new { Message = "Не задан Telegram:BotToken" });

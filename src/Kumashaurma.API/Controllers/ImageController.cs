@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -25,7 +26,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpPost("upload/{shawarmaId}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> UploadImage(int shawarmaId, IFormFile file)
         {
             try
@@ -118,7 +119,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> DeleteImage(int id)
         {
             try

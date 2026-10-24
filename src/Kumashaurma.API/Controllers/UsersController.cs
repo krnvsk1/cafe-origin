@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Models;
 using Kumashaurma.API.Data;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -14,19 +15,42 @@ namespace Kumashaurma.API.Controllers
     public class UsersController : ControllerBase
     {
         private readonly UserManager<AppUser> _userManager;
+        private readonly RoleManager<IdentityRole<int>> _roleManager;
         private readonly ApplicationDbContext _context;
+        private readonly IPermissionService _permissions;
 
-        public UsersController(UserManager<AppUser> userManager, ApplicationDbContext context)
+        public UsersController(
+            UserManager<AppUser> userManager,
+            RoleManager<IdentityRole<int>> roleManager,
+            ApplicationDbContext context,
+            IPermissionService permissions)
         {
             _userManager = userManager;
+            _roleManager = roleManager;
             _context = context;
+            _permissions = permissions;
+        }
+
+        /// <summary>
+        /// Можно ли текущему пользователю выдавать или снимать эту роль:
+        /// администратор — любую; остальные — только роли с правами не шире своих и не «Администратор»
+        /// </summary>
+        private async Task<string?> CheckRoleChangeAllowedAsync(string role)
+        {
+            if (!await _roleManager.RoleExistsAsync(role)) return "Такой роли нет";
+            if (User.IsInRole(AppRoles.Admin)) return null;
+            if (role == AppRoles.Admin) return "Назначать администраторов может только администратор";
+
+            var rolePerms = await _permissions.GetPermissionsAsync(new[] { role });
+            var mine = await _permissions.GetPermissionsAsync(User.FindAll(ClaimTypes.Role).Select(c => c.Value));
+            return rolePerms.IsSubsetOf(mine) ? null : "У этой роли есть права, которых нет у вас";
         }
 
         /// <summary>
         /// Получить список всех пользователей (только для admin/manager)
         /// </summary>
         [HttpGet]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.UsersView, Permissions.UsersRoles)]
         public async Task<ActionResult<IEnumerable<UserListDto>>> GetUsers(
             [FromQuery] string? role = null,
             [FromQuery] int page = 1,
@@ -76,7 +100,7 @@ namespace Kumashaurma.API.Controllers
         /// Получить пользователя по ID
         /// </summary>
         [HttpGet("{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.UsersView, Permissions.UsersRoles)]
         public async Task<ActionResult<UserDetailDto>> GetUser(int id)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
@@ -117,7 +141,7 @@ namespace Kumashaurma.API.Controllers
         /// Назначить роль пользователю (только для admin)
         /// </summary>
         [HttpPost("{id}/roles")]
-        [Authorize(Roles = "admin")]
+        [HasPermission(Permissions.UsersRoles)]
         public async Task<ActionResult> AssignRole(int id, [FromBody] AssignRoleDto dto)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
@@ -127,9 +151,15 @@ namespace Kumashaurma.API.Controllers
                 return NotFound(new { message = "Пользователь не найден" });
             }
 
-            if (!AppRoles.AllRoles.Contains(dto.Role))
+            var denied = await CheckRoleChangeAllowedAsync(dto.Role);
+            if (denied != null)
             {
-                return BadRequest(new { message = $"Недопустимая роль. Допустимые роли: {string.Join(", ", AppRoles.AllRoles)}" });
+                return BadRequest(new { message = denied });
+            }
+
+            if (await _userManager.IsInRoleAsync(user, dto.Role))
+            {
+                return Ok(new { message = "Роль уже назначена" });
             }
 
             var result = await _userManager.AddToRoleAsync(user, dto.Role);
@@ -139,14 +169,14 @@ namespace Kumashaurma.API.Controllers
                 return BadRequest(new { message = string.Join(", ", result.Errors.Select(e => e.Description)) });
             }
 
-            return Ok(new { message = $"Роль '{dto.Role}' успешно назначена" });
+            return Ok(new { message = "Роль назначена" });
         }
 
         /// <summary>
         /// Удалить роль у пользователя (только для admin)
         /// </summary>
         [HttpDelete("{id}/roles/{role}")]
-        [Authorize(Roles = "admin")]
+        [HasPermission(Permissions.UsersRoles)]
         public async Task<ActionResult> RemoveRole(int id, string role)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
@@ -156,9 +186,16 @@ namespace Kumashaurma.API.Controllers
                 return NotFound(new { message = "Пользователь не найден" });
             }
 
-            if (!AppRoles.AllRoles.Contains(role))
+            var denied = await CheckRoleChangeAllowedAsync(role);
+            if (denied != null)
             {
-                return BadRequest(new { message = $"Недопустимая роль. Допустимые роли: {string.Join(", ", AppRoles.AllRoles)}" });
+                return BadRequest(new { message = denied });
+            }
+
+            // Нельзя остаться без единого администратора
+            if (role == AppRoles.Admin && (await _userManager.GetUsersInRoleAsync(AppRoles.Admin)).Count <= 1)
+            {
+                return BadRequest(new { message = "Это последний администратор — сначала назначьте другого" });
             }
 
             var result = await _userManager.RemoveFromRoleAsync(user, role);
@@ -168,7 +205,7 @@ namespace Kumashaurma.API.Controllers
                 return BadRequest(new { message = string.Join(", ", result.Errors.Select(e => e.Description)) });
             }
 
-            return Ok(new { message = $"Роль '{role}' успешно удалена" });
+            return Ok(new { message = "Роль снята" });
         }
 
         /// <summary>

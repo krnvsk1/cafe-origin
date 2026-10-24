@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
 using Kumashaurma.API.Services;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -14,7 +15,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/inventory/documents")]
-    [Authorize(Roles = AppRoles.Admin)]
+    [HasPermission(Permissions.InventoryView)]
     public class StockDocumentsController : ControllerBase
     {
         private static readonly string[] WriteOffReasons = { "spoilage", "expired", "staff", "damage", "other" };
@@ -136,6 +137,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // POST: api/inventory/documents
+        [HasPermission(Permissions.InventoryManage)]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] DocumentRequest request)
         {
@@ -167,6 +169,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // PUT: api/inventory/documents/{id} — только черновик
+        [HasPermission(Permissions.InventoryManage)]
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Update(int id, [FromBody] DocumentRequest request)
         {
@@ -192,6 +195,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // POST: api/inventory/documents/{id}/post — провести
+        [HasPermission(Permissions.InventoryManage)]
         [HttpPost("{id:int}/post")]
         public async Task<IActionResult> Post(int id)
         {
@@ -204,6 +208,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // POST: api/inventory/documents/{id}/cancel — отменить проведённый
+        [HasPermission(Permissions.InventoryManage)]
         [HttpPost("{id:int}/cancel")]
         public async Task<IActionResult> Cancel(int id)
         {
@@ -226,6 +231,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // DELETE: api/inventory/documents/{id} — только черновик
+        [HasPermission(Permissions.InventoryManage)]
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {
@@ -241,6 +247,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // POST: api/inventory/documents/{id}/attachment — фото или скан накладной
+        [HasPermission(Permissions.InventoryManage)]
         [HttpPost("{id:int}/attachment")]
         [RequestSizeLimit(15 * 1024 * 1024)]
         public async Task<IActionResult> UploadAttachment(int id, IFormFile file)
@@ -268,6 +275,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // DELETE: api/inventory/documents/{id}/attachment
+        [HasPermission(Permissions.InventoryManage)]
         [HttpDelete("{id:int}/attachment")]
         public async Task<IActionResult> DeleteAttachment(int id)
         {

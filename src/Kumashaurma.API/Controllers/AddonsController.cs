@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -64,7 +65,7 @@ namespace Kumashaurma.API.Controllers
 
         // POST: api/addons/categories
         [HttpPost("categories")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> CreateCategory([FromBody] AddonCategory category)
         {
             try
@@ -92,7 +93,7 @@ namespace Kumashaurma.API.Controllers
 
         // PUT: api/addons/categories/{id}
         [HttpPut("categories/{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> UpdateCategory(int id, [FromBody] AddonCategory updatedCategory)
         {
             try
@@ -125,7 +126,7 @@ namespace Kumashaurma.API.Controllers
 
         // DELETE: api/addons/categories/{id}
         [HttpDelete("categories/{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> DeleteCategory(int id)
         {
             try
@@ -252,7 +253,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpPost]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> CreateAddon([FromBody] CreateAddonDto dto)
         {
             try
@@ -291,7 +292,7 @@ namespace Kumashaurma.API.Controllers
 
         // PUT: api/addons/{id}
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> UpdateAddon(int id, [FromBody] Addon updatedAddon)
         {
             try
@@ -322,7 +323,7 @@ namespace Kumashaurma.API.Controllers
 
         // DELETE: api/addons/{id}
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> DeleteAddon(int id)
         {
             try
@@ -367,7 +368,7 @@ namespace Kumashaurma.API.Controllers
 
         // POST: api/addons/link-to-shawarma
         [HttpPost("link-to-shawarma")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> LinkAddonToShawarma([FromBody] LinkAddonRequest request)
         {
             try
@@ -447,7 +448,7 @@ namespace Kumashaurma.API.Controllers
 
         // DELETE: api/addons/unlink-from-shawarma
         [HttpDelete("unlink-from-shawarma")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> UnlinkAddonFromShawarma(int shawarmaId, int addonId)
         {
             try

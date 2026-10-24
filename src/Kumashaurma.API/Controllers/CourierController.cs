@@ -6,6 +6,7 @@ using Kumashaurma.API.Data;
 using Kumashaurma.API.Extensions;
 using Kumashaurma.API.Models;
 using Kumashaurma.API.Services;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -14,7 +15,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/courier")]
-    [Authorize(Roles = "courier,admin,manager")]
+    [HasPermission(Permissions.Delivery)]
     public class CourierController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -157,10 +158,15 @@ namespace Kumashaurma.API.Controllers
 
         // GET: api/courier/couriers — список курьеров (для назначения менеджером)
         [HttpGet("couriers")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.CouriersAssign)]
         public async Task<IActionResult> GetCouriers()
         {
-            var couriers = await _userManager.GetUsersInRoleAsync(AppRoles.Courier);
+            // Курьеры — пользователи с ролью, у которой есть право «Доставка» (кроме администраторов)
+            var courierIds = await CourierUserIdsAsync();
+            var couriers = await _userManager.Users.AsNoTracking()
+                .Where(u => courierIds.Contains(u.Id))
+                .OrderBy(u => u.FirstName)
+                .ToListAsync();
             return Ok(couriers.Select(c => new
             {
                 c.Id,
@@ -171,7 +177,7 @@ namespace Kumashaurma.API.Controllers
 
         // POST: api/courier/orders/{id}/assign — менеджер назначает/снимает курьера
         [HttpPost("orders/{id}/assign")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.CouriersAssign)]
         public async Task<IActionResult> Assign(int id, [FromBody] AssignRequest request)
         {
             var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == id);
@@ -180,7 +186,7 @@ namespace Kumashaurma.API.Controllers
             if (request.CourierId.HasValue)
             {
                 var courier = await _userManager.FindByIdAsync(request.CourierId.Value.ToString());
-                if (courier == null || !await _userManager.IsInRoleAsync(courier, AppRoles.Courier))
+                if (courier == null || !(await CourierUserIdsAsync()).Contains(courier.Id))
                     return BadRequest(new { Message = "Курьер не найден" });
             }
 
@@ -188,6 +194,20 @@ namespace Kumashaurma.API.Controllers
             await _context.SaveChangesAsync();
             _events.Publish(new OrderEvent("updated", order.Id, order.UserId, order.Status, null, DateTime.UtcNow));
             return Ok(new { order.Id, order.CourierId });
+        }
+
+        private async Task<List<int>> CourierUserIdsAsync()
+        {
+            var roleIds = await _context.RoleClaims.AsNoTracking()
+                .Where(c => c.ClaimType == Permissions.ClaimType && c.ClaimValue == Permissions.Delivery)
+                .Select(c => c.RoleId)
+                .Distinct()
+                .ToListAsync();
+            return await _context.UserRoles.AsNoTracking()
+                .Where(ur => roleIds.Contains(ur.RoleId))
+                .Select(ur => ur.UserId)
+                .Distinct()
+                .ToListAsync();
         }
     }
 }

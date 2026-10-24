@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
 using Kumashaurma.API.Services;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -12,7 +13,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/inventory")]
-    [Authorize(Roles = AppRoles.Admin)]
+    [HasPermission(Permissions.InventoryView, Permissions.TechCards)]
     public class InventoryController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -131,6 +132,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // POST: api/inventory/items
+        [HasPermission(Permissions.InventoryManage, Permissions.TechCards)]
         [HttpPost("items")]
         public async Task<IActionResult> CreateItem([FromBody] StockItemRequest request)
         {
@@ -145,6 +147,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // PUT: api/inventory/items/{id}
+        [HasPermission(Permissions.InventoryManage)]
         [HttpPut("items/{id:int}")]
         public async Task<IActionResult> UpdateItem(int id, [FromBody] StockItemRequest request)
         {
@@ -160,6 +163,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // DELETE: api/inventory/items/{id} — удаляет неиспользованную позицию, иначе отправляет в архив
+        [HasPermission(Permissions.InventoryManage)]
         [HttpDelete("items/{id:int}")]
         public async Task<IActionResult> DeleteItem(int id)
         {
@@ -208,6 +212,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // POST: api/inventory/recalculate — пересчитать остатки по журналу
+        [HasPermission(Permissions.InventoryManage)]
         [HttpPost("recalculate")]
         public async Task<IActionResult> Recalculate()
         {
@@ -252,6 +257,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // POST: api/inventory/suppliers
+        [HasPermission(Permissions.InventoryManage)]
         [HttpPost("suppliers")]
         public async Task<IActionResult> CreateSupplier([FromBody] SupplierRequest request)
         {
@@ -264,6 +270,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // PUT: api/inventory/suppliers/{id}
+        [HasPermission(Permissions.InventoryManage)]
         [HttpPut("suppliers/{id:int}")]
         public async Task<IActionResult> UpdateSupplier(int id, [FromBody] SupplierRequest request)
         {
@@ -276,6 +283,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // DELETE: api/inventory/suppliers/{id} — с накладными уходит в архив
+        [HasPermission(Permissions.InventoryManage)]
         [HttpDelete("suppliers/{id:int}")]
         public async Task<IActionResult> DeleteSupplier(int id)
         {

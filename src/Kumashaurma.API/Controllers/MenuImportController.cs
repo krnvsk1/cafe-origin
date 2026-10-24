@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Kumashaurma.API.Services;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -9,7 +10,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/admin/menu-import")]
-    [Authorize(Roles = "admin")]
+    [HasPermission(Permissions.MenuImport)]
     public class MenuImportController : ControllerBase
     {
         private readonly MenuImportService _import;

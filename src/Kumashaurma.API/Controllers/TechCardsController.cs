@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
 using Kumashaurma.API.Services;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -12,7 +13,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/inventory")]
-    [Authorize(Roles = AppRoles.Admin)]
+    [HasPermission(Permissions.InventoryView, Permissions.TechCards)]
     public class TechCardsController : ControllerBase
     {
         private const string Dish = "dish";
@@ -157,6 +158,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // PUT: api/inventory/techcards/{target}/{id} — создать или заменить
+        [HasPermission(Permissions.TechCards)]
         [HttpPut("techcards/{target}/{id:int}")]
         public async Task<IActionResult> SaveCard(string target, int id, [FromBody] TechCardRequest request)
         {
@@ -222,6 +224,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         // DELETE: api/inventory/techcards/{target}/{id}
+        [HasPermission(Permissions.TechCards)]
         [HttpDelete("techcards/{target}/{id:int}")]
         public async Task<IActionResult> DeleteCard(string target, int id)
         {

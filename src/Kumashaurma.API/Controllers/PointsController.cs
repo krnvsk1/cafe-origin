@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -113,7 +114,7 @@ namespace Kumashaurma.API.Controllers
         /// Получить баланс любого пользователя (для админа/менеджера)
         /// </summary>
         [HttpGet("users/{userId}/balance")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Points, Permissions.UsersView)]
         public async Task<IActionResult> GetUserBalance(int userId)
         {
             try
@@ -142,7 +143,7 @@ namespace Kumashaurma.API.Controllers
         /// Начислить/списать баллы пользователю (для админа)
         /// </summary>
         [HttpPost("admin/grant")]
-        [Authorize(Roles = "admin")]
+        [HasPermission(Permissions.Points)]
         public async Task<IActionResult> AdminGrantPoints([FromBody] GrantPointsRequest request)
         {
             try

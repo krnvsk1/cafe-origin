@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Options;
 using Kumashaurma.API.Services;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -13,7 +14,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/analytics")]
-    [Authorize(Roles = "admin,manager")]
+    [HasPermission(Permissions.Analytics)]
     public class AnalyticsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

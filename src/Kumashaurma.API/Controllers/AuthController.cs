@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Kumashaurma.API.Authorization;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.DTOs.Auth;
 using Kumashaurma.API.Models;
@@ -21,6 +22,7 @@ namespace Kumashaurma.API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ILogger<AuthController> _logger;
         private readonly IConfiguration _configuration;
+        private readonly IPermissionService _permissions;
 
         public AuthController(
             UserManager<AppUser> userManager,
@@ -29,8 +31,10 @@ namespace Kumashaurma.API.Controllers
             IVerificationService verificationService,
             ApplicationDbContext context,
             ILogger<AuthController> logger,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IPermissionService permissions)
         {
+            _permissions = permissions;
             _userManager = userManager;
             _signInManager = signInManager;
             _tokenService = tokenService;
@@ -125,7 +129,7 @@ namespace Kumashaurma.API.Controllers
                 AccessToken = accessToken,
                 RefreshToken = refreshToken.Token,
                 ExpiresAt = DateTime.UtcNow.AddMinutes(GetTokenExpirationMinutes()),
-                User = MapToUserDto(user, roles)
+                User = await MapToUserDtoAsync(user, roles)
             });
         }
 
@@ -231,7 +235,7 @@ namespace Kumashaurma.API.Controllers
                 AccessToken = accessToken,
                 RefreshToken = refreshToken.Token,
                 ExpiresAt = DateTime.UtcNow.AddMinutes(GetTokenExpirationMinutes()),
-                User = MapToUserDto(user, roles)
+                User = await MapToUserDtoAsync(user, roles)
             });
         }
 
@@ -288,7 +292,7 @@ namespace Kumashaurma.API.Controllers
                 AccessToken = accessToken,
                 RefreshToken = newRefreshToken.Token,
                 ExpiresAt = DateTime.UtcNow.AddMinutes(GetTokenExpirationMinutes()),
-                User = MapToUserDto(user, roles)
+                User = await MapToUserDtoAsync(user, roles)
             });
         }
 
@@ -337,7 +341,7 @@ namespace Kumashaurma.API.Controllers
 
             var roles = await _userManager.GetRolesAsync(user);
 
-            return Ok(MapToUserDto(user, roles));
+            return Ok(await MapToUserDtoAsync(user, roles));
         }
 
         private string GetIpAddress()
@@ -368,17 +372,7 @@ namespace Kumashaurma.API.Controllers
             return digits;
         }
 
-        private static UserDto MapToUserDto(AppUser user, IList<string> roles)
-        {
-            return new UserDto
-            {
-                Id = user.Id,
-                Phone = user.PhoneNumber ?? "",
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                PhoneVerified = user.PhoneVerified,
-                Roles = roles
-            };
-        }
+        private Task<UserDto> MapToUserDtoAsync(AppUser user, IList<string> roles) =>
+            UserDtoFactory.CreateAsync(user, roles, _permissions);
     }
 }

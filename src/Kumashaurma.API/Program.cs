@@ -8,6 +8,9 @@ using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
 using Kumashaurma.API.Services;
 using Kumashaurma.API.Options;
+using Kumashaurma.API.Authorization;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -155,6 +158,12 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
+// Права ролей: каталог разрешений в коде, раздача — в админке (role_claims)
+builder.Services.AddSingleton<IPermissionService, PermissionService>();
+builder.Services.AddScoped<IClaimsTransformation, PermissionClaimsTransformation>();
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
+
 // Настройки заведения
 builder.Services.Configure<RestaurantOptions>(builder.Configuration.GetSection(RestaurantOptions.SectionName));
 builder.Services.Configure<ReferralOptions>(builder.Configuration.GetSection(ReferralOptions.SectionName));
@@ -271,6 +280,9 @@ try
                 Console.WriteLine($"Created role: {role}");
             }
         }
+
+        // Названия встроенных ролей и права по умолчанию (один раз)
+        await RoleSeeder.SeedAsync(roleManager);
     }
 }
 catch (Exception ex)

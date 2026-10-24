@@ -63,6 +63,10 @@ namespace Kumashaurma.API.DTOs.Auth
         public string? LastName { get; set; }
         public bool PhoneVerified { get; set; }
         public IList<string> Roles { get; set; } = new List<string>();
+        /// <summary>Разрешения по всем ролям пользователя — по ним интерфейс показывает разделы</summary>
+        public IList<string> Permissions { get; set; } = new List<string>();
+        /// <summary>Названия ролей для интерфейса («Менеджер», «Повар»…)</summary>
+        public IList<string> RoleTitles { get; set; } = new List<string>();
     }
 
     public class SendCodeResponseDto

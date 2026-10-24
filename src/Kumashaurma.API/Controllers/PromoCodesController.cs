@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -80,7 +81,7 @@ namespace Kumashaurma.API.Controllers
         /// Получить все промокоды (админ)
         /// </summary>
         [HttpGet]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.PromoCodes)]
         public async Task<IActionResult> GetAll()
         {
             try
@@ -102,7 +103,7 @@ namespace Kumashaurma.API.Controllers
         /// Создать промокод (админ)
         /// </summary>
         [HttpPost]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.PromoCodes)]
         public async Task<IActionResult> Create([FromBody] CreatePromoCodeRequest request)
         {
             try
@@ -159,7 +160,7 @@ namespace Kumashaurma.API.Controllers
         /// Обновить промокод (админ)
         /// </summary>
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.PromoCodes)]
         public async Task<IActionResult> Update(int id, [FromBody] UpdatePromoCodeRequest request)
         {
             try
@@ -205,7 +206,7 @@ namespace Kumashaurma.API.Controllers
         /// Удалить промокод (админ)
         /// </summary>
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin")]
+        [HasPermission(Permissions.PromoCodes)]
         public async Task<IActionResult> Delete(int id)
         {
             try

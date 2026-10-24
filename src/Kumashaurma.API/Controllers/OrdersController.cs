@@ -7,6 +7,8 @@ using Kumashaurma.API.Models;
 using Kumashaurma.API.Options;
 using Kumashaurma.API.Services;
 using Microsoft.Extensions.Options;
+using Kumashaurma.API.Authorization;
+using Kumashaurma.API.Extensions;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -38,7 +40,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpGet]
-        [Authorize(Roles = "admin,manager,courier")]
+        [HasPermission(Permissions.OrdersView, Permissions.Kitchen, Permissions.Delivery)]
         public async Task<IActionResult> GetAll()
         {
             try
@@ -117,7 +119,7 @@ namespace Kumashaurma.API.Controllers
         /// </summary>
         private bool CanAccessOrder(Order order, string? token)
         {
-            if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Courier))
+            if (User.IsStaff())
                 return true;
 
             var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -147,7 +149,7 @@ namespace Kumashaurma.API.Controllers
             if (order == null)
                 return NotFound(new { Message = $"Заказ с ID {id} не найден" });
 
-            var isStaff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Courier);
+            var isStaff = User.IsStaff();
             var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (!isStaff && (!int.TryParse(currentUserIdClaim, out var currentUserId) || order.UserId != currentUserId))
                 return NotFound(new { Message = $"Заказ с ID {id} не найден" });
@@ -562,7 +564,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.OrdersManage)]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateOrderRequest request)
         {
             try
@@ -612,7 +614,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.OrdersManage)]
         public async Task<IActionResult> Delete(int id)
         {
             try
@@ -639,7 +641,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpGet("stats")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Dashboard, Permissions.OrdersManage)]
         public async Task<IActionResult> GetStats()
         {
             try
@@ -667,7 +669,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpPatch("{id}/status")]
-        [Authorize(Roles = "admin,manager,courier")]
+        [HasPermission(Permissions.OrdersManage, Permissions.Kitchen, Permissions.Delivery)]
         public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateOrderRequest request)
         {
             try

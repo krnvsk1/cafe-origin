@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -53,7 +54,7 @@ namespace Kumashaurma.API.Controllers
 
         // GET: api/delivery-zones/all — все зоны (админка)
         [HttpGet("all")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Zones)]
         public async Task<IActionResult> GetAll()
         {
             var zones = await _context.DeliveryZones.AsNoTracking()
@@ -90,7 +91,7 @@ namespace Kumashaurma.API.Controllers
 
         // POST: api/delivery-zones
         [HttpPost]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Zones)]
         public async Task<IActionResult> Create([FromBody] ZoneRequest request)
         {
             var error = Validate(request);
@@ -105,7 +106,7 @@ namespace Kumashaurma.API.Controllers
 
         // PUT: api/delivery-zones/{id}
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Zones)]
         public async Task<IActionResult> Update(int id, [FromBody] ZoneRequest request)
         {
             var zone = await _context.DeliveryZones.FindAsync(id);
@@ -121,7 +122,7 @@ namespace Kumashaurma.API.Controllers
 
         // DELETE: api/delivery-zones/{id}
         [HttpDelete("{id}")]
-        [Authorize(Roles = "admin,manager")]
+        [HasPermission(Permissions.Zones)]
         public async Task<IActionResult> Delete(int id)
         {
             var deleted = await _context.DeliveryZones.Where(z => z.Id == id).ExecuteDeleteAsync();

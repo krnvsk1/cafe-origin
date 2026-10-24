@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
+using Kumashaurma.API.Authorization;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -10,7 +11,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/stoplist")]
-    [Authorize(Roles = "admin,manager")]
+    [HasPermission(Permissions.StopList)]
     public class StopListController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
