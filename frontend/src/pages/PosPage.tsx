@@ -18,6 +18,7 @@ import ProductModal from '../components/ProductModal';
 import type { Shawarma, SelectedAddon } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import { tokens } from '../theme';
+import { allowedOrderTypes, isAllowedFor, describeOrderTypes } from '../utils/orderTypes';
 
 interface TicketLine {
   key: string;
@@ -28,6 +29,8 @@ interface TicketLine {
   quantity: number;
   addons: SelectedAddon[];
   comment: string;
+  /** Где можно продать (null — везде), например пиво — только в зале */
+  allowed: string[] | null;
 }
 
 const money = (v: number) => `${Math.round(v * 100) / 100} ₽`.replace('.', ',');
@@ -164,6 +167,7 @@ const Ticket: React.FC<{
   const received = parseFloat(cash.replace(',', '.')) || 0;
   const change = payment === 'cash' && received > 0 ? received - total : null;
   const count = lines.reduce((s, l) => s + l.quantity, 0);
+  const blocked = lines.filter(l => !isAllowedFor(l.allowed, orderType));
 
   React.useEffect(() => {
     const digits = phone.replace(/\D/g, '');
@@ -265,6 +269,11 @@ const Ticket: React.FC<{
       {/* Оформление */}
       <Box sx={{ px: 2, pt: 1.5, pb: 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1.25 }}>
         {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
+        {blocked.length > 0 && (
+          <Alert severity="warning">
+            {blocked.map(l => l.title).join(', ')} — {describeOrderTypes(blocked[0].allowed ?? [])}. Переключите «В зале» или уберите из чека.
+          </Alert>
+        )}
 
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
           <ToggleButtonGroup exclusive size="small" value={orderType} onChange={(_, v) => v && setOrderType(v)} sx={{ display: 'flex', '& .MuiToggleButton-root': { flex: 1 } }}>
@@ -326,7 +335,7 @@ const Ticket: React.FC<{
           variant="contained"
           color="secondary"
           size="large"
-          disabled={lines.length === 0 || create.isPending || (change !== null && change < 0)}
+          disabled={lines.length === 0 || create.isPending || (change !== null && change < 0) || blocked.length > 0}
           onClick={submit}
           startIcon={create.isPending ? <CircularProgress size={18} color="inherit" /> : undefined}
           sx={{ minHeight: 56, fontSize: '1.05rem' }}
@@ -480,6 +489,7 @@ const PosPage: React.FC = () => {
         quantity,
         addons,
         comment,
+        allowed: allowedOrderTypes(card, child),
       }];
     });
     setToast(`${card.name} — в чеке`);

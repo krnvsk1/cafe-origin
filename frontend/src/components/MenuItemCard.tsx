@@ -8,6 +8,7 @@ import {
 import type { Shawarma } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import { tokens } from '../theme';
+import { allowedOrderTypes, describeOrderTypes } from '../utils/orderTypes';
 
 interface MenuItemCardProps {
   item: Shawarma;
@@ -39,6 +40,8 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
   const price = priceOf(item);
   const description = item.description || item.children?.[0]?.description || '';
   const spicy = item.isSpicy || item.children?.some(c => c.isSpicy);
+  const orderTypes = allowedOrderTypes(item);
+  const venueNote = orderTypes ? describeOrderTypes(orderTypes) : '';
   const badge = item.badge ? BADGES[item.badge] : undefined;
   // Единственный вариант с весом/размером (например «400 г») показываем под названием
   const sizeNote = item.children?.length === 1 && item.children[0].name !== 'Стандарт' ? item.children[0].name : '';
@@ -88,10 +91,11 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
           </Box>
         )}
 
-        {(badge || spicy || cheese) && (
+        {(badge || spicy || cheese || venueNote) && (
           <Box sx={{ position: 'absolute', left: 8, top: 8, display: 'flex', gap: 0.5, flexWrap: 'wrap', pr: 5 }}>
             {badge && <Tag label={badge.label} color={badge.color} solid />}
             {spicy && <Tag label="Острое" color={tokens.chili} />}
+            {venueNote && <Tag label={venueNote[0].toUpperCase() + venueNote.slice(1)} color="#21201F" />}
             {cheese && !badge && <Tag label="С сыром" color="#B86A00" />}
           </Box>
         )}

@@ -52,6 +52,7 @@ import type { CreateShawarmaDto, Shawarma, ShawarmaImage } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import MenuItemCard, { BADGES } from '../components/MenuItemCard';
 import { tokens } from '../theme';
+import { ORDER_TYPES, describeOrderTypes } from '../utils/orderTypes';
 
 interface TempImage {
   file: File;
@@ -194,6 +195,7 @@ const CreateMenuItemPage: React.FC = () => {
     parentId: urlParentId ? Number(urlParentId) : null,
     category: '',
     badge: null,
+    availableOrderTypes: null,
   });
   const [errors, setErrors] = React.useState<FieldErrors>({});
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -218,6 +220,7 @@ const CreateMenuItemPage: React.FC = () => {
         parentId: existingShawarma.parentId ?? null,
         category: existingShawarma.category ?? '',
         badge: existingShawarma.badge ?? null,
+        availableOrderTypes: existingShawarma.availableOrderTypes ?? null,
       });
       setKind(existingShawarma.parentId ? 'variant' : 'card');
     }
@@ -428,6 +431,10 @@ const CreateMenuItemPage: React.FC = () => {
       // Раздел и метка нужны только карточке на витрине
       category: kind === 'card' ? formData.category?.trim() ?? '' : '',
       badge: kind === 'card' ? formData.badge ?? null : null,
+      // Все способы = без ограничений
+      availableOrderTypes: kind === 'card' && formData.availableOrderTypes && formData.availableOrderTypes.length < ORDER_TYPES.length
+        ? formData.availableOrderTypes
+        : [],
     };
 
     try {
@@ -781,6 +788,54 @@ const CreateMenuItemPage: React.FC = () => {
               />
             </Box>
           </Section>
+
+          {/* Где продаётся */}
+          {kind === 'card' ? (
+            <Section
+              title="Где продаётся"
+              subtitle="Например, пиво — только в зале: на доставку его не оформить ни на сайте, ни на кассе"
+            >
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {ORDER_TYPES.map(type => {
+                  const current = formData.availableOrderTypes?.length ? formData.availableOrderTypes : [...ORDER_TYPES];
+                  const selected = current.includes(type);
+                  return (
+                    <Box
+                      key={type}
+                      component="button"
+                      type="button"
+                      aria-pressed={selected}
+                      disabled={isPending}
+                      onClick={() => {
+                        const next = selected ? current.filter(t => t !== type) : [...current, type];
+                        if (next.length === 0) return; // хотя бы один способ
+                        handleChange('availableOrderTypes', next.length === ORDER_TYPES.length ? null : ORDER_TYPES.filter(t => next.includes(t)));
+                      }}
+                      sx={{
+                        display: 'inline-flex', alignItems: 'center', gap: 0.75, px: 1.75, height: 40,
+                        borderRadius: '12px', border: '1.5px solid',
+                        borderColor: selected ? 'text.primary' : 'transparent',
+                        bgcolor: selected ? 'background.paper' : t.surfaceMuted,
+                        color: selected ? 'text.primary' : 'text.secondary',
+                        font: 'inherit', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer',
+                      }}
+                    >
+                      {selected ? '✓' : '+'} {type}
+                    </Box>
+                  );
+                })}
+              </Box>
+              {formData.availableOrderTypes?.length ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.25 }}>
+                  Гости увидят пометку «{describeOrderTypes(formData.availableOrderTypes)}»
+                </Typography>
+              ) : null}
+            </Section>
+          ) : parentCard?.availableOrderTypes?.length ? (
+            <Alert severity="info">
+              Карточка «{parentCard.name}» продаётся {describeOrderTypes(parentCard.availableOrderTypes)} — это действует и на вариант
+            </Alert>
+          ) : null}
 
           {/* Варианты карточки */}
           {isEditMode && kind === 'card' && (

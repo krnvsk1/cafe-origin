@@ -14,6 +14,8 @@ export interface Shawarma {
   isPromo?: boolean;
   category?: string;          // Раздел меню (Пиццы, Бургеры…)
   badge?: 'hit' | 'new' | 'promo' | 'lean' | null;
+  /** Где можно заказать: «Доставка», «Самовывоз», «В зале»; null — везде */
+  availableOrderTypes?: string[] | null;
   createdAt: string;
   updatedAt?: string | null;
   images?: ShawarmaImage[];
@@ -47,6 +49,8 @@ export interface Shawarma {
     sortOrder?: number;
     category?: string;
     badge?: 'hit' | 'new' | 'promo' | 'lean' | null;
+    /** Пустой массив / null — продаётся везде */
+    availableOrderTypes?: string[] | null;
   };
 
   export interface CartItem extends Shawarma {

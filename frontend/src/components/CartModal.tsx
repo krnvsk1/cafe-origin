@@ -17,7 +17,8 @@ import {
   Chip,
   CircularProgress,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  Alert,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -34,6 +35,7 @@ import { useValidatePromoCode, usePointsBalance, useRedeemPoints } from '../api/
 import type { PromoCodeValidation } from '../types';
 import { useAuthStore } from '../store/authStore';
 import { resolveMediaUrl } from '../utils/media';
+import { allowedOrderTypes, isAllowedFor, describeOrderTypes } from '../utils/orderTypes';
 
 interface CartModalProps {
   open: boolean;
@@ -65,6 +67,8 @@ const CartModal: React.FC<CartModalProps> = ({
   const totalItems = useTotalItems();
   const totalPrice = useTotalPrice();
   const { updateQuantity, removeItem } = useCartStore();
+  // Позиции, которые нельзя получить выбранным способом (например, пиво — только в зале)
+  const blockedItems = items.filter(i => !isAllowedFor(allowedOrderTypes(i, i.selectedChild), deliveryType));
   const { isAuthenticated } = useAuthStore();
 
   const [promoCode, setPromoCode] = React.useState('');
@@ -550,13 +554,19 @@ const CartModal: React.FC<CartModalProps> = ({
         </Paper>
       </DialogContent>
 
-      <DialogActions sx={{ p: isMobile ? 2 : 3, pt: 0 }}>
+      <DialogActions sx={{ p: isMobile ? 2 : 3, pt: 0, flexDirection: 'column', alignItems: 'stretch', gap: 1.5 }}>
+        {blockedItems.length > 0 && (
+          <Alert severity="warning" sx={{ m: '0 !important' }}>
+            {blockedItems.map(i => `«${i.name}» — ${describeOrderTypes(allowedOrderTypes(i, i.selectedChild) ?? [])}`).join('; ')}.
+            {' '}Выберите другой способ получения или уберите {blockedItems.length > 1 ? 'эти позиции' : 'позицию'} из корзины.
+          </Alert>
+        )}
         <Button
           variant="contained"
             color="secondary"
           onClick={onCheckout}
           fullWidth
-          disabled={!isMinOrderReached || items.length === 0}
+          disabled={!isMinOrderReached || items.length === 0 || blockedItems.length > 0}
           sx={{
             borderRadius: '9999px',
             py: 2,

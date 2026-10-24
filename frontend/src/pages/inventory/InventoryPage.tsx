@@ -8,6 +8,7 @@ import DocumentsTab from './DocumentsTab';
 import DishesTab from './DishesTab';
 import SuppliersTab from './SuppliersTab';
 import ReportsTab from './ReportsTab';
+import EgaisTab from './EgaisTab';
 import TechCardEditor from './TechCardEditor';
 import DocumentEditor from './DocumentEditor';
 import { useCan, P } from '../../auth/permissions';
@@ -17,6 +18,7 @@ const TABS = [
   { value: 'receipts', label: 'Приходы' },
   { value: 'writeoffs', label: 'Списания' },
   { value: 'counts', label: 'Инвентаризация' },
+  { value: 'egais', label: 'ЕГАИС' },
   { value: 'dishes', label: 'Блюда и техкарты' },
   { value: 'items', label: 'Номенклатура' },
   { value: 'suppliers', label: 'Поставщики' },
@@ -109,6 +111,7 @@ const InventoryPage: React.FC = () => {
       {tab === 'receipts' && <DocumentsTab type="receipt" />}
       {tab === 'writeoffs' && <DocumentsTab type="writeoff" />}
       {tab === 'counts' && <DocumentsTab type="inventory" />}
+      {tab === 'egais' && <EgaisTab />}
       {tab === 'dishes' && <DishesTab onOpenCard={(target, id) => setCard({ target, id })} />}
       {tab === 'items' && <StockTab mode="catalog" onOpenDocument={setOpenDocId} onOpenSemiCard={openSemiCard} />}
       {tab === 'suppliers' && <SuppliersTab />}
