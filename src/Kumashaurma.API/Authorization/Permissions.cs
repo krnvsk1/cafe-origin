@@ -30,6 +30,7 @@ namespace Kumashaurma.API.Authorization
         public const string InventoryView = "inventory.view";
         public const string InventoryManage = "inventory.manage";
         public const string TechCards = "techcards";
+        public const string Chz = "chz";
 
         public const string UsersView = "users.view";
         public const string UsersRoles = "users.roles";
@@ -62,6 +63,7 @@ namespace Kumashaurma.API.Authorization
             new(InventoryView, "Склад", "Склад: просмотр", "Остатки, документы, блюда и отчёты по себестоимости"),
             new(InventoryManage, "Склад", "Склад: документы", "Проводить приходы, списания и инвентаризации, вести номенклатуру и поставщиков"),
             new(TechCards, "Склад", "Техкарты", "Создавать и менять технологические карты"),
+            new(Chz, "Склад", "Честный знак", "Выводить из оборота маркированный товар (подпись своим сертификатом КЭП)"),
 
             new(UsersView, "Сотрудники и доступ", "Пользователи", "Список пользователей и их данные"),
             new(UsersRoles, "Сотрудники и доступ", "Назначение ролей", "Выдавать и снимать роли у пользователей"),

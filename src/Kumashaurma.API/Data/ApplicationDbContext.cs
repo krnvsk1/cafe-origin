@@ -56,6 +56,9 @@ namespace Kumashaurma.API.Data
         // Настройки из админки
         public DbSet<AppSetting> AppSettings { get; set; } = null!;
 
+        // Честный знак
+        public DbSet<ChzDocument> ChzDocuments { get; set; } = null!;
+
         // ЕГАИС
         public DbSet<EgaisDocument> EgaisDocuments { get; set; } = null!;
         public DbSet<EgaisDocumentLine> EgaisDocumentLines { get; set; } = null!;
@@ -398,6 +401,13 @@ namespace Kumashaurma.API.Data
             });
 
             modelBuilder.Entity<StockItem>(entity => entity.HasIndex(e => e.EgaisAlcCode));
+
+            modelBuilder.Entity<ChzDocument>(entity =>
+            {
+                entity.HasIndex(e => e.CreatedAt);
+                entity.HasIndex(e => e.Status);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            });
 
             // Shawarma self-referencing hierarchy (parent_id)
             modelBuilder.Entity<Shawarma>(entity =>

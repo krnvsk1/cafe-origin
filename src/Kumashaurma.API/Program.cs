@@ -199,6 +199,11 @@ builder.Services.AddHttpClient<Kumashaurma.API.Services.Egais.UtmClient>(client 
 builder.Services.AddScoped<Kumashaurma.API.Services.Egais.EgaisService>();
 builder.Services.AddHostedService<Kumashaurma.API.Services.Egais.EgaisSyncWorker>();
 
+// Честный знак (True API): подпись КЭП в браузере, сервер только передаёт запросы
+builder.Services.AddSingleton<Kumashaurma.API.Services.Chz.ChzSettingsProvider>();
+builder.Services.AddHttpClient<Kumashaurma.API.Services.Chz.ChzClient>(client => client.Timeout = TimeSpan.FromSeconds(60));
+builder.Services.AddScoped<Kumashaurma.API.Services.Chz.ChzService>();
+
 // Импорт меню с kumashaurma.ru
 builder.Services.AddHttpClient<MenuImportService>(client =>
 {
