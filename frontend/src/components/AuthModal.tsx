@@ -230,7 +230,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
         },
       }}
     >
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
+      <DialogTitle component="div" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
         <Typography variant="h6" fontWeight={700}>
           {step === 'phone' && 'Вход в аккаунт'}
           {step === 'verify' && 'Подтверждение'}

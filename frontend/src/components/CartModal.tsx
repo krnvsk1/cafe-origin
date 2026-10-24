@@ -206,7 +206,7 @@ const CartModal: React.FC<CartModalProps> = ({
         }
       }}
     >
-      <DialogTitle
+      <DialogTitle component="div"
         sx={{
           p: 3,
           pb: 1,

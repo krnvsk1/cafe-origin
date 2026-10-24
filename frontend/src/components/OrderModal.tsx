@@ -245,7 +245,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
           }
         }}
       >
-        <DialogTitle sx={{
+        <DialogTitle component="div" sx={{
           position: 'relative',
           py: isMobile ? 2 : 3,
           px: isMobile ? 2 : 3,

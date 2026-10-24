@@ -203,7 +203,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
         }
       }}
     >
-      <DialogTitle sx={{
+      <DialogTitle component="div" sx={{
         p: isMobile ? 2 : 3,
         display: 'flex',
         alignItems: 'center',
