@@ -105,11 +105,25 @@ export const createAppTheme = (mode: 'light' | 'dark') => {
       },
       MuiChip: {
         styleOverrides: {
-          root: { borderRadius: 12, fontWeight: 500 },
+          // Цвета задаём через ownerState: иначе стиль варианта filled перебивает цвет primary
+          root: ({ ownerState }) => ({
+            borderRadius: 12,
+            fontWeight: 500,
+            ...(ownerState.variant !== 'outlined' && ownerState.color === 'default' && {
+              backgroundColor: t.surfaceMuted,
+            }),
+            ...(ownerState.variant !== 'outlined' && ownerState.color === 'primary' && {
+              backgroundColor: t.ink,
+              color: t.surface,
+              '&:hover': { backgroundColor: t.ink },
+              '& .MuiChip-icon': { color: t.surface },
+            }),
+            ...(ownerState.variant !== 'outlined' && ownerState.color === 'secondary' && {
+              backgroundColor: tokens.saffron,
+              color: '#21201F',
+            }),
+          }),
           outlined: { borderColor: t.line },
-          filled: { backgroundColor: t.surfaceMuted },
-          colorPrimary: { backgroundColor: t.ink, color: t.surface },
-          colorSecondary: { backgroundColor: tokens.saffron, color: '#21201F' },
         },
       },
       MuiOutlinedInput: {
