@@ -255,7 +255,11 @@ namespace Kumashaurma.API.Services.Chz
         /// </summary>
         public static string Normalize(string raw, string productGroup)
         {
-            var code = raw.Trim().Replace("(", "").Replace(")", "");
+            var code = raw.Trim();
+            // Скобки убираем только в «человекочитаемом» виде (01)GTIN(21)серийный —
+            // в самом серийном номере скобки, ?, % и т.п. законны: 0104600494695223215(siQp?cKYIYm
+            var hr = System.Text.RegularExpressions.Regex.Match(code, @"^\(01\)(\d{14})\(21\)(.+)$");
+            if (hr.Success) code = "01" + hr.Groups[1].Value + "21" + hr.Groups[2].Value;
             // Некоторые сканеры вместо GS отдают «\u001d» текстом или символ ↔
             code = code.Replace("\\u001d", Gs.ToString()).Replace("\\x1d", Gs.ToString());
             var gs = code.IndexOf(Gs);

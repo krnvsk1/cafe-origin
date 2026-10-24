@@ -66,6 +66,13 @@ namespace Kumashaurma.Tests
         }
 
         [Fact]
+        public void KeepsBracketsInsideSerial()
+        {
+            Assert.Equal("0104600494695223215(siQp?cKYIYm", ChzCodes.Normalize("0104600494695223215(siQp?cKYIYm", "softdrinks"));
+            Assert.Equal("0104600494695223215(siQp?cKYIYm", ChzCodes.Normalize("(01)04600494695223(21)5(siQp?cKYIYm", "softdrinks"));
+        }
+
+        [Fact]
         public void BalanceKeepsOnlyTopLevelCodes()
         {
             var codes = new[]
