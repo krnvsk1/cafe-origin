@@ -212,18 +212,23 @@ namespace Kumashaurma.API.Controllers
                         IsRequired = g.Key.IsRequired,
                         MinSelections = g.Key.MinSelections,
                         MaxSelections = g.Key.MaxSelections,
-                        Addons = g.Select(sa => new
-                        {
-                            Id = sa.Addon.Id,
-                            Name = sa.Addon.Name,
-                            Description = sa.Addon.Description,
-                            Price = sa.CustomPrice ?? sa.Addon.Price,
-                            IsAvailable = sa.Addon.IsAvailable,
-                            MaxQuantity = sa.MaxQuantity,
-                            IsDefault = sa.IsDefault
-                        }).OrderBy(a => a.Name).ToList()
+                        DisplayOrder = g.Key.DisplayOrder,
+                        Addons = g
+                            .OrderBy(sa => sa.Addon.DisplayOrder).ThenBy(sa => sa.Addon.Name)
+                            .Select(sa => new
+                            {
+                                Id = sa.Addon.Id,
+                                AddonCategoryId = sa.Addon.AddonCategoryId,
+                                Name = sa.Addon.Name,
+                                Description = sa.Addon.Description,
+                                Price = sa.CustomPrice ?? sa.Addon.Price,
+                                IsAvailable = sa.Addon.IsAvailable,
+                                MaxQuantity = sa.MaxQuantity,
+                                IsDefault = sa.IsDefault
+                            }).ToList()
                     })
-                    .OrderBy(c => c.Name)
+                    // Сначала обязательные группы (размер теста и т.п.), затем по порядку
+                    .OrderByDescending(c => c.IsRequired).ThenBy(c => c.DisplayOrder).ThenBy(c => c.Name)
                     .ToList();
 
                 return Ok(categories);

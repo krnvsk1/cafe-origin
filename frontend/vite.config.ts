@@ -10,7 +10,12 @@ export default defineConfig({
         target: 'http://localhost:5199',
         changeOrigin: true,
         secure: false,
-      }
+      },
+      // Картинки блюд отдаёт бэкенд из wwwroot/uploads
+      '/uploads': {
+        target: 'http://localhost:5199',
+        changeOrigin: true,
+      },
     }
   },
   resolve: {
