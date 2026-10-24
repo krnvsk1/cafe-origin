@@ -16,6 +16,8 @@ export interface EgaisState {
   lastSyncAt: string | null;
   lastSyncError: string | null;
   detectedFsrarId: string | null;
+  /** Раньше этого времени ЕГАИС отклонит запрос накладных без акта (лимит — раз в 48 часов) */
+  nextUnacceptedRequestAt: string | null;
   toProcess: number;
   awaitingRegId: number;
   awaitingTicket: number;

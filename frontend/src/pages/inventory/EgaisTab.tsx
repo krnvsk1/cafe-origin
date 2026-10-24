@@ -2,7 +2,7 @@ import * as React from 'react';
 import {
   Box, Typography, Button, CircularProgress, Alert, Chip, ToggleButtonGroup, ToggleButton, Dialog, DialogTitle,
   DialogContent, DialogActions, IconButton, TextField, Autocomplete, InputAdornment, useMediaQuery, useTheme,
-  createFilterOptions,
+  createFilterOptions, Tooltip,
 } from '@mui/material';
 import {
   Sync as SyncIcon, Close as CloseIcon, ChevronRight as ChevronRightIcon, LocalBarOutlined as BeerIcon,
@@ -13,6 +13,7 @@ import {
   requestUnaccepted, fetchEgaisDiagnostics, type EgaisDiagnostics,
   type EgaisLine,
 } from '../../api/egais';
+import { useQueryClient } from '@tanstack/react-query';
 import { useStockItems, apiError, fmtMoney, fmtDate, fmtDateTime, fmtQty, UNIT_LABELS, type StockItem } from '../../api/inventory';
 import { useCan, P } from '../../auth/permissions';
 import { tokens } from '../../theme';
@@ -371,6 +372,7 @@ const EgaisTab: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [requesting, setRequesting] = React.useState(false);
   const [diagOpen, setDiagOpen] = React.useState(false);
+  const qc = useQueryClient();
 
   const runRequest = async () => {
     setRequesting(true);
@@ -382,8 +384,11 @@ const EgaisTab: React.FC = () => {
       setMessage({ ok: false, text: apiError(e) });
     } finally {
       setRequesting(false);
+      qc.invalidateQueries({ queryKey: ['egais', 'status'] });
     }
   };
+  // ЕГАИС принимает запрос накладных без акта не чаще раза в 48 часов
+  const nextRequestAt = state?.nextUnacceptedRequestAt ?? null;
   const canSettings = can(P.Settings);
 
   const runSync = async () => {
@@ -437,10 +442,14 @@ const EgaisTab: React.FC = () => {
             </Button>
           )}
           {state?.enabled && can(P.InventoryManage) && (
-            <Button onClick={runRequest} disabled={requesting} sx={{ bgcolor: t.surfaceMuted }}
-              startIcon={requesting ? <CircularProgress size={16} /> : undefined}>
-              Запросить из ЕГАИС
-            </Button>
+            <Tooltip title={nextRequestAt ? `ЕГАИС принимает этот запрос раз в 48 часов. Повторить можно после ${fmtDateTime(nextRequestAt)}` : ''}>
+              <span>
+                <Button onClick={runRequest} disabled={requesting || !!nextRequestAt} sx={{ bgcolor: t.surfaceMuted }}
+                  startIcon={requesting ? <CircularProgress size={16} /> : undefined}>
+                  Запросить из ЕГАИС
+                </Button>
+              </span>
+            </Tooltip>
           )}
           {state?.enabled && can(P.InventoryManage) && (
             <Button variant="contained" color="secondary" onClick={runSync} disabled={sync.isPending}

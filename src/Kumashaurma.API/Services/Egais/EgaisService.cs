@@ -49,7 +49,8 @@ namespace Kumashaurma.API.Services.Egais
         public static string? DetectedFsrarId { get; private set; }
 
         /// <summary>Что и когда отправляли в УТМ — чтобы сопоставить квитанции по транспортному ID</summary>
-        public record SentRecord(string TransportId, string What, int? DocumentId, DateTime SentAt);
+        public record SentRecord(string TransportId, string What, int? DocumentId, DateTime SentAt, string? Kind = null);
+        private const string QueryNattnKind = "QueryNATTN";
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SentRecord> Sent = new();
 
         /// <summary>Отказы ЕГАИС на наши запросы (например, «Нарушена целостность конверта»)</summary>
@@ -57,10 +58,10 @@ namespace Kumashaurma.API.Services.Egais
         private static readonly System.Collections.Concurrent.ConcurrentQueue<Rejection> Rejections = new();
         public static IReadOnlyList<Rejection> RecentRejections => Rejections.Reverse().Take(20).ToList();
 
-        private static void Remember(string response, string what, int? documentId)
+        private static void Remember(string response, string what, int? documentId, string? kind = null)
         {
             var id = UtmClient.ExtractTransportId(response);
-            if (id != null) Sent[id] = new SentRecord(id, what, documentId, DateTime.UtcNow);
+            if (id != null) Sent[id] = new SentRecord(id, what, documentId, DateTime.UtcNow, kind);
         }
         public static string? LastSyncError { get; private set; }
 
@@ -142,10 +143,63 @@ namespace Kumashaurma.API.Services.Egais
         public async Task RequestUnacceptedAsync(CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(_options.FsrarId)) throw new EgaisException("Не указан ФСРАР ID заведения");
+            var next = NextQueryNattnAt(await GetQueryNattnSentAtAsync(ct), DateTime.UtcNow);
+            if (next != null)
+                throw new EgaisException($"ЕГАИС принимает этот запрос не чаще раза в 48 часов. Повторить можно после {next.Value.AddHours(3):dd.MM.yyyy HH:mm} (МСК)");
+
             var xml = EgaisXml.BuildQuery(_options.FsrarId, "QueryNATTN", "КОД", _options.FsrarId);
             var (ok, response) = await _utm.SendAsync("QueryNATTN", xml, ct);
             if (!ok) throw new EgaisException($"УТМ не принял запрос: {UtmClient.ExtractError(response)}");
-            Remember(response, "Запрос накладных без акта (QueryNATTN)", null);
+            Remember(response, "Запрос накладных без акта (QueryNATTN)", null, QueryNattnKind);
+            await SetQueryNattnSentAtAsync(DateTime.UtcNow, ct);
+        }
+
+        // ================= Ограничение QueryNATTN =================
+
+        /// <summary>ЕГАИС обрабатывает QueryNATTN не чаще раза в 48 часов на ФСРАР ID (иначе — отказ в квитанции)</summary>
+        public static readonly TimeSpan QueryNattnCooldown = TimeSpan.FromHours(48);
+        private const string QueryNattnKey = "egais_query_nattn";
+        private record QueryNattnState(DateTime SentAt);
+        private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+        /// <summary>Когда снова можно отправить QueryNATTN; null — можно сейчас</summary>
+        public static DateTime? NextQueryNattnAt(DateTime? lastSentAt, DateTime now) =>
+            lastSentAt is DateTime sent && now - sent < QueryNattnCooldown ? sent + QueryNattnCooldown : null;
+
+        /// <summary>Отказ ЕГАИС из-за лимита «не чаще 1-го раза в 48 часов»</summary>
+        public static bool IsQueryNattnLimitRejection(TicketData t) =>
+            t.Accepted == false
+            && string.Equals(t.DocType, "QueryNATTN", StringComparison.OrdinalIgnoreCase)
+            && t.Comment.Contains("не чаще", StringComparison.OrdinalIgnoreCase);
+
+        public async Task<DateTime?> NextQueryNattnAtAsync(CancellationToken ct = default) =>
+            NextQueryNattnAt(await GetQueryNattnSentAtAsync(ct), DateTime.UtcNow);
+
+        // Время отправки хранится в базе, чтобы лимит не сбрасывался перезапуском сервиса
+        private async Task<DateTime?> GetQueryNattnSentAtAsync(CancellationToken ct)
+        {
+            var row = await _context.AppSettings.AsNoTracking().FirstOrDefaultAsync(s => s.Key == QueryNattnKey, ct);
+            return row == null ? null : System.Text.Json.JsonSerializer.Deserialize<QueryNattnState>(row.Value, Json)?.SentAt;
+        }
+
+        private async Task SetQueryNattnSentAtAsync(DateTime? sentAt, CancellationToken ct)
+        {
+            var row = await _context.AppSettings.FirstOrDefaultAsync(s => s.Key == QueryNattnKey, ct);
+            if (sentAt == null)
+            {
+                if (row != null) _context.AppSettings.Remove(row);
+            }
+            else
+            {
+                if (row == null)
+                {
+                    row = new AppSetting { Key = QueryNattnKey };
+                    _context.AppSettings.Add(row);
+                }
+                row.Value = System.Text.Json.JsonSerializer.Serialize(new QueryNattnState(sentAt.Value), Json);
+                row.UpdatedAt = DateTime.UtcNow;
+            }
+            await _context.SaveChangesAsync(ct);
         }
 
         /// <summary>По списку неподтверждённых накладных запрашиваем повторную отправку тех, которых у нас нет</summary>
@@ -286,6 +340,10 @@ namespace Kumashaurma.API.Services.Egais
                 {
                     Rejections.Enqueue(new Rejection(DateTime.UtcNow, sent.What, t.Comment));
                     while (Rejections.Count > 50) Rejections.TryDequeue(out _);
+                    // Наш QueryNATTN отклонён не из-за лимита (неверный ID, конверт и т.п.) — ЕГАИС его не обработал, повторять можно сразу.
+                    // Только по своим отправкам из этого запуска: старая квитанция после перезапуска не должна снять свежую отметку.
+                    if (sent.Kind == QueryNattnKind && !IsQueryNattnLimitRejection(t))
+                        await SetQueryNattnSentAtAsync(null, ct);
                     if (sent.DocumentId is int docId)
                     {
                         var d = await _context.EgaisDocuments.FirstOrDefaultAsync(x => x.Id == docId, ct);

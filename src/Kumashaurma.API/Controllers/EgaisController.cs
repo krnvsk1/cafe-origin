@@ -144,6 +144,7 @@ namespace Kumashaurma.API.Controllers
                 lastSyncAt = EgaisService.LastSyncAt,
                 detectedFsrarId = EgaisService.DetectedFsrarId,
                 lastSyncError = EgaisService.LastSyncError,
+                nextUnacceptedRequestAt = await _egais.NextQueryNattnAtAsync(HttpContext.RequestAborted),
                 toProcess = counts.GetValueOrDefault(EgaisStatuses.Ready) + counts.GetValueOrDefault(EgaisStatuses.Error),
                 awaitingRegId = counts.GetValueOrDefault(EgaisStatuses.AwaitingRegId),
                 awaitingTicket = counts.GetValueOrDefault(EgaisStatuses.ActSent)
