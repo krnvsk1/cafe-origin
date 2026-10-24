@@ -277,7 +277,7 @@ namespace Kumashaurma.API.Services.Egais
         private async Task<bool> ApplyTicketAsync(TicketData t, CancellationToken ct)
         {
             // Квитанция на наш запрос по транспортному ID (в т.ч. CryptoTicket — отказ на уровне «конверта»)
-            var certId = System.Text.RegularExpressions.Regex.Match(t.Comment ?? "", @"сертификате\s*\[(\d+)\]");
+            var certId = System.Text.RegularExpressions.Regex.Match(t.Comment, @"сертификате\s*\[(\d+)\]");
             if (certId.Success) DetectedFsrarId = certId.Groups[1].Value;
 
             if (t.TransportId != null && Sent.TryGetValue(t.TransportId, out var sent))
