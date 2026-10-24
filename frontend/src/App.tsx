@@ -26,6 +26,7 @@ import {
   DarkModeOutlined as DarkModeIcon,
   LightModeOutlined as LightModeIcon,
   ShoppingBagOutlined as ShoppingBagIcon,
+  Inventory2Outlined as InventoryIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
@@ -61,6 +62,7 @@ import KitchenPage from './pages/KitchenPage';
 import CourierPage from './pages/CourierPage';
 import AdminDeliveryZonesPage from './pages/AdminDeliveryZonesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import InventoryPage from './pages/inventory/InventoryPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -179,6 +181,7 @@ function App() {
     { text: 'Зоны доставки', icon: <MapIcon />, path: '/admin/zones', roles: ['admin', 'manager'] },
     { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', roles: ['admin', 'manager'] },
     { text: 'Отзывы', icon: <ReviewsIcon />, path: '/admin/reviews', roles: ['admin', 'manager'] },
+    { text: 'Склад', icon: <InventoryIcon />, path: '/admin/inventory', roles: ['admin'] },
     { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', roles: ['admin'] },
     { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', roles: ['admin'] },
   ] as { text: string; icon: React.ReactNode; path: string; roles: string[] }[])
@@ -373,6 +376,8 @@ function App() {
                 {isAdminRole && (
                   <>
                     <Route path="/admin/create" element={<CreateMenuItemPage />} />
+                    <Route path="/admin/inventory" element={<InventoryPage />} />
+                    <Route path="/admin/inventory/:tab" element={<InventoryPage />} />
                     <Route path="/admin/users" element={<UsersPage />} />
                   </>
                 )}
