@@ -37,7 +37,7 @@ namespace Kumashaurma.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -65,7 +65,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("price");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
@@ -88,7 +88,7 @@ namespace Kumashaurma.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -124,7 +124,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("name");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
@@ -151,7 +151,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at");
 
                     b.Property<string>("Email")
@@ -208,7 +208,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("referral_code");
 
                     b.Property<DateTime?>("ReferralRewardedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("referral_rewarded_at");
 
                     b.Property<int?>("ReferredByUserId")
@@ -232,7 +232,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
 
                     b.Property<string>("UserName")
@@ -276,7 +276,7 @@ namespace Kumashaurma.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -341,7 +341,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("address");
 
                     b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("completed_at");
 
                     b.Property<int?>("CourierId")
@@ -350,7 +350,7 @@ namespace Kumashaurma.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -391,7 +391,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("notes");
 
                     b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("paid_at");
 
                     b.Property<string>("PaymentId")
@@ -418,7 +418,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("phone");
 
                     b.Property<DateTime?>("PickedUpAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("picked_up_at");
 
                     b.Property<int?>("PromoCodeId")
@@ -426,7 +426,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("promo_code_id");
 
                     b.Property<DateTime?>("ScheduledFor")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("scheduled_for");
 
                     b.Property<string>("Status")
@@ -567,7 +567,7 @@ namespace Kumashaurma.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -580,7 +580,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("rating");
 
                     b.Property<DateTime?>("RepliedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("replied_at");
 
                     b.Property<int>("UserId")
@@ -616,7 +616,7 @@ namespace Kumashaurma.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -655,11 +655,11 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("min_order_amount");
 
                     b.Property<DateTime?>("ValidFrom")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("valid_from");
 
                     b.Property<DateTime?>("ValidUntil")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("valid_until");
 
                     b.HasKey("Id");
@@ -682,11 +682,11 @@ namespace Kumashaurma.API.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("expires_at");
 
                     b.Property<string>("ReplacedByToken")
@@ -695,7 +695,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("replaced_by_token");
 
                     b.Property<DateTime?>("RevokedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("revoked_at");
 
                     b.Property<string>("RevokedByIp")
@@ -739,7 +739,7 @@ namespace Kumashaurma.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -773,7 +773,8 @@ namespace Kumashaurma.API.Migrations
 
                     b.Property<int?>("ParentId")
                         .HasColumnType("integer")
-                        .HasColumnName("parent_id");
+                        .HasColumnName("parent_id")
+                        .HasAnnotation("Relational:JsonPropertyName", "parentId");
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(10,2)")
@@ -784,15 +785,15 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("sort_order");
 
                     b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
-
                     b.HasIndex("ParentId");
+
+                    b.HasIndex("ParentId", "Name")
+                        .IsUnique();
 
                     b.ToTable("shawarmas");
                 });
@@ -846,7 +847,7 @@ namespace Kumashaurma.API.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at");
 
                     b.Property<string>("FileName")
@@ -888,7 +889,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("attempts");
 
                     b.Property<DateTime?>("BlockedUntil")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("blocked_until");
 
                     b.Property<string>("Code")
@@ -898,11 +899,11 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("code");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("expires_at");
 
                     b.Property<string>("Phone")
@@ -912,7 +913,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("phone");
 
                     b.Property<DateTime?>("VerifiedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("verified_at");
 
                     b.HasKey("Id");
@@ -950,7 +951,7 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("comment");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at");
 
                     b.Property<string>("Entrance")
@@ -989,7 +990,7 @@ namespace Kumashaurma.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -1026,7 +1027,7 @@ namespace Kumashaurma.API.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
+                        .HasColumnType("timestamp without time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
