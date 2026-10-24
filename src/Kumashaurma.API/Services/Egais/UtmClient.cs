@@ -128,7 +128,12 @@ namespace Kumashaurma.API.Services.Egais
             }
             catch (Exception ex) when (ex is HttpRequestException or UriFormatException)
             {
-                return (false, $"Нет связи: {ex.Message}");
+                var target = url != null ? BaseOf(url) : Base;
+                var local = target.IsLoopback;
+                return (false, local
+                    ? $"Нет связи: {ex.Message}. «localhost» — это компьютер, где запущен сервер сервиса. " +
+                      "Если УТМ стоит на другом компьютере, укажите его адрес в сети, например http://192.168.1.20:8080"
+                    : $"Нет связи: {ex.Message}. Проверьте, что компьютер с УТМ включён, в той же сети и порт открыт в брандмауэре");
             }
         }
     }
