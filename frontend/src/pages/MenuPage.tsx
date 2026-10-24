@@ -43,6 +43,7 @@ import OrderModal from '../components/OrderModal';
 import { useCartStore, useTotalItems, useTotalPrice } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { useOrderFlowStore } from '../store/orderFlowStore';
+import { useShallow } from 'zustand/react/shallow';
 
 interface NavCategory {
   id: string;
@@ -71,7 +72,8 @@ const MenuPage: React.FC = () => {
   const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   
   const { openCart, orderOpen, closeOrder, backToCart, deliveryType, address, setAddress, customerName, setCustomerName, phone, setPhone } = useOrderFlowStore(
-    (state) => ({
+    // useShallow: без него новый объект на каждый рендер даёт бесконечный цикл в zustand 5
+    useShallow((state) => ({
       openCart: state.openCart,
       orderOpen: state.orderOpen,
       closeOrder: state.closeOrder,
@@ -83,7 +85,7 @@ const MenuPage: React.FC = () => {
       setCustomerName: state.setCustomerName,
       phone: state.phone,
       setPhone: state.setPhone,
-    })
+    }))
   );
 
   const cartItems = useCartStore(state => state.items);
