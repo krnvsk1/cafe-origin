@@ -1,187 +1,186 @@
-import React from 'react';
+import * as React from 'react';
+import { Box, Typography, IconButton, Button, useTheme } from '@mui/material';
 import {
-  Card,
-  CardMedia,
-  Typography,
-  Box,
-  Chip,
-  IconButton,
-  useTheme,
-  alpha,
-} from '@mui/material';
-import { Add as AddIcon, Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon } from '@mui/icons-material';
+  Add as AddIcon,
+  Favorite as FavoriteIcon,
+  FavoriteBorder as FavoriteBorderIcon,
+} from '@mui/icons-material';
 import type { Shawarma } from '../types';
-import placeholderImage from '../assets/placeholder-shawarma.svg';
 import { resolveMediaUrl } from '../utils/media';
+import { tokens } from '../theme';
 
 interface MenuItemCardProps {
   item: Shawarma;
+  onOpen: () => void;
   isFavorite?: boolean;
   // Если не передан — кнопка «в избранное» не показывается (например, для гостей)
   onToggleFavorite?: () => void;
+  /** Сколько штук этой позиции уже в корзине */
+  inCartCount?: number;
 }
 
-const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, isFavorite = false, onToggleFavorite }) => {
+const priceOf = (item: Shawarma) => {
+  const children = item.children ?? [];
+  if (children.length === 0) return { value: item.price, from: false };
+  const min = Math.min(...children.map(c => c.price));
+  const max = Math.max(...children.map(c => c.price));
+  return { value: min, from: min !== max };
+};
+
+/**
+ * Карточка позиции меню: фото, цена, название, кнопка «Добавить».
+ * Клик по карточке или кнопке открывает выбор варианта и добавок.
+ */
+const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = false, onToggleFavorite, inCartCount = 0 }) => {
   const theme = useTheme();
-
-  const imageUrl = item.images && item.images.length > 0
-    ? resolveMediaUrl(item.images[0].filePath)
-    : '';
-
-  if (!item.isAvailable) return null;
+  const muted = theme.palette.mode === 'light' ? tokens.light.surfaceMuted : tokens.dark.surfaceMuted;
+  const image = item.primaryImage || item.images?.find(i => i.isPrimary)?.filePath || item.images?.[0]?.filePath;
+  const imageUrl = image ? resolveMediaUrl(image) : '';
+  const price = priceOf(item);
+  const description = item.description || item.children?.[0]?.description || '';
+  const spicy = item.isSpicy || item.children?.some(c => c.isSpicy);
+  const cheese = item.hasCheese || item.children?.some(c => c.hasCheese);
 
   return (
-    <Card
+    <Box
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
       sx={{
         display: 'flex',
-        flexDirection: { xs: 'column', md: 'row' },
-        borderRadius: { xs: 2, md: 3 },
-        border: `1px solid ${theme.palette.divider}`,
-        boxShadow: theme.palette.mode === 'light' ? '0 2px 8px rgba(0,0,0,0.08)' : '0 2px 8px rgba(0,0,0,0.3)',
-        transition: 'all 0.2s ease',
-        '&:hover': {
-          transform: 'translateY(-4px)',
-          boxShadow: '0 12px 24px rgba(0,0,0,0.12)',
-          borderColor: 'primary.main',
-        },
+        flexDirection: 'column',
         height: '100%',
+        p: { xs: 1, sm: 1.25 },
+        borderRadius: '24px',
         bgcolor: 'background.paper',
+        cursor: 'pointer',
+        outline: 'none',
+        transition: 'box-shadow 0.2s ease',
+        '&:hover': { boxShadow: '0 8px 28px rgba(33,32,31,0.10)' },
+        '&:focus-visible': { boxShadow: `0 0 0 3px ${theme.palette.text.primary}` },
       }}
     >
       {/* Фото */}
       <Box
         sx={{
-          width: { xs: '100%', md: '35%' },
-          height: { xs: 140, md: 'auto' },
           position: 'relative',
+          aspectRatio: '1 / 1',
+          borderRadius: '18px',
+          overflow: 'hidden',
+          bgcolor: muted,
         }}
       >
-        <CardMedia
-          component="img"
-          image={imageUrl || placeholderImage}
-          alt={item.name}
-          sx={{
-            height: '100%',
-            width: '100%',
-            objectFit: 'cover',
-            borderTopLeftRadius: { xs: 8, md: 16 },
-            borderTopRightRadius: { xs: 8, md: 0 },
-            borderBottomLeftRadius: { xs: 0, md: 16 },
-          }}
-        />
+        {imageUrl ? (
+          <Box
+            component="img"
+            src={imageUrl}
+            alt={item.name}
+            loading="lazy"
+            sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          />
+        ) : (
+          <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
+            <Typography aria-hidden sx={{ fontSize: { xs: 56, sm: 72 }, lineHeight: 1, opacity: 0.85 }}>🌯</Typography>
+          </Box>
+        )}
+
+        {(spicy || cheese) && (
+          <Box sx={{ position: 'absolute', left: 8, bottom: 8, display: 'flex', gap: 0.5 }}>
+            {spicy && <Tag label="Острая" color={tokens.chili} />}
+            {cheese && <Tag label="С сыром" color="#E8890C" />}
+          </Box>
+        )}
+
         {onToggleFavorite && (
           <IconButton
             size="small"
             aria-label={isFavorite ? 'Убрать из избранного' : 'В избранное'}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavorite();
-            }}
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
             sx={{
               position: 'absolute',
-              top: 6,
-              right: 6,
-              zIndex: 2,
-              bgcolor: alpha(theme.palette.background.paper, 0.85),
-              '&:hover': { bgcolor: theme.palette.background.paper },
+              top: 8,
+              right: 8,
+              bgcolor: 'rgba(255,255,255,0.92)',
+              color: '#21201F',
+              '&:hover': { bgcolor: '#fff' },
             }}
           >
-            {isFavorite
-              ? <FavoriteIcon fontSize="small" sx={{ color: 'error.main' }} />
-              : <FavoriteBorderIcon fontSize="small" />}
+            {isFavorite ? <FavoriteIcon fontSize="small" sx={{ color: tokens.chili }} /> : <FavoriteBorderIcon fontSize="small" />}
           </IconButton>
         )}
-        {/* Бейджи на фото */}
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 0.5,
-            position: 'absolute',
-            top: 8,
-            left: 8,
-            zIndex: 1,
-          }}
-        >
-          {item.isSpicy && (
-            <Chip
-              label="🌶️"
-              size="small"
-              sx={{
-                bgcolor: alpha(theme.palette.error.main, 0.9),
-                color: 'white',
-                fontSize: '0.7rem',
-                border: 'none',
-              }}
-            />
-          )}
-          {item.hasCheese && (
-            <Chip
-              label="🧀"
-              size="small"
-              sx={{
-                bgcolor: alpha(theme.palette.warning.main, 0.9),
-                color: 'white',
-                fontSize: '0.7rem',
-                border: 'none',
-              }}
-            />
-          )}
-        </Box>
       </Box>
 
-      {/* Контент */}
-      <Box
-        sx={{
-          width: { xs: '100%', md: '65%' },
-          p: 2,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Box>
-          <Typography variant="h6" fontWeight={700} sx={{ fontSize: { xs: '1rem', md: '1.1rem' }, mb: 0.5 }}>
-            {item.name}
-          </Typography>
+      {/* Текст */}
+      <Box sx={{ px: 0.75, pt: 1.25, flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <Typography sx={{ fontWeight: 800, fontSize: { xs: '1.05rem', sm: '1.2rem' }, letterSpacing: '-0.02em' }}>
+          {price.from && <Box component="span" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.85em', mr: 0.5 }}>от</Box>}
+          {price.value} ₽
+        </Typography>
+        <Typography
+          sx={{
+            mt: 0.25,
+            fontWeight: 500,
+            fontSize: { xs: '0.9rem', sm: '0.95rem' },
+            lineHeight: 1.3,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+        >
+          {item.name}
+        </Typography>
+        {description && (
           <Typography
             variant="body2"
             color="text.secondary"
             sx={{
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
+              mt: 0.25,
+              fontSize: '0.8rem',
+              display: { xs: 'none', sm: '-webkit-box' },
+              WebkitLineClamp: 1,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
-              mb: 1,
-              fontSize: { xs: '0.8rem', md: '0.875rem' },
             }}
           >
-            {item.description || 'Без описания'}
+            {description}
           </Typography>
-        </Box>
-
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-          <Typography variant="h6" color="primary.main" fontWeight={700} sx={{ fontSize: { xs: '1rem', md: '1.25rem' } }}>
-            {(item.children && item.children.length > 0)
-              ? `от ${Math.min(...item.children.map(c => c.price))} ₽`
-              : `${item.price} ₽`}
-          </Typography>
-          <IconButton
-            size="small"
-            sx={{
-              bgcolor: 'primary.main',
-              color: 'white',
-              width: { xs: 36, md: 40 },
-              height: { xs: 36, md: 40 },
-              borderRadius: '9999px',
-              '&:hover': { bgcolor: 'primary.dark' },
-            }}
-          >
-            <AddIcon fontSize="small" />
-          </IconButton>
-        </Box>
+        )}
+        <Box sx={{ flex: 1 }} />
+        <Button
+          fullWidth
+          startIcon={inCartCount > 0 ? undefined : <AddIcon />}
+          onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          sx={{
+            mt: 1.25,
+            bgcolor: inCartCount > 0 ? tokens.saffron : muted,
+            color: inCartCount > 0 ? '#21201F' : 'text.primary',
+            '&:hover': { bgcolor: inCartCount > 0 ? tokens.saffronHover : 'action.selected' },
+          }}
+        >
+          {inCartCount > 0 ? `В корзине: ${inCartCount}` : 'Добавить'}
+        </Button>
       </Box>
-    </Card>
+    </Box>
   );
 };
+
+const Tag: React.FC<{ label: string; color: string }> = ({ label, color }) => (
+  <Box
+    component="span"
+    sx={{
+      px: 1,
+      py: 0.25,
+      borderRadius: '8px',
+      bgcolor: 'rgba(255,255,255,0.94)',
+      color,
+      fontSize: '0.72rem',
+      fontWeight: 700,
+    }}
+  >
+    {label}
+  </Box>
+);
 
 export default MenuItemCard;

@@ -1,24 +1,18 @@
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, NavLink, Navigate } from 'react-router-dom';
 import {
   AppBar, Toolbar, Typography, Button, Box, Container,
-  ThemeProvider, createTheme, CssBaseline, Badge,
+  ThemeProvider, CssBaseline,
   IconButton, Drawer, List, ListItem, ListItemButton,
-  ListItemIcon, ListItemText, Divider, useMediaQuery,
+  ListItemIcon, ListItemText, useMediaQuery,
   Menu, MenuItem,
 } from '@mui/material';
 import {
-  LocalDining as RestaurantIcon,
-  ShoppingCart,
-  Schedule,
   Dashboard as DashboardIcon,
   AddCircle as AddIcon,
   Menu as MenuIcon,
   Close as CloseIcon,
   Home as HomeIcon,
   ListAlt as ListAltIcon,
-  AddShoppingCart as AddCartIcon,
-  Brightness4 as Brightness4Icon,
-  Brightness7 as Brightness7Icon,
   People as PeopleIcon,
   LocalOffer as PromoIcon,
   Star as StarIcon,
@@ -29,10 +23,16 @@ import {
   Map as MapIcon,
   Insights as InsightsIcon,
   ExpandMore as ExpandMoreIcon,
+  DarkModeOutlined as DarkModeIcon,
+  LightModeOutlined as LightModeIcon,
+  ShoppingBagOutlined as ShoppingBagIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
 import { useTheme } from './hooks/useTheme';
+import { createAppTheme } from './theme';
+import BrandLogo from './components/BrandLogo';
+import WorkingHours from './components/WorkingHours';
 import type { PromoCodeValidation } from './types';
 import { useCartStore, useTotalItems, useTotalPrice } from './store/cartStore';
 import { useAuthStore } from './store/authStore';
@@ -156,38 +156,7 @@ function App() {
   const isAdmin = isAuthenticated && (hasRole('admin') || hasRole('manager'));
   const isAdminRole = isAuthenticated && hasRole('admin');
 
-  const theme = createTheme({
-    palette: {
-      mode: themeMode,
-      primary: {
-        main: themeMode === 'light' ? '#0891b2' : '#22d3ee',
-        dark: themeMode === 'light' ? '#0e7490' : '#0891b2',
-      },
-      secondary: {
-        main: '#f59e0b',
-      },
-      background: {
-        default: themeMode === 'light' ? '#f1f5f9' : '#0b1120',
-        paper: themeMode === 'light' ? '#ffffff' : '#1e293b',
-      },
-      text: {
-        primary: themeMode === 'light' ? '#0f172a' : '#f1f5f9',
-        secondary: themeMode === 'light' ? '#475569' : '#94a3b8',
-      },
-      divider: themeMode === 'light' ? '#e2e8f0' : '#334155',
-    },
-    typography: {
-      fontFamily: [
-        'Inter',
-        'Roboto',
-        '-apple-system',
-        'sans-serif'
-      ].join(','),
-    },
-    shape: {
-      borderRadius: 16,
-    },
-  });
+  const theme = React.useMemo(() => createAppTheme(themeMode), [themeMode]);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -216,11 +185,10 @@ function App() {
     .filter(link => isAuthenticated && link.roles.some(r => hasRole(r)));
 
   const getMenuItems = () => {
-    const items: { text: string; icon: React.ReactNode; path: string; highlight?: boolean }[] = [
+    const items: { text: string; icon: React.ReactNode; path: string }[] = [
       { text: 'Меню', icon: <HomeIcon />, path: '/' },
       { text: 'Мои заказы', icon: <ListAltIcon />, path: '/orders' },
       { text: 'Мои баллы', icon: <StarIcon />, path: '/points' },
-      { text: 'Новый заказ', icon: <AddCartIcon />, path: '/order', highlight: true },
     ];
 
     staffLinks.forEach(link => items.push({ text: link.text, icon: link.icon, path: link.path }));
@@ -233,226 +201,152 @@ function App() {
         <CssBaseline />
         <Router>
           <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-            <AppBar
-              position="sticky"
-              sx={{
-                bgcolor: 'background.paper',
-                color: 'text.primary',
-                boxShadow: theme.palette.mode === 'light'
-                  ? '0 1px 3px rgba(0,0,0,0.08)'
-                  : '0 1px 3px rgba(0,0,0,0.3)',
-                zIndex: 2,
-              }}
-            >
-              <Toolbar>
-                {isMobile && (
-                  <IconButton
-                    size="large"
-                    edge="start"
-                    color="inherit"
-                    aria-label="menu"
-                    onClick={toggleMobileMenu}
-                    sx={{ mr: 2 }}
-                  >
-                    <MenuIcon />
-                  </IconButton>
-                )}
+            <AppBar position="sticky" sx={{ zIndex: (t) => t.zIndex.appBar }}>
+              <Container maxWidth={false} sx={{ maxWidth: 1320 }}>
+                <Toolbar disableGutters sx={{ gap: { xs: 1, md: 2 }, minHeight: { xs: 60, md: 72 } }}>
+                  {isMobile && (
+                    <IconButton edge="start" aria-label="Открыть меню" onClick={toggleMobileMenu}>
+                      <MenuIcon />
+                    </IconButton>
+                  )}
 
-                <Typography
-                  variant="h5"
-                  component={Link}
-                  to="/"
-                  sx={{
-                    fontWeight: 700,
-                    color: 'text.primary',
-                    flexGrow: 1,
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    fontSize: { xs: '1.1rem', sm: '1.5rem' }
-                  }}
-                >
-                  <RestaurantIcon sx={{ color: 'primary.main', fontSize: { xs: '1.5rem', sm: '2rem' } }} />
-                  <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
-                    КУМА ШАУРМА
-                  </Box>
-                  <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
-                    КУМА
-                  </Box>
-                </Typography>
+                  <BrandLogo compact={false} />
 
-                {/* Профиль / Вход */}
-                <ProfileMenu onLoginClick={() => setAuthOpen(true)} />
+                  {!isMobile && (
+                    <Box component="nav" sx={{ display: 'flex', gap: 0.5, ml: 3 }}>
+                      {[
+                        { to: '/', label: 'Меню' },
+                        { to: '/orders', label: 'Мои заказы' },
+                        { to: '/points', label: 'Баллы' },
+                      ].map(link => (
+                        <Button
+                          key={link.to}
+                          component={NavLink}
+                          to={link.to}
+                          end
+                          sx={{
+                            color: 'text.secondary',
+                            fontWeight: 600,
+                            '&.active': { color: 'text.primary', bgcolor: 'action.hover' },
+                          }}
+                        >
+                          {link.label}
+                        </Button>
+                      ))}
+                      {staffLinks.length > 0 && (
+                        <>
+                          <Button
+                            onClick={(e) => setAdminMenuAnchor(e.currentTarget)}
+                            endIcon={<ExpandMoreIcon />}
+                            sx={{ color: 'text.secondary', fontWeight: 600 }}
+                          >
+                            Управление
+                          </Button>
+                          <Menu
+                            anchorEl={adminMenuAnchor}
+                            open={Boolean(adminMenuAnchor)}
+                            onClose={() => setAdminMenuAnchor(null)}
+                          >
+                            {staffLinks.map((link) => (
+                              <MenuItem
+                                key={link.path}
+                                component={Link}
+                                to={link.path}
+                                onClick={() => setAdminMenuAnchor(null)}
+                              >
+                                <ListItemIcon>{link.icon}</ListItemIcon>
+                                <ListItemText>{link.text}</ListItemText>
+                              </MenuItem>
+                            ))}
+                          </Menu>
+                        </>
+                      )}
+                    </Box>
+                  )}
 
-                <IconButton
-                  onClick={toggleTheme}
-                  sx={{
-                    color: 'text.primary',
-                    mr: 1,
-                    '&:hover': {
-                      backgroundColor: theme.palette.mode === 'light'
-                        ? 'rgba(0,0,0,0.05)'
-                        : 'rgba(255,255,255,0.05)',
-                    }
-                  }}
-                >
-                  {themeMode === 'light' ? <Brightness4Icon /> : <Brightness7Icon />}
-                </IconButton>
+                  <Box sx={{ flex: 1 }} />
 
-                <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', mr: 3, gap: 1 }}>
-                  <Schedule fontSize="small" sx={{ color: 'text.secondary' }} />
-                  <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.secondary' }}>
-                    10:00−21:55
-                  </Typography>
-                </Box>
+                  {!isMobile && (
+                    <IconButton onClick={toggleTheme} aria-label={themeMode === 'light' ? 'Тёмная тема' : 'Светлая тема'}>
+                      {themeMode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
+                    </IconButton>
+                  )}
 
-                <Box
-                  onClick={openCart}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    mr: { xs: 1, md: 3 },
-                    color: 'text.primary',
-                    cursor: 'pointer',
-                    '&:hover': { opacity: 0.8 }
-                  }}
-                >
-                  <Badge badgeContent={totalItems} color="primary">
-                    <ShoppingCart />
-                  </Badge>
-                  <Typography
-                    variant="body2"
+                  <ProfileMenu onLoginClick={() => setAuthOpen(true)} />
+
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    onClick={openCart}
+                    aria-label={`Корзина, ${totalItems} шт.`}
+                    startIcon={<ShoppingBagIcon />}
                     sx={{
-                      fontWeight: 500,
-                      ml: 1,
-                      display: { xs: 'none', sm: 'block' },
-                      color: 'text.primary'
+                      minWidth: { xs: 48, sm: 120 },
+                      px: { xs: 1.5, sm: 2.25 },
+                      fontWeight: 700,
+                      '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } },
                     }}
                   >
-                    {totalPrice} ₽
-                  </Typography>
-                </Box>
-
-                {!isMobile && (
-                  <>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button component={Link} to="/" sx={{ color: 'text.primary' }}>
-                        Меню
-                      </Button>
-                      <Button component={Link} to="/orders" sx={{ color: 'text.primary' }}>
-                        Заказы
-                      </Button>
+                    <Box component="span" sx={{ display: { xs: totalItems ? 'inline' : 'none', sm: 'inline' } }}>
+                      {totalItems > 0 ? `${totalPrice.toLocaleString('ru-RU')} ₽` : 'Корзина'}
                     </Box>
-
-                    {staffLinks.length > 0 && (
-                      <Box sx={{ ml: 2 }}>
-                        <Button
-                          onClick={(e) => setAdminMenuAnchor(e.currentTarget)}
-                          startIcon={<DashboardIcon />}
-                          endIcon={<ExpandMoreIcon />}
-                          sx={{ color: 'text.primary' }}
-                        >
-                          Управление
-                        </Button>
-                        <Menu
-                          anchorEl={adminMenuAnchor}
-                          open={Boolean(adminMenuAnchor)}
-                          onClose={() => setAdminMenuAnchor(null)}
-                        >
-                          {staffLinks.map((link) => (
-                            <MenuItem
-                              key={link.path}
-                              component={Link}
-                              to={link.path}
-                              onClick={() => setAdminMenuAnchor(null)}
-                            >
-                              <ListItemIcon>{link.icon}</ListItemIcon>
-                              <ListItemText>{link.text}</ListItemText>
-                            </MenuItem>
-                          ))}
-                        </Menu>
-                      </Box>
-                    )}
-                  </>
-                )}
-              </Toolbar>
+                  </Button>
+                </Toolbar>
+              </Container>
             </AppBar>
 
             <Drawer
               anchor="left"
               open={mobileMenuOpen}
               onClose={closeMobileMenu}
-              sx={{
-                '& .MuiDrawer-paper': {
-                  width: 280,
-                  bgcolor: 'background.paper',
-                  color: 'text.primary',
-                  borderRadius: '0 16px 16px 0',
-                },
-              }}
+              PaperProps={{ sx: { width: 300, borderRadius: '0 24px 24px 0' } }}
             >
-              <Box sx={{ p: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" sx={{ color: 'text.primary', display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <RestaurantIcon sx={{ color: 'primary.main' }} />
-                    Меню
-                  </Typography>
-                  <IconButton onClick={closeMobileMenu} sx={{ color: 'text.primary' }}>
+              <Box sx={{ p: 2.5, display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                  <BrandLogo onClick={closeMobileMenu} />
+                  <IconButton onClick={closeMobileMenu} aria-label="Закрыть меню">
                     <CloseIcon />
                   </IconButton>
                 </Box>
 
-                <Divider sx={{ bgcolor: theme.palette.divider, mb: 2 }} />
-
-                <List>
+                <List disablePadding>
                   {getMenuItems().map((item) => (
-                    <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
+                    <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
                       <ListItemButton
-                        component={Link}
+                        component={NavLink}
                         to={item.path}
+                        end
                         onClick={closeMobileMenu}
                         sx={{
-                          borderRadius: 2,
-                          bgcolor: item.highlight ? 'primary.main' : 'transparent',
-                          color: item.highlight ? 'white' : 'text.primary',
-                          '&:hover': {
-                            bgcolor: item.highlight ? 'primary.dark' : 'action.hover',
-                          },
+                          borderRadius: 3,
+                          py: 1.25,
+                          '&.active': { bgcolor: 'action.selected' },
                         }}
                       >
-                        <ListItemIcon sx={{ color: item.highlight ? 'white' : 'text.primary', minWidth: 40 }}>
-                          {item.icon}
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={item.text}
-                          primaryTypographyProps={{
-                            fontWeight: item.highlight ? 700 : 400,
-                          }}
-                        />
+                        <ListItemIcon sx={{ minWidth: 40, color: 'text.secondary' }}>{item.icon}</ListItemIcon>
+                        <ListItemText primary={item.text} primaryTypographyProps={{ fontWeight: 600 }} />
                       </ListItemButton>
                     </ListItem>
                   ))}
                 </List>
 
-                <Divider sx={{ bgcolor: theme.palette.divider, my: 2 }} />
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary', p: 1 }}>
-                  <Schedule fontSize="small" />
-                  <Typography variant="body2">
-                    Время работы: 10:00−21:55
-                  </Typography>
+                <Box sx={{ mt: 'auto', pt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <WorkingHours />
+                  <IconButton onClick={toggleTheme} aria-label={themeMode === 'light' ? 'Тёмная тема' : 'Светлая тема'}>
+                    {themeMode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
+                  </IconButton>
                 </Box>
               </Box>
             </Drawer>
 
             <Container
-              maxWidth="lg"
+              maxWidth={false}
               sx={{
-                mt: { xs: 2, sm: 4 },
-                mb: { xs: 2, sm: 4 },
+                maxWidth: 1320,
+                pt: { xs: 2, md: 3 },
+                pb: { xs: 12, md: 6 },
                 flex: 1,
-                px: { xs: 2, sm: 3, md: 4 },
+                px: { xs: 2, sm: 3 },
               }}
             >
               <LiveOrdersListener />
@@ -527,20 +421,12 @@ function App() {
               onClose={() => setAuthOpen(false)}
             />
 
-            <Box
-              component="footer"
-              sx={{
-                py: { xs: 2, sm: 3 },
-                px: 2,
-                mt: 'auto',
-                backgroundColor: 'background.paper',
-                color: 'text.primary',
-                borderTop: `1px solid ${theme.palette.divider}`,
-              }}
-            >
-              <Container maxWidth="lg">
-                <Typography variant="body2" align="center" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                  © {new Date().getFullYear()} Кума Шаурма. Все права защищены.
+            <Box component="footer" sx={{ py: 3, px: 2, mt: 'auto', borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+              <Container maxWidth={false} sx={{ maxWidth: 1320, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+                <BrandLogo />
+                <WorkingHours />
+                <Typography variant="body2" color="text.secondary">
+                  © {new Date().getFullYear()} Кума Шаурма
                 </Typography>
               </Container>
             </Box>

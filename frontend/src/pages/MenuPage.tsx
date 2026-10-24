@@ -1,565 +1,353 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Container,
   Typography,
   Box,
-  CircularProgress,
   Alert,
   Chip,
   TextField,
   InputAdornment,
   Button,
-  Paper,
+  Skeleton,
   useTheme,
   useMediaQuery,
-  Badge,
-  Fab,
-  Zoom,
-  Grid2 as Grid,
-  Divider,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
-  Stack,
+  IconButton,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Add as AddIcon,
-  ShoppingCart as CartIcon,
-  LocationOn as LocationIcon,
-  Star as StarIcon,
-  LocalOffer as OfferIcon,
+  Close as CloseIcon,
   Favorite as FavoriteIcon,
+  AccessTimeRounded as TimeIcon,
+  CreditCardRounded as CardIcon,
+  StorefrontRounded as PickupIcon,
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import MenuItemCard from '../components/MenuItemCard';
 import RepeatLastOrderBanner from '../components/RepeatLastOrderBanner';
+import CartPanel, { MobileCartBar } from '../components/CartPanel';
 import { useFavoriteIds, useToggleFavorite } from '../api/favorites';
-import { useShawarmas } from '../api/hooks';
+import { useShawarmas, useRestaurantSettings } from '../api/hooks';
 import type { Shawarma, SelectedAddon } from '../types';
 import ProductModal from '../components/ProductModal';
-import OrderModal from '../components/OrderModal';
-import { useCartStore, useTotalItems, useTotalPrice } from '../store/cartStore';
+import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
-import { useOrderFlowStore } from '../store/orderFlowStore';
-import { useShallow } from 'zustand/react/shallow';
+import { tokens } from '../theme';
 
-interface NavCategory {
-  id: string;
-  name: string;
-  count: number;
-}
+type Filter = 'all' | 'favorites' | 'spicy' | 'cheese';
+
+/** «Обложка» заведения — как карточка ресторана в сервисах доставки */
+const RestaurantHero: React.FC = () => {
+  const { data: settings } = useRestaurantSettings();
+  const facts: { icon: React.ReactNode; text: string }[] = [
+    { icon: <TimeIcon fontSize="small" />, text: 'Доставка 30–45 мин' },
+    { icon: <PickupIcon fontSize="small" />, text: 'Самовывоз и в зале' },
+  ];
+  if (settings?.onlinePaymentEnabled) facts.push({ icon: <CardIcon fontSize="small" />, text: 'Оплата онлайн' });
+
+  return (
+    <Box
+      component="section"
+      sx={{
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: { xs: '24px', md: '32px' },
+        bgcolor: tokens.saffron,
+        color: '#21201F',
+        px: { xs: 2.5, md: 5 },
+        py: { xs: 3, md: 5 },
+        mb: { xs: 2, md: 3 },
+      }}
+    >
+      {/* Крупный силуэт шаурмы справа — главный графический акцент страницы */}
+      <Typography
+        aria-hidden
+        sx={{
+          position: 'absolute',
+          right: { xs: -24, md: 32 },
+          bottom: { xs: -36, md: -48 },
+          fontSize: { xs: 150, md: 240 },
+          lineHeight: 1,
+          transform: 'rotate(-18deg)',
+          userSelect: 'none',
+          pointerEvents: 'none',
+        }}
+      >
+        🌯
+      </Typography>
+
+      <Typography
+        component="h1"
+        sx={{
+          fontWeight: 900,
+          fontSize: { xs: '2.25rem', sm: '3rem', md: '4rem' },
+          lineHeight: 0.95,
+          letterSpacing: '-0.045em',
+          maxWidth: { xs: '75%', md: '60%' },
+        }}
+      >
+        Кума Шаурма
+      </Typography>
+      <Typography sx={{ mt: 1.5, fontSize: { xs: '1rem', md: '1.15rem' }, fontWeight: 500, maxWidth: { xs: '70%', md: 520 } }}>
+        Шаурма, фалафель и картошка — привезём горячим или соберём к вашему приходу
+      </Typography>
+
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: { xs: 2, md: 3 }, maxWidth: { xs: '80%', md: '70%' } }}>
+        {settings && (
+          <Fact icon={<TimeIcon fontSize="small" />} text={`${settings.isOpenNow ? 'Открыто' : 'Закрыто'}, ${settings.openTime}–${settings.closeTime}`} />
+        )}
+        {facts.map(f => <Fact key={f.text} icon={f.icon} text={f.text} />)}
+      </Box>
+    </Box>
+  );
+};
+
+const Fact: React.FC<{ icon: React.ReactNode; text: string }> = ({ icon, text }) => (
+  <Box
+    sx={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 0.75,
+      px: 1.5,
+      py: 0.75,
+      borderRadius: '12px',
+      bgcolor: 'rgba(255,255,255,0.55)',
+      fontWeight: 600,
+      fontSize: '0.875rem',
+    }}
+  >
+    {icon}
+    {text}
+  </Box>
+);
 
 const MenuPage: React.FC = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isWide = useMediaQuery(theme.breakpoints.up('lg'));
 
   const { isAuthenticated, hasRole } = useAuthStore();
   const isAdminRole = isAuthenticated && hasRole('admin');
 
-  const { data: menuItems, isLoading, error } = useShawarmas();
+  const { data: menuItems, isLoading, error, refetch } = useShawarmas();
 
   const [selectedProduct, setSelectedProduct] = useState<Shawarma | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('all');
 
   // Избранное
   const { data: favoriteIds = [] } = useFavoriteIds();
   const toggleFavorite = useToggleFavorite();
-  const [onlyFavorites, setOnlyFavorites] = useState(false);
   const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
-  
-  const { openCart, orderOpen, closeOrder, backToCart, deliveryType, address, setAddress, customerName, setCustomerName, phone, setPhone } = useOrderFlowStore(
-    // useShallow: без него новый объект на каждый рендер даёт бесконечный цикл в zustand 5
-    useShallow((state) => ({
-      openCart: state.openCart,
-      orderOpen: state.orderOpen,
-      closeOrder: state.closeOrder,
-      backToCart: state.backToCart,
-      deliveryType: state.deliveryType,
-      address: state.address,
-      setAddress: state.setAddress,
-      customerName: state.customerName,
-      setCustomerName: state.setCustomerName,
-      phone: state.phone,
-      setPhone: state.setPhone,
-    }))
-  );
 
   const cartItems = useCartStore(state => state.items);
-  const totalItems = useTotalItems();
-  const totalPrice = useTotalPrice();
   const addToCart = useCartStore(state => state.addItem);
 
-  const [items, setItems] = useState<Shawarma[]>([]);
-  useEffect(() => {
-    if (menuItems) setItems(menuItems);
+  // Сколько штук каждой карточки в корзине
+  const inCart = useMemo(() => {
+    const map = new Map<number, number>();
+    cartItems.forEach(i => map.set(i.id, (map.get(i.id) ?? 0) + i.quantity));
+    return map;
+  }, [cartItems]);
+
+  // Карточки (parent_id = null) с доступными вариантами
+  const cards = useMemo(() => {
+    return (menuItems ?? [])
+      .filter(item => item.isCard || item.parentId === null)
+      .map(item => ({ ...item, children: (item.children || []).filter(c => c.isAvailable) }))
+      .filter(item => item.children.length > 0);
   }, [menuItems]);
 
-  // === ИЕРАРХИЧЕСКАЯ ГРУППИРОВКА ===
-  // Отделяем карточки (parent_id = null) и одиночные товары (без parent_id и без children)
-  const { cards } = useMemo(() => {
-    const cardsList: Shawarma[] = [];
-    const soloList: Shawarma[] = [];
+  const hasSpicy = cards.some(c => c.isSpicy || c.children?.some(ch => ch.isSpicy));
+  const hasCheese = cards.some(c => c.hasCheese || c.children?.some(ch => ch.hasCheese));
 
-    items.forEach(item => {
-      if (item.isCard || item.parentId === null) {
-        // Это карточка-категория: показываем, только если у неё есть доступные дети
-        const availableChildren = (item.children || []).filter(c => c.isAvailable);
-        if (availableChildren.length > 0) {
-          cardsList.push({ ...item, children: availableChildren });
-        }
-      }
-      // Дочерние позиции обрабатываются через карточки — solo не нужны
-    });
+  // Фильтр и поиск (по названию карточки и её вариантов)
+  const visibleCards = useMemo(() => {
+    let list = cards;
+    if (filter === 'favorites') list = list.filter(c => favoriteSet.has(c.id));
+    if (filter === 'spicy') list = list.filter(c => c.isSpicy || c.children?.some(ch => ch.isSpicy));
+    if (filter === 'cheese') list = list.filter(c => c.hasCheese || c.children?.some(ch => ch.hasCheese));
 
-    return { cards: cardsList, soloItems: soloList };
-  }, [items]);
-
-  const handleProductClick = (item: Shawarma) => {
-    setSelectedProduct(item);
-    setModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setModalOpen(false);
-    setSelectedProduct(null);
-  };
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(card =>
+      card.name.toLowerCase().includes(q) ||
+      (card.children || []).some(child =>
+        child.name.toLowerCase().includes(q) || child.description?.toLowerCase().includes(q)));
+  }, [cards, filter, favoriteSet, searchQuery]);
 
   const handleAddToCart = (product: Shawarma, quantity: number, selectedAddons: SelectedAddon[], instructions: string, selectedChild?: Shawarma) => {
     addToCart(product, quantity, selectedAddons, instructions, selectedChild);
   };
 
-  const categoryRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const categoryListRef = useRef<HTMLUListElement>(null);
-  const chipContainerRef = useRef<HTMLDivElement>(null);
-
-  // === ПОИСК ===
-  // Поиск работает по дочерним позициям, но возвращает карточки-родители, у которых есть совпадения
-  const filteredCards = useMemo(() => {
-    const base = onlyFavorites ? cards.filter(card => favoriteSet.has(card.id)) : cards;
-    if (!searchQuery) return base;
-
-    const q = searchQuery.toLowerCase();
-    return base.map(card => {
-      const matchingChildren = (card.children || []).filter(child =>
-        child.name.toLowerCase().includes(q) ||
-        child.description?.toLowerCase().includes(q) ||
-        card.name.toLowerCase().includes(q)
-      );
-      return matchingChildren.length > 0 ? { ...card, children: matchingChildren } : null;
-    }).filter(Boolean) as Shawarma[];
-  }, [cards, searchQuery, onlyFavorites, favoriteSet]);
-
-  // Навигационные категории — названия карточек
-  const navCategories = useMemo<NavCategory[]>(() => {
-    return filteredCards.map((card) => ({
-      id: `card-${card.id}`,
-      name: card.name,
-      count: (card.children || []).length,
-    }));
-  }, [filteredCards]);
-
-  const stickyOffset = useMemo(() => {
-    if (isMobile) {
-      return (theme.mixins.toolbar.minHeight as number) + 56 + 8;
-    } else {
-      return (theme.mixins.toolbar.minHeight as number) + 16;
-    }
-  }, [isMobile, theme]);
-
-  useEffect(() => {
-    categoryRefs.current.clear();
-
-    const timeout = setTimeout(() => {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              const id = entry.target.getAttribute('data-category-id');
-              if (id) setActiveCategory(id);
-            }
-          });
-        },
-        {
-          threshold: 0.3,
-          rootMargin: `-${stickyOffset}px 0px -${window.innerHeight * 0.7}px 0px`,
-        }
-      );
-
-      categoryRefs.current.forEach((element) => {
-        observer.observe(element);
-      });
-
-      return () => observer.disconnect();
-    }, 100);
-
-    return () => clearTimeout(timeout);
-  }, [filteredCards, stickyOffset]);
-
-  useEffect(() => {
-    if (isMobile || !categoryListRef.current || !activeCategory) return;
-
-    const activeElement = categoryListRef.current.querySelector(`[data-category-id="${activeCategory}"]`) as HTMLElement;
-    if (activeElement) {
-      activeElement.scrollIntoView({
-        block: 'nearest',
-        behavior: 'smooth',
-      });
-    }
-  }, [activeCategory, isMobile]);
-
-  useEffect(() => {
-    if (!isMobile || !chipContainerRef.current || !activeCategory) return;
-
-    const activeChip = chipContainerRef.current.querySelector(`[data-category-id="${activeCategory}"]`) as HTMLElement;
-    if (activeChip) {
-      activeChip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    }
-  }, [activeCategory, isMobile]);
-
-  const scrollToCategory = (id: string) => {
-    const element = categoryRefs.current.get(id);
-    if (element) {
-      const elementPosition = element.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo({
-        top: elementPosition - stickyOffset,
-        behavior: 'smooth',
-      });
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <Box textAlign="center">
-          <CircularProgress size={60} sx={{ mb: 3 }} />
-          <Typography variant="h6" color="text.secondary">Загружаем меню...</Typography>
-        </Box>
-      </Container>
-    );
-  }
-
-  if (error) {
-    return (
-      <Container sx={{ py: 4 }}>
-        <Alert severity="error" sx={{ mb: 3, borderRadius: 3 }}>
-          Ошибка загрузки меню: {error.message}
-        </Alert>
-        <Button variant="contained" onClick={() => window.location.reload()} sx={{ borderRadius: 3 }}>
-          Попробовать снова
-        </Button>
-      </Container>
-    );
-  }
-
-  // Рендер одной карточки-родителя в сетке (клик → модалка с выбором варианта)
-  const renderProductCard = (card: Shawarma) => (
-    <Box key={card.id} onClick={() => handleProductClick(card)} sx={{ cursor: 'pointer' }}>
-      <MenuItemCard
-        item={card}
-        isFavorite={favoriteSet.has(card.id)}
-        onToggleFavorite={isAuthenticated
-          ? () => toggleFavorite.mutate({ shawarmaId: card.id, isFavorite: !favoriteSet.has(card.id) })
-          : undefined}
-      />
-    </Box>
-  );
+  const filters: { key: Filter; label: string; icon?: React.ReactElement; show: boolean }[] = [
+    { key: 'all', label: 'Всё меню', show: true },
+    { key: 'favorites', label: 'Избранное', icon: <FavoriteIcon />, show: isAuthenticated && (favoriteIds.length > 0 || filter === 'favorites') },
+    { key: 'spicy', label: 'Острое', show: hasSpicy },
+    { key: 'cheese', label: 'С сыром', show: hasCheese },
+  ];
 
   return (
     <>
-      {/* Десктопная версия */}
-      {!isMobile ? (
-        <Container maxWidth="xl" sx={{ py: 3 }}>
-          <Grid container spacing={3}>
-            {/* Левая колонка – навигация */}
-            <Grid size={{ md: 3, lg: 2.5 }}>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2,
-                  borderRadius: 3,
-                  border: `1px solid ${theme.palette.divider}`,
-                  position: 'sticky',
-                  top: 80,
-                  maxHeight: 'calc(100vh - 100px)',
-                  overflowY: 'auto',
-                }}
-              >
-                <Stack spacing={1} sx={{ mb: 3 }}>
-                  <Button
-                    startIcon={<LocationIcon />}
-                    sx={{ justifyContent: 'flex-start', textTransform: 'none' }}
-                  >
-                    Адреса и зоны доставки
-                  </Button>
-                  <Button startIcon={<StarIcon />} sx={{ justifyContent: 'flex-start', textTransform: 'none' }}>
-                    Отзывы
-                  </Button>
-                  <Button startIcon={<OfferIcon />} sx={{ justifyContent: 'flex-start', textTransform: 'none' }}>
-                    Акции
-                  </Button>
-                </Stack>
+      <RestaurantHero />
+      <RepeatLastOrderBanner />
 
-                <Divider sx={{ my: 2 }} />
-
-                <Typography variant="h6" gutterBottom fontWeight={600}>
-                  Меню
-                </Typography>
-                <List disablePadding ref={categoryListRef}>
-                  {navCategories.map((cat) => (
-                    <ListItem key={cat.id} disablePadding sx={{ mb: 0.5 }}>
-                      <ListItemButton
-                        data-category-id={cat.id}
-                        selected={activeCategory === cat.id}
-                        onClick={() => scrollToCategory(cat.id)}
-                        sx={{ borderRadius: 2, py: 0.5 }}
-                      >
-                        <ListItemText primary={`${cat.name} (${cat.count})`} />
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-            </Grid>
-
-            {/* Правая колонка – товары */}
-            <Grid size={{ md: 9, lg: 9.5 }}>
-              <RepeatLastOrderBanner />
-
-              {/* Поиск */}
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2,
-                  mb: 3,
-                  borderRadius: 3,
-                  border: `1px solid ${theme.palette.divider}`,
-                }}
-              >
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                  <TextField
-                    fullWidth
-                    placeholder="Поиск блюд..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon sx={{ color: 'text.secondary' }} />
-                        </InputAdornment>
-                      ),
-                    }}
-                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9999px' } }}
-                  />
-                  {isAuthenticated && (favoriteIds.length > 0 || onlyFavorites) && (
-                    <Chip
-                      icon={<FavoriteIcon />}
-                      label="Избранное"
-                      color={onlyFavorites ? 'error' : 'default'}
-                      variant={onlyFavorites ? 'filled' : 'outlined'}
-                      onClick={() => setOnlyFavorites(v => !v)}
-                      sx={{ borderRadius: '9999px', alignSelf: 'center' }}
-                    />
-                  )}
-                  {isAdminRole && (
-                    <Button
-                      component={Link}
-                      to="/admin/create"
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      sx={{ borderRadius: '9999px', px: 4, whiteSpace: 'nowrap' }}
-                    >
-                      Добавить товар
-                    </Button>
-                  )}
-                </Box>
-              </Paper>
-
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: {
-                    xs: '1fr',
-                    sm: 'repeat(2, 1fr)',
-                    lg: 'repeat(2, 1fr)',
-                  },
-                  gap: 3,
-                }}
-              >
-                {filteredCards.map((card) => renderProductCard(card))}
-              </Box>
-
-              {/* Пустой результат */}
-              {filteredCards.length === 0 && (
-                <Box textAlign="center" py={8}>
-                  <Typography variant="h5" color="text.secondary" sx={{ mb: 2 }}>
-                    Ничего не найдено
-                  </Typography>
-                  <Typography variant="body1" color="text.secondary">
-                    Попробуйте изменить поисковый запрос
-                  </Typography>
-                </Box>
-              )}
-            </Grid>
-          </Grid>
-        </Container>
-      ) : (
-        /* Мобильная версия */
-        <Container maxWidth="xl" sx={{ py: 3 }}>
-          <RepeatLastOrderBanner />
-
-          {/* Поиск */}
-          <Paper
-            elevation={0}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) 340px' },
+          gap: 3,
+          alignItems: 'start',
+        }}
+      >
+        <Box component="section" aria-label="Меню">
+          {/* Липкая панель: поиск и быстрые фильтры */}
+          <Box
             sx={{
-              p: 2,
-              mb: 3,
-              borderRadius: 3,
-              border: `1px solid ${theme.palette.divider}`,
-            }}
-          >
-            <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-              <TextField
-                fullWidth
-                placeholder="Поиск блюд..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ color: 'text.secondary' }} />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9999px' } }}
-              />
-              {isAuthenticated && (favoriteIds.length > 0 || onlyFavorites) && (
-                <Chip
-                  icon={<FavoriteIcon />}
-                  label="Избранное"
-                  color={onlyFavorites ? 'error' : 'default'}
-                  variant={onlyFavorites ? 'filled' : 'outlined'}
-                  onClick={() => setOnlyFavorites(v => !v)}
-                  sx={{ borderRadius: '9999px', alignSelf: 'center' }}
-                />
-              )}
-              {isAdminRole && (
-                <Button
-                  component={Link}
-                  to="/admin/create"
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  sx={{ borderRadius: '9999px', px: 4, whiteSpace: 'nowrap' }}
-                >
-                  Добавить товар
-                </Button>
-              )}
-            </Box>
-          </Paper>
-
-          {/* Горизонтальные категории (sticky) */}
-          <Paper
-            ref={chipContainerRef}
-            elevation={0}
-            sx={{
-              p: 1,
-              mb: 3,
-              borderRadius: 3,
-              border: `1px solid ${theme.palette.divider}`,
               position: 'sticky',
-              top: (theme) => theme.mixins.toolbar.minHeight,
-              zIndex: 1100,
-              bgcolor: 'background.paper',
-              overflowX: 'auto',
-              whiteSpace: 'nowrap',
-              '&::-webkit-scrollbar': { display: 'none' },
+              top: { xs: 60, md: 72 },
+              zIndex: 5,
+              mx: { xs: -2, sm: -3, lg: 0 },
+              px: { xs: 2, sm: 3, lg: 0 },
+              py: 1.5,
+              bgcolor: 'background.default',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              flexWrap: { xs: 'wrap', md: 'nowrap' },
             }}
           >
-            <Box sx={{ display: 'inline-flex', gap: 1 }}>
-              {navCategories.map((cat) => (
+            <TextField
+              size="small"
+              placeholder="Найти в меню"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              sx={{ flex: { xs: '1 1 100%', md: '0 1 320px' }, '& .MuiOutlinedInput-root': { bgcolor: 'background.paper' } }}
+              inputProps={{ 'aria-label': 'Поиск по меню' }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery ? (
+                  <InputAdornment position="end">
+                    <IconButton size="small" aria-label="Очистить поиск" onClick={() => setSearchQuery('')}>
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : undefined,
+              }}
+            />
+            <Box
+              role="tablist"
+              aria-label="Фильтры меню"
+              sx={{ display: 'flex', gap: 1, overflowX: 'auto', '&::-webkit-scrollbar': { display: 'none' } }}
+            >
+              {filters.filter(f => f.show).map(f => (
                 <Chip
-                  key={cat.id}
-                  data-category-id={cat.id}
-                  label={`${cat.name}`}
-                  onClick={() => scrollToCategory(cat.id)}
-                  color={activeCategory === cat.id ? 'primary' : 'default'}
-                  variant={activeCategory === cat.id ? 'filled' : 'outlined'}
-                  sx={{ borderRadius: '9999px' }}
+                  key={f.key}
+                  role="tab"
+                  aria-selected={filter === f.key}
+                  icon={f.icon}
+                  label={f.label}
+                  onClick={() => setFilter(f.key)}
+                  color={filter === f.key ? 'primary' : 'default'}
+                  sx={{
+                    height: 40,
+                    px: 0.5,
+                    fontWeight: 600,
+                    flexShrink: 0,
+                    bgcolor: filter === f.key ? undefined : 'background.paper',
+                  }}
                 />
               ))}
             </Box>
-          </Paper>
+            {isAdminRole && (
+              <Button
+                component={Link}
+                to="/admin/create"
+                startIcon={<AddIcon />}
+                variant="outlined"
+                sx={{ ml: 'auto', flexShrink: 0, display: { xs: 'none', md: 'inline-flex' }, bgcolor: 'background.paper' }}
+              >
+                Новая позиция
+              </Button>
+            )}
+          </Box>
+
+          {error && (
+            <Alert
+              severity="error"
+              sx={{ my: 2 }}
+              action={<Button color="inherit" size="small" onClick={() => refetch()}>Повторить</Button>}
+            >
+              Не удалось загрузить меню. Проверьте соединение и попробуйте ещё раз.
+            </Alert>
+          )}
 
           <Box
             sx={{
+              mt: 1,
               display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: 2,
+              gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))', xl: 'repeat(4, minmax(0, 1fr))' },
+              gap: { xs: 1.25, sm: 2 },
             }}
           >
-            {filteredCards.map((card) => renderProductCard(card))}
+            {isLoading && Array.from({ length: 8 }).map((_, i) => (
+              <Box key={i} sx={{ bgcolor: 'background.paper', borderRadius: '24px', p: 1.25 }}>
+                <Skeleton variant="rounded" sx={{ aspectRatio: '1 / 1', height: 'auto', borderRadius: '18px' }} />
+                <Skeleton width="40%" height={32} sx={{ mt: 1 }} />
+                <Skeleton width="80%" />
+                <Skeleton variant="rounded" height={40} sx={{ mt: 1, borderRadius: '14px' }} />
+              </Box>
+            ))}
+
+            {visibleCards.map(card => (
+              <MenuItemCard
+                key={card.id}
+                item={card}
+                onOpen={() => setSelectedProduct(card)}
+                inCartCount={inCart.get(card.id) ?? 0}
+                isFavorite={favoriteSet.has(card.id)}
+                onToggleFavorite={isAuthenticated
+                  ? () => toggleFavorite.mutate({ shawarmaId: card.id, isFavorite: !favoriteSet.has(card.id) })
+                  : undefined}
+              />
+            ))}
           </Box>
 
-          {filteredCards.length === 0 && (
-            <Box textAlign="center" py={8}>
-              <Typography variant="h5" color="text.secondary" sx={{ mb: 2 }}>
-                Ничего не найдено
+          {!isLoading && !error && visibleCards.length === 0 && (
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <Typography variant="h5" sx={{ mb: 1 }}>
+                {cards.length === 0 ? 'Меню скоро появится' : 'Ничего не нашлось'}
               </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Попробуйте изменить поисковый запрос
+              <Typography color="text.secondary" sx={{ mb: 2 }}>
+                {cards.length === 0
+                  ? (isAdminRole ? 'Добавьте первую позицию — она сразу появится здесь.' : 'Загляните чуть позже.')
+                  : 'Попробуйте другое слово или сбросьте фильтр.'}
               </Typography>
+              {cards.length === 0 && isAdminRole ? (
+                <Button component={Link} to="/admin/create" variant="contained" startIcon={<AddIcon />}>Добавить позицию</Button>
+              ) : cards.length > 0 && (
+                <Button variant="outlined" onClick={() => { setSearchQuery(''); setFilter('all'); }}>Показать всё меню</Button>
+              )}
             </Box>
           )}
-        </Container>
-      )}
+        </Box>
 
-      {/* Плавающая кнопка корзины */}
-      {cartItems.length > 0 && (
-        <Zoom in={cartItems.length > 0} unmountOnExit>
-          <Fab
-            variant="extended"
-            color="primary"
-            aria-label="cart"
-            onClick={openCart}
-            sx={{
-              position: 'fixed',
-              bottom: 16,
-              right: 16,
-              zIndex: 1000,
-              boxShadow: 4,
-              borderRadius: '9999px',
-            }}
-          >
-            <Badge badgeContent={totalItems} color="error" sx={{ mr: 1 }}>
-              <CartIcon />
-            </Badge>
-            {totalPrice} ₽
-          </Fab>
-        </Zoom>
-      )}
+        {isWide && (
+          <Box sx={{ position: 'sticky', top: 96 }}>
+            <CartPanel />
+          </Box>
+        )}
+      </Box>
 
-      {/* Модалки */}
+      {!isWide && <MobileCartBar />}
+
       <ProductModal
-        open={modalOpen}
-        onClose={handleCloseModal}
+        open={!!selectedProduct}
+        onClose={() => setSelectedProduct(null)}
         product={selectedProduct}
         onAddToCart={handleAddToCart}
-      />
-
-      <OrderModal
-        open={orderOpen}
-        onClose={closeOrder}
-        onBackToCart={backToCart}
-        deliveryType={deliveryType}
-        address={address}
-        onAddressChange={setAddress}
-        customerName={customerName}
-        onCustomerNameChange={setCustomerName}
-        phone={phone}
-        onPhoneChange={setPhone}
       />
     </>
   );

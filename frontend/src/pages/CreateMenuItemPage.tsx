@@ -1088,7 +1088,7 @@ const CreateMenuItemPage: React.FC = () => {
                   position: 'relative',
                   width: '100%',
                   height: { xs: 280, sm: 380 },
-                  bgcolor: theme.palette.mode === 'light' ? '#f1f5f9' : '#0f172a',
+                  bgcolor: 'action.hover',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

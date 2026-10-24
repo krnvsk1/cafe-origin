@@ -282,7 +282,7 @@ const CartModal: React.FC<CartModalProps> = ({
                       width: 80,
                       height: 80,
                       borderRadius: 3,
-                      bgcolor: theme.palette.mode === 'light' ? '#f8fafc' : '#1e293b',
+                      bgcolor: 'action.hover',
                       border: `1px solid ${theme.palette.divider}`,
                     }}
                   >
@@ -331,7 +331,7 @@ const CartModal: React.FC<CartModalProps> = ({
                       <IconButton
                         size="small"
                         onClick={() => handleQuantityChange(item.uniqueKey, -1)}
-                        sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: '50%', bgcolor: theme.palette.mode === 'light' ? '#ecfeff' : 'rgba(34,211,238,0.1)', color: 'primary.main', '&:hover': { bgcolor: 'primary.main', color: 'white' } }}
+                        sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: '50%', bgcolor: 'action.hover', color: 'text.primary', '&:hover': { bgcolor: 'action.selected' } }}
                       >
                         <RemoveIcon fontSize="small" />
                       </IconButton>
@@ -339,7 +339,7 @@ const CartModal: React.FC<CartModalProps> = ({
                       <IconButton
                         size="small"
                         onClick={() => handleQuantityChange(item.uniqueKey, 1)}
-                        sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: '50%', bgcolor: theme.palette.mode === 'light' ? '#ecfeff' : 'rgba(34,211,238,0.1)', color: 'primary.main', '&:hover': { bgcolor: 'primary.main', color: 'white' } }}
+                        sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: '50%', bgcolor: 'action.hover', color: 'text.primary', '&:hover': { bgcolor: 'action.selected' } }}
                       >
                         <AddIcon fontSize="small" />
                       </IconButton>
@@ -528,7 +528,7 @@ const CartModal: React.FC<CartModalProps> = ({
             p: 2,
             borderRadius: 3,
             borderColor: theme.palette.divider,
-            bgcolor: theme.palette.mode === 'light' ? '#f8fafc' : '#1e293b',
+            bgcolor: 'action.hover',
             display: 'flex',
             justifyContent: 'space-between',
           }}
@@ -553,6 +553,7 @@ const CartModal: React.FC<CartModalProps> = ({
       <DialogActions sx={{ p: isMobile ? 2 : 3, pt: 0 }}>
         <Button
           variant="contained"
+            color="secondary"
           onClick={onCheckout}
           fullWidth
           disabled={!isMinOrderReached || items.length === 0}

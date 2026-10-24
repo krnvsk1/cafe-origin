@@ -335,7 +335,7 @@ const OrderCard: React.FC<{
             <Paper 
               variant="outlined" 
               sx={{ 
-                bgcolor: theme.palette.mode === 'light' ? '#fafafa' : '#1e293b'
+                bgcolor: 'action.hover'
               }}
             >
               <List dense>

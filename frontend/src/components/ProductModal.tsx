@@ -198,7 +198,6 @@ const ProductModal: React.FC<ProductModalProps> = ({
       fullWidth={!isMobile}
       PaperProps={{
         sx: {
-          borderRadius: isMobile ? 0 : 2,
           maxHeight: isMobile ? '100%' : '90vh',
         }
       }}
@@ -258,7 +257,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                 </Grid>
 
                 <Grid size={{ xs: 7 }}>
-                  <Typography variant="h5" color="primary.main" fontWeight={700} gutterBottom>
+                  <Typography variant="h5" color="text.primary" fontWeight={700} gutterBottom>
                     {isSimpleProduct
                       ? `${basePrice} ₽`
                       : selectedChild
@@ -336,7 +335,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                                 label={
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                     <Typography>{addon.name}</Typography>
-                                    <Typography variant="body2" color="primary.main" fontWeight={600}>
+                                    <Typography variant="body2" color="text.primary" fontWeight={600}>
                                       +{addon.price} ₽
                                     </Typography>
                                   </Box>
@@ -411,7 +410,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                   />
                 )}
 
-                <Typography variant="h5" color="primary.main" fontWeight={700} gutterBottom>
+                <Typography variant="h5" color="text.primary" fontWeight={700} gutterBottom>
                   {isSimpleProduct
                     ? `${basePrice} ₽`
                     : selectedChild
@@ -485,7 +484,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
                               label={
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                   <Typography>{addon.name}</Typography>
-                                  <Typography variant="body2" color="primary.main" fontWeight={600}>
+                                  <Typography variant="body2" color="text.primary" fontWeight={600}>
                                     +{addon.price} ₽
                                   </Typography>
                                 </Box>
@@ -541,40 +540,27 @@ const ProductModal: React.FC<ProductModalProps> = ({
         )}
       </DialogContent>
 
-      <DialogActions sx={{
-        p: isMobile ? 2 : 3,
-        flexDirection: 'column',
-        gap: 2,
-        borderTop: `1px solid ${theme.palette.divider}`,
-      }}>
-        <Box sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          width: '100%'
-        }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="h6">Количество:</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IconButton onClick={() => handleQuantityChange(-1)} disabled={quantity <= 1} size="small" sx={{ borderRadius: '50%', bgcolor: theme.palette.mode === 'light' ? '#ecfeff' : 'rgba(34,211,238,0.1)', color: 'primary.main', '&:hover': { bgcolor: 'primary.main', color: 'white' } }}>
-                <RemoveIcon />
-              </IconButton>
-              <Typography sx={{ minWidth: 30, textAlign: 'center' }}>{quantity}</Typography>
-              <IconButton onClick={() => handleQuantityChange(1)} size="small" sx={{ borderRadius: '50%', bgcolor: theme.palette.mode === 'light' ? '#ecfeff' : 'rgba(34,211,238,0.1)', color: 'primary.main', '&:hover': { bgcolor: 'primary.main', color: 'white' } }}>
-                <AddIcon />
-              </IconButton>
-            </Box>
-          </Box>
-
-          <Button
-            variant="contained"
-            onClick={handleAddToCart}
-            disabled={isLoading}
-            sx={{ borderRadius: '9999px', px: 4 }}
-          >
-            В корзину {totalPrice} ₽
-          </Button>
+      <DialogActions sx={{ p: isMobile ? 2 : 3, gap: 1.5, borderTop: `1px solid ${theme.palette.divider}` }}>
+        <Box sx={{ display: 'inline-flex', alignItems: 'center', bgcolor: 'action.hover', borderRadius: '14px', height: 52 }}>
+          <IconButton onClick={() => handleQuantityChange(-1)} disabled={quantity <= 1} aria-label="Меньше">
+            <RemoveIcon />
+          </IconButton>
+          <Typography sx={{ minWidth: 28, textAlign: 'center', fontWeight: 700 }}>{quantity}</Typography>
+          <IconButton onClick={() => handleQuantityChange(1)} aria-label="Больше">
+            <AddIcon />
+          </IconButton>
         </Box>
+        <Button
+          variant="contained"
+          color="secondary"
+          size="large"
+          onClick={handleAddToCart}
+          disabled={isLoading}
+          sx={{ flex: 1, justifyContent: 'space-between', px: 2.5, ml: '0 !important' }}
+        >
+          <span>Добавить</span>
+          <span>{totalPrice} ₽</span>
+        </Button>
       </DialogActions>
 
       <Snackbar

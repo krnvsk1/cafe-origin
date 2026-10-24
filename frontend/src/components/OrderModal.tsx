@@ -445,7 +445,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
                           sx={{
                             width: 56,
                             height: 56,
-                            bgcolor: '#f8fafc',
+                            bgcolor: 'action.hover',
                             borderRadius: 3,
                             mr: 2,
                             border: `1px solid ${theme.palette.divider}`,
@@ -535,7 +535,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
               p: 2,
               borderRadius: 4,
               border: `1px solid ${theme.palette.divider}`,
-              bgcolor: theme.palette.mode === 'light' ? '#ecfeff' : 'rgba(8,145,178,0.08)',
+              bgcolor: 'action.hover',
               mb: 2,
             }}
           >
@@ -571,7 +571,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
           </Paper>
 
           {/* Убираем заглушку, так как теперь поля ввода есть */}
-          {/* <Box sx={{ p: 2, bgcolor: theme.palette.mode === 'light' ? '#f8fafc' : '#1e293b', borderRadius: 3, border: `1px solid ${theme.palette.divider}` }}>
+          {/* <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 3, border: `1px solid ${theme.palette.divider}` }}>
             <Typography variant="body2" color="text.secondary">
               🔐 В будущем здесь будут имя и телефон из профиля
             </Typography>
@@ -581,10 +581,11 @@ const OrderModal: React.FC<OrderModalProps> = ({
         <DialogActions sx={{
           p: isMobile ? 2 : 3,
           borderTop: `1px solid ${theme.palette.divider}`,
-          bgcolor: theme.palette.mode === 'light' ? '#f8fafc' : '#1e293b',
+          bgcolor: 'action.hover',
         }}>
           <Button
             variant="contained"
+            color="secondary"
             onClick={handleSubmit}
             fullWidth
             disabled={cartItems.length === 0 || createOrder.isPending ||
