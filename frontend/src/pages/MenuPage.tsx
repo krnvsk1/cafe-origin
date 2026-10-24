@@ -226,12 +226,12 @@ const MenuPage: React.FC = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) 340px' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 340px' },
           gap: 3,
           alignItems: 'start',
         }}
       >
-        <Box component="section" aria-label="Меню">
+        <Box component="section" aria-label="Меню" sx={{ minWidth: 0 }}>
           {/* Липкая панель: поиск и быстрые фильтры */}
           <Box
             sx={{

@@ -373,7 +373,7 @@ const TechCardEditor: React.FC<Props> = ({ open, target, id, onClose }) => {
               </Typography>
             </Box>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: '1fr 1fr' }, gap: 1.5 }}>
               {target === 'semi' ? (
                 <TextField
                   label="Выход партии"

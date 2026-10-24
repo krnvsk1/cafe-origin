@@ -157,7 +157,7 @@ const AnalyticsPage: React.FC = () => {
             )}
           </Paper>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 3 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '1fr 1fr' }, gap: 2, mb: 3 }}>
             <Paper sx={{ p: 2.5 }}>
               <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>Заказы по часам</Typography>
               <SimpleBarChart
@@ -189,7 +189,7 @@ const AnalyticsPage: React.FC = () => {
             </Paper>
           </Box>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(3, 1fr)' }, gap: 2 }}>
             <Paper sx={{ p: 2.5 }}>
               <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>Способ получения</Typography>
               <ShareList rows={data.deliveryTypes.map(d => ({ label: d.type, value: d.orders, extra: `${d.orders} зак.` }))} />

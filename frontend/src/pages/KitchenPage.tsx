@@ -166,7 +166,7 @@ const KitchenPage: React.FC = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: later.length ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: later.length ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)' },
           gap: 2,
           alignItems: 'start',
         }}

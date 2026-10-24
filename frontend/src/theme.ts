@@ -66,7 +66,18 @@ export const createAppTheme = (mode: 'light' | 'dark') => {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
-          body: { backgroundColor: t.bg, WebkitFontSmoothing: 'antialiased' },
+          // Страница прокручивается только вертикально: если что-то шире экрана — обрезаем,
+          // а не даём сдвигать всю страницу вбок (clip, в отличие от hidden, не ломает position: sticky)
+          html: { overflowX: 'clip', maxWidth: '100%' },
+          body: {
+            backgroundColor: t.bg,
+            WebkitFontSmoothing: 'antialiased',
+            overflowX: 'clip',
+            maxWidth: '100%',
+            // Без авто-увеличения шрифта в Safari при повороте телефона
+            WebkitTextSizeAdjust: '100%',
+          },
+          img: { maxWidth: '100%' },
           '::selection': { backgroundColor: alpha(tokens.saffron, 0.5) },
         },
       },

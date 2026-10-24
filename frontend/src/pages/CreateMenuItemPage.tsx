@@ -574,7 +574,7 @@ const CreateMenuItemPage: React.FC = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) 340px' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 340px' },
           gap: { xs: 2, md: 3 },
           alignItems: 'start',
         }}
@@ -643,7 +643,7 @@ const CreateMenuItemPage: React.FC = () => {
                 />
               </Field>
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '200px 1fr' }, gap: 2.5 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: '200px 1fr' }, gap: 2.5 }}>
                 <Field
                   label="Цена"
                   htmlFor="field-price"
@@ -1144,7 +1144,7 @@ const CreateMenuItemPage: React.FC = () => {
                 </ToggleButtonGroup>
               </Box>
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: '1fr 1fr' }, gap: 3 }}>
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>Масштаб</Typography>

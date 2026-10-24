@@ -169,7 +169,7 @@ const AdminDeliveryZonesPage: React.FC = () => {
         </Alert>
       )}
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '340px 1fr' }, gap: 2 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '340px 1fr' }, gap: 2 }}>
         <Paper sx={{ p: 2 }}>
           {isLoading && <LinearProgress />}
           {editingId === null ? (
