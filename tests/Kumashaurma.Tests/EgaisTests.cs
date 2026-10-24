@@ -208,5 +208,43 @@ namespace Kumashaurma.Tests
             Assert.Equal("WBREGID", param.Element(qp + "Name")!.Value);
             Assert.Equal("TTN-0000000002", param.Element(qp + "Value")!.Value);
         }
+
+        [Fact]
+        public void RecognizesQueryNattnLimitRejection()
+        {
+            var ticket = EgaisXml.ParseTicket(EgaisXml.Load(@"<?xml version=""1.0"" encoding=""utf-8"" standalone=""no""?>
+<ns:Documents xmlns:ns=""http://fsrar.ru/WEGAIS/WB_DOC_SINGLE_01"" xmlns:tc=""http://fsrar.ru/WEGAIS/Ticket"" Version=""1.0"">
+  <ns:Owner><ns:FSRAR_ID>3463047</ns:FSRAR_ID></ns:Owner>
+  <ns:Document><ns:Ticket>
+    <tc:TicketDate>2026-10-24T23:52:48.6665403</tc:TicketDate>
+    <tc:Identity/>
+    <tc:DocId>479091EB-5B1E-473D-BBD1-1D87EFC30A8D</tc:DocId>
+    <tc:TransportId>2a5de3bd-7238-44ed-bdac-a78ec07a3600</tc:TransportId>
+    <tc:RegID/>
+    <tc:DocType>QueryNATTN</tc:DocType>
+    <tc:Result>
+      <tc:Conclusion>Rejected</tc:Conclusion>
+      <tc:Comments>Обработка запросов по типу QueryNATTN производится не чаще 1-го раза в 48 часов Владелец [""030000991200""]. </tc:Comments>
+    </tc:Result>
+  </ns:Ticket></ns:Document>
+</ns:Documents>"));
+
+            Assert.Equal("2a5de3bd-7238-44ed-bdac-a78ec07a3600", ticket.TransportId);
+            Assert.False(ticket.Accepted);
+            Assert.True(EgaisService.IsQueryNattnLimitRejection(ticket));
+            // Другой отказ на тот же запрос — не лимит, повторять можно сразу
+            Assert.False(EgaisService.IsQueryNattnLimitRejection(ticket with { Comment = "Нарушена целостность конверта" }));
+        }
+
+        [Fact]
+        public void QueryNattnAllowedOnceIn48Hours()
+        {
+            var sent = new DateTime(2026, 10, 24, 20, 52, 0, DateTimeKind.Utc);
+
+            Assert.Null(EgaisService.NextQueryNattnAt(null, sent));
+            Assert.Equal(sent.AddHours(48), EgaisService.NextQueryNattnAt(sent, sent.AddHours(1)));
+            Assert.Equal(sent.AddHours(48), EgaisService.NextQueryNattnAt(sent, sent.AddHours(47.9)));
+            Assert.Null(EgaisService.NextQueryNattnAt(sent, sent.AddHours(48)));
+        }
     }
 }
