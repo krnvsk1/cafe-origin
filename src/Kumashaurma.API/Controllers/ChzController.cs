@@ -160,6 +160,29 @@ namespace Kumashaurma.API.Controllers
             });
         }
 
+        // GET: api/chz/balance?group=milk&days=365 — коды «в обороте» на нашем балансе
+        [HttpGet("balance")]
+        public async Task<IActionResult> Balance([FromQuery] string group = "milk", [FromQuery] int days = 365)
+        {
+            try
+            {
+                var (codes, truncated) = await _chz.BalanceAsync(group, days, HttpContext.RequestAborted);
+                var items = codes.GroupBy(c => c.Gtin)
+                    .Select(g => new
+                    {
+                        gtin = g.Key,
+                        count = g.Count(),
+                        lastEmission = g.Max(x => x.EmissionDate),
+                        codes = g.Select(x => x.Cis).ToList()
+                    })
+                    .OrderByDescending(x => x.lastEmission)
+                    .ToList();
+                return Ok(new { total = codes.Count, truncated, items });
+            }
+            catch (ChzApiException ex) { return ChzError(ex); }
+            catch (HttpRequestException ex) { return StatusCode(502, new { message = $"Честный знак недоступен: {ex.Message}" }); }
+        }
+
         // POST: api/chz/withdrawals — собрать документ вывода из оборота (черновик для подписи)
         [HttpPost("withdrawals")]
         public async Task<IActionResult> Prepare([FromBody] WithdrawalRequest r)

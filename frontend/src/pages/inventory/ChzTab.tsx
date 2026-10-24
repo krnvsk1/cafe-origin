@@ -1,16 +1,16 @@
 import * as React from 'react';
 import {
   Box, Typography, Button, TextField, MenuItem, Switch, FormControlLabel, Alert, CircularProgress, Chip, IconButton,
-  Dialog, DialogTitle, DialogContent, DialogActions, Collapse, useTheme, useMediaQuery,
+  Dialog, DialogTitle, DialogContent, DialogActions, Collapse, Checkbox, useTheme, useMediaQuery,
 } from '@mui/material';
 import {
   QrCodeScanner as ScanIcon, Close as CloseIcon, CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon,
-  SettingsOutlined as SettingsIcon, Key as KeyIcon, ChevronRight as ChevronRightIcon, Logout as LogoutIcon,
+  SettingsOutlined as SettingsIcon, Key as KeyIcon, ChevronRight as ChevronRightIcon, Logout as LogoutIcon, CloudDownloadOutlined as LoadIcon,
 } from '@mui/icons-material';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useChzState, useChzDocuments, useSaveChzSettings, chzAuthStart, chzAuthComplete, chzLogout, chzPrepare, chzSubmit,
-  chzRefresh, chzDelete, fetchChzDocument, CHZ_STATUS, type ChzDocumentDetail, type ChzState,
+  chzRefresh, chzDelete, fetchChzDocument, fetchChzBalance, CHZ_STATUS, type ChzDocumentDetail, type ChzState, type ChzBalance,
 } from '../../api/chz';
 import { apiError, fmtDateTime, fmtDate, toDateInput } from '../../api/inventory';
 import { listCertificates, signBase64, signText, type Certificate } from '../../utils/cryptopro';
@@ -274,6 +274,137 @@ const DocumentDialog: React.FC<{ id: number | null; thumbprint: string | null; s
   );
 };
 
+// ============ Баланс в ЧЗ ============
+
+const BalancePanel: React.FC<{
+  state: ChzState;
+  busy: boolean;
+  canSign: boolean;
+  actionTitle: string;
+  onWithdraw: (codes: string[], group: string) => Promise<boolean>;
+  message: { ok: boolean; text: string } | null;
+  onCloseMessage: () => void;
+}> = ({ state, busy, canSign, actionTitle, onWithdraw, message, onCloseMessage }) => {
+  const [group, setGroup] = React.useState(state.productGroups[0] ?? 'milk');
+  const [days, setDays] = React.useState(365);
+  const [data, setData] = React.useState<ChzBalance | null>(null);
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [confirm, setConfirm] = React.useState(false);
+  const qc = useQueryClient();
+  const groupTitle = state.groups.find(g => g.key === group)?.title ?? group;
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const r = await fetchChzBalance(group, days);
+      setData(r);
+      setSelected(new Set(r.items.map(i => i.gtin)));
+    } catch (e) {
+      if (needsSignIn(e)) await qc.invalidateQueries({ queryKey: ['chz', 'status'] });
+      setError(apiError(e));
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const chosen = data ? data.items.filter(i => selected.has(i.gtin)) : [];
+  const chosenCount = chosen.reduce((s, i) => s + i.count, 0);
+  const toggle = (gtin: string) => setSelected(prev => {
+    const n = new Set(prev);
+    if (n.has(gtin)) n.delete(gtin); else n.add(gtin);
+    return n;
+  });
+
+  const run = async () => {
+    setConfirm(false);
+    const ok = await onWithdraw(chosen.flatMap(i => i.codes), group);
+    if (ok) await load();
+  };
+
+  return (
+    <Panel>
+      <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', mb: 0.5 }}>На балансе в Честном знаке</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Коды «в обороте», которые числятся за вашим ИНН. Можно вывести всё разом или выбрать товары по GTIN.
+      </Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: '1fr 200px auto' }, gap: 1.5, mb: 2 }}>
+        <TextField select label="Товарная группа" value={group} onChange={e => { setGroup(e.target.value); setData(null); }}>
+          {state.productGroups.map(g => <MenuItem key={g} value={g}>{state.groups.find(x => x.key === g)?.title ?? g}</MenuItem>)}
+        </TextField>
+        <TextField select label="Произведено за" value={days} onChange={e => { setDays(Number(e.target.value)); setData(null); }}>
+          <MenuItem value={30}>30 дней</MenuItem>
+          <MenuItem value={90}>3 месяца</MenuItem>
+          <MenuItem value={365}>год</MenuItem>
+          <MenuItem value={1095}>3 года</MenuItem>
+        </TextField>
+        <Button variant="contained" color="secondary" onClick={load} disabled={loading || busy} sx={{ minHeight: 56 }}
+          startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <LoadIcon />}>
+          Запросить
+        </Button>
+      </Box>
+
+      {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
+      {message && <Alert severity={message.ok ? 'success' : 'error'} sx={{ mb: 1.5, whiteSpace: 'pre-line' }} onClose={onCloseMessage}>{message.text}</Alert>}
+
+      {data && data.total === 0 && <Alert severity="info">По группе «{groupTitle}» на балансе ничего нет</Alert>}
+      {data && data.total > 0 && (
+        <>
+          {data.truncated && <Alert severity="warning" sx={{ mb: 1.5 }}>Показаны первые {data.total} кодов — после вывода запросите ещё раз</Alert>}
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+            <Checkbox
+              checked={selected.size === data.items.length}
+              indeterminate={selected.size > 0 && selected.size < data.items.length}
+              onChange={e => setSelected(e.target.checked ? new Set(data.items.map(i => i.gtin)) : new Set())}
+            />
+            <Typography sx={{ fontWeight: 600 }}>Всего {data.total} шт · {data.items.length} товаров</Typography>
+          </Box>
+          <Box sx={{ maxHeight: 320, overflowY: 'auto', mb: 2 }}>
+            {data.items.map(i => (
+              <Box key={i.gtin} onClick={() => toggle(i.gtin)}
+                sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer', borderRadius: '10px', '&:hover': { bgcolor: 'action.hover' } }}>
+                <Checkbox checked={selected.has(i.gtin)} />
+                <Typography sx={{ fontFamily: 'monospace', flex: 1, minWidth: 0 }} noWrap>{i.gtin}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
+                  {i.lastEmission ? `от ${fmtDate(i.lastEmission)}` : ''}
+                </Typography>
+                <Typography sx={{ fontWeight: 700, minWidth: 56, textAlign: 'right', pr: 1 }}>{i.count} шт</Typography>
+              </Box>
+            ))}
+          </Box>
+          <Button variant="contained" color="secondary" size="large" onClick={() => setConfirm(true)}
+            disabled={busy || chosenCount === 0 || !canSign}
+            startIcon={busy ? <CircularProgress size={18} color="inherit" /> : undefined}>
+            Вывести из оборота · {chosenCount}
+          </Button>
+        </>
+      )}
+
+      <Dialog open={confirm} onClose={() => setConfirm(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Вывести {chosenCount} кодов?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Группа «{groupTitle}», причина — «{actionTitle}» (меняется в форме «Вывод из оборота» выше).
+            Отменить вывод из оборота нельзя.
+          </Typography>
+          {chosenCount > 5000 && (
+            <Typography color="text.secondary" sx={{ mt: 1 }}>
+              Будет {Math.ceil(chosenCount / 5000)} документа — каждый нужно подписать.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setConfirm(false)} sx={{ color: 'text.secondary' }}>Отмена</Button>
+          <Button variant="contained" color="secondary" onClick={run}>Подписать и вывести</Button>
+        </DialogActions>
+      </Dialog>
+    </Panel>
+  );
+};
+
 // ============ Вкладка ============
 
 const ChzTab: React.FC = () => {
@@ -296,6 +427,8 @@ const ChzTab: React.FC = () => {
   const [comment, setComment] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState<{ ok: boolean; text: string } | null>(null);
+  // Где показать результат: в форме вывода или в панели баланса
+  const [messageAt, setMessageAt] = React.useState<'form' | 'balance'>('form');
   const [openId, setOpenId] = React.useState<number | null>(null);
   const scanRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -311,38 +444,65 @@ const ChzTab: React.FC = () => {
     setCodes(prev => (prev.includes(code) ? prev : [...prev, code]));
   };
 
-  const send = async () => {
-    if (!state || !thumbprint) return;
+  /** Вывести коды: документы по 5000 кодов, каждый подписывается КЭП, затем ждём результат проверки */
+  const withdraw = async (list: string[], pg: string, note: string | undefined, at: 'form' | 'balance'): Promise<boolean> => {
+    if (!state || !thumbprint || list.length === 0) return false;
+    setMessageAt(at);
     setBusy(true);
     setMessage(null);
+    const results: string[] = [];
+    let allOk = true;
     try {
-      const draft = await chzPrepare({ productGroup: group, action, date, codes: codes.join('\n'), comment: comment.trim() || undefined });
-      const signature = await signBase64(thumbprint, draft.productDocument!, true);
-      const sent = await chzSubmit(draft.id, signature);
-      setCodes([]);
-      setComment('');
+      const chunks: string[][] = [];
+      for (let i = 0; i < list.length; i += 5000) chunks.push(list.slice(i, i + 5000));
+      const sentIds: number[] = [];
+      for (const [i, chunk] of chunks.entries()) {
+        if (chunks.length > 1) setMessage({ ok: true, text: `Документ ${i + 1} из ${chunks.length}: подпишите…` });
+        const draft = await chzPrepare({ productGroup: pg, action, date, codes: chunk.join('\n'), comment: note });
+        const signature = await signBase64(thumbprint, draft.productDocument!, true);
+        const sent = await chzSubmit(draft.id, signature);
+        if (sent.status === 'error') {
+          allOk = false;
+          results.push(`${sent.documentNumber}: ${sent.result ?? 'Честный знак отклонил документ'}`);
+        } else sentIds.push(sent.id);
+      }
       await qc.invalidateQueries({ queryKey: ['chz', 'documents'] });
 
-      if (sent.status === 'error') {
-        setMessage({ ok: false, text: sent.result ?? 'Честный знак отклонил документ' });
-        return;
-      }
-      setMessage({ ok: true, text: `${sent.documentNumber} отправлен, Честный знак проверяет коды…` });
-      // Проверка обычно занимает до минуты
-      for (let i = 0; i < 12; i++) {
-        await new Promise(r => setTimeout(r, 5000));
-        const r = await chzRefresh(sent.id);
-        if (r.status !== 'sent') {
-          setMessage({ ok: r.status === 'ok', text: `${r.documentNumber}: ${r.result ?? CHZ_STATUS[r.status].label}` });
-          break;
+      if (sentIds.length) {
+        setMessage({ ok: true, text: `Отправлено документов: ${sentIds.length}, Честный знак проверяет коды…` });
+        // Проверка обычно занимает до минуты
+        let pending = [...sentIds];
+        for (let i = 0; i < 12 && pending.length; i++) {
+          await new Promise(r => setTimeout(r, 5000));
+          const next: number[] = [];
+          for (const id of pending) {
+            const r = await chzRefresh(id);
+            if (r.status === 'sent') next.push(id);
+            else {
+              if (r.status !== 'ok') allOk = false;
+              results.push(`${r.documentNumber}: ${r.result ?? CHZ_STATUS[r.status].label}`);
+            }
+          }
+          pending = next;
         }
+        if (pending.length) results.push(`Ещё проверяются: ${pending.length} — статус обновится в истории`);
       }
+      setMessage({ ok: allOk, text: results.join('\n') });
       await qc.invalidateQueries({ queryKey: ['chz', 'documents'] });
+      return true;
     } catch (e) {
       if (needsSignIn(e)) await qc.invalidateQueries({ queryKey: ['chz', 'status'] });
-      setMessage({ ok: false, text: e instanceof Error && !(e as { response?: unknown }).response ? e.message : apiError(e) });
+      setMessage({ ok: false, text: [...results, e instanceof Error && !(e as { response?: unknown }).response ? e.message : apiError(e)].join('\n') });
+      return false;
     } finally {
       setBusy(false);
+    }
+  };
+
+  const send = async () => {
+    if (await withdraw(codes, group, comment.trim() || undefined, 'form')) {
+      setCodes([]);
+      setComment('');
     }
   };
 
@@ -442,7 +602,7 @@ const ChzTab: React.FC = () => {
 
           <TextField fullWidth size="small" label="Комментарий" value={comment} onChange={e => setComment(e.target.value)} sx={{ mb: 2 }} />
 
-          {message && <Alert severity={message.ok ? 'success' : 'error'} sx={{ mb: 1.5 }} onClose={() => setMessage(null)}>{message.text}</Alert>}
+          {message && messageAt === 'form' && <Alert severity={message.ok ? 'success' : 'error'} sx={{ mb: 1.5, whiteSpace: 'pre-line' }} onClose={() => setMessage(null)}>{message.text}</Alert>}
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
             <Button
@@ -459,6 +619,18 @@ const ChzTab: React.FC = () => {
             {!state.signedIn && <Typography variant="body2" color="text.secondary">Сначала войдите с сертификатом</Typography>}
           </Box>
         </Panel>
+      )}
+
+      {configured && state.signedIn && (
+        <BalancePanel
+          state={state}
+          busy={busy}
+          canSign={!!thumbprint}
+          actionTitle={actionTitle(action)}
+          onWithdraw={(list, pg) => withdraw(list, pg, 'Вывод остатков с баланса', 'balance')}
+          message={messageAt === 'balance' ? message : null}
+          onCloseMessage={() => setMessage(null)}
+        />
       )}
 
       {docs.length > 0 && (

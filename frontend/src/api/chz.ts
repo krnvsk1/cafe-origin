@@ -76,3 +76,14 @@ export const chzSubmit = (id: number, signature: string) =>
 export const chzRefresh = (id: number) =>
   apiClient.post<ChzDocumentDetail>(`/api/chz/withdrawals/${id}/refresh`).then(r => r.data);
 export const chzDelete = (id: number) => apiClient.delete(`/api/chz/documents/${id}`);
+
+export interface ChzBalance {
+  total: number;
+  /** Выгрузка остановлена на лимите (20 000 кодов) */
+  truncated: boolean;
+  items: { gtin: string; count: number; lastEmission: string | null; codes: string[] }[];
+}
+
+/** Коды «в обороте» на нашем балансе по товарной группе */
+export const fetchChzBalance = (group: string, days = 365) =>
+  apiClient.get<ChzBalance>('/api/chz/balance', { params: { group, days }, timeout: 180000 }).then(r => r.data);

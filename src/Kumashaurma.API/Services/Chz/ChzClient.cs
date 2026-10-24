@@ -133,6 +133,67 @@ namespace Kumashaurma.API.Services.Chz
             return ParseStatus(body);
         }
 
+        public record BalanceCode(string Cis, string Gtin, DateTime? EmissionDate);
+
+        /// <summary>
+        /// Коды маркировки на балансе участника (статус INTRODUCED — «в обороте») по товарной группе.
+        /// Постранично по 1000, сортировка по убыванию даты эмиссии; maxCodes — защита от бесконечной выгрузки.
+        /// </summary>
+        public async Task<(List<BalanceCode> Codes, bool Truncated)> SearchIntroducedAsync(ChzOptions o, string token, string productGroup,
+            DateTime from, int maxCodes = 20000, CancellationToken ct = default)
+        {
+            var result = new List<BalanceCode>();
+            string sgtin = "0";
+            string? lastDate = null;
+            while (true)
+            {
+                var pagination = new Dictionary<string, object> { ["perPage"] = 1000, ["sgtin"] = sgtin };
+                if (lastDate != null) pagination["lastEmissionDate"] = lastDate;
+                var body = new
+                {
+                    filter = new
+                    {
+                        emissionDatePeriod = new { from = from.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'"), to = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'") },
+                        states = new[] { new { status = "INTRODUCED" } },
+                        productGroups = new[] { productGroup }
+                    },
+                    pagination
+                };
+                using var req = new HttpRequestMessage(HttpMethod.Post, $"{Base(o)}/v4/true-api/cises/search") { Content = JsonContent.Create(body) };
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                using var res = await _http.SendAsync(req, ct);
+                await EnsureOk(res, ct);
+                var (page, isLast) = ParseSearch(await res.Content.ReadAsStringAsync(ct));
+                result.AddRange(page.Select(p => p.Code));
+                if (isLast || page.Count == 0) return (result, false);
+                if (result.Count >= maxCodes) return (result, true);
+                sgtin = page[^1].Code.Cis;
+                lastDate = page[^1].RawDate;
+                if (lastDate == null) return (result, true);
+            }
+        }
+
+        public static (List<(BalanceCode Code, string? RawDate)> Page, bool IsLast) ParseSearch(string body)
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            var isLast = root.TryGetProperty("isLastPage", out var l) && l.ValueKind == JsonValueKind.True;
+            var list = new List<(BalanceCode, string?)>();
+            if (root.TryGetProperty("result", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                foreach (var x in arr.EnumerateArray())
+                {
+                    string? Str(string k) => x.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+                    var cis = Str("sgtin") ?? Str("cis");
+                    if (string.IsNullOrEmpty(cis)) continue;
+                    var raw = Str("emissionDate");
+                    DateTime? date = DateTime.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AdjustToUniversal, out var d) ? d : null;
+                    var gtin = Str("gtin") ?? (cis.Length >= 16 && cis.StartsWith("01") ? cis.Substring(2, 14) : "");
+                    list.Add((new BalanceCode(cis, gtin, date), raw));
+                }
+            return (list, isLast);
+        }
+
         public static (string Status, string? Errors) ParseStatus(string body)
         {
             using var doc = JsonDocument.Parse(body);

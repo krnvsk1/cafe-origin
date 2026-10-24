@@ -175,6 +175,29 @@ namespace Kumashaurma.API.Services.Chz
             return doc;
         }
 
+        /// <summary>Что числится на балансе «в обороте» по группе, сгруппировано по GTIN</summary>
+        public async Task<(List<ChzClient.BalanceCode> Codes, bool Truncated)> BalanceAsync(string productGroup, int days, CancellationToken ct)
+        {
+            if (!Groups.ContainsKey(productGroup)) throw new ChzApiException("Неизвестная товарная группа");
+            var (o, token) = await RequireTokenAsync();
+            try
+            {
+                var (codes, truncated) = await _client.SearchIntroducedAsync(o, token, productGroup,
+                    DateTime.UtcNow.AddDays(-Math.Clamp(days, 1, 1500)), 20000, ct);
+                // Коды, уже отправленные нами на вывод, но ещё не обработанные ЧЗ, не показываем
+                var pending = (await _context.ChzDocuments.AsNoTracking()
+                        .Where(d => d.Status == ChzStatuses.Sent && d.ProductGroup == productGroup)
+                        .Select(d => d.Codes).ToListAsync(ct))
+                    .SelectMany(c => c.Split('\n')).ToHashSet();
+                return (codes.Where(c => !pending.Contains(c.Cis)).ToList(), truncated);
+            }
+            catch (ChzApiException ex) when (ex.StatusCode == 401)
+            {
+                SignOut(o);
+                throw new ChzApiException("Сессия Честного знака истекла — войдите заново", 401);
+            }
+        }
+
         /// <summary>Узнать результат проверки документа</summary>
         public async Task<ChzDocument> RefreshAsync(int id, CancellationToken ct)
         {

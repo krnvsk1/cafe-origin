@@ -53,5 +53,17 @@ namespace Kumashaurma.Tests
             Assert.Equal("CHECKED_NOT_OK", status);
             Assert.Equal("Код не найден", errors);
         }
+
+        [Fact]
+        public void ParsesBalanceSearch()
+        {
+            var (page, isLast) = ChzClient.ParseSearch("{\"isLastPage\":true,\"result\":[{\"gtin\":\"04607009471233\",\"sgtin\":\"010460700947123321aB3dEf\",\"status\":\"INTRODUCED\",\"emissionDate\":\"2026-10-01T10:00:00.000Z\"},{\"sgtin\":\"010460700947124021XyZ123\"}]}");
+            Assert.True(isLast);
+            Assert.Equal(2, page.Count);
+            Assert.Equal("04607009471233", page[0].Code.Gtin);
+            Assert.Equal(new DateTime(2026, 10, 1, 10, 0, 0, DateTimeKind.Utc), page[0].Code.EmissionDate);
+            Assert.Equal("04607009471240", page[1].Code.Gtin);
+            Assert.Null(page[1].RawDate);
+        }
     }
 }
