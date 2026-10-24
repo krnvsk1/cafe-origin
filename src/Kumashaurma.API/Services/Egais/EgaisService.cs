@@ -41,7 +41,11 @@ namespace Kumashaurma.API.Services.Egais
 
         public static bool IsSeen(string url) => Seen.ContainsKey(url);
 
-        /// <summary>ФСРАР ID, который УТМ указывает во входящих документах — сверяем с настройками</summary>
+        /// <summary>
+        /// ФСРАР ID из сертификата ключа УТМ — его называет ЕГАИС в отказе
+        /// («FSRAR_ID документа [..] не совпадает с идентификатором абонента в сертификате [..]»).
+        /// Поле Owner во входящих документах для этого не годится.
+        /// </summary>
         public static string? DetectedFsrarId { get; private set; }
 
         /// <summary>Что и когда отправляли в УТМ — чтобы сопоставить квитанции по транспортному ID</summary>
@@ -184,7 +188,6 @@ namespace Kumashaurma.API.Services.Egais
             var xml = await _utm.GetAsync(r.Url, ct);
             var doc = EgaisXml.Load(xml);
             var kind = EgaisXml.DetectType(doc) ?? r.Type;
-            DetectedFsrarId = EgaisXml.OwnerFsrarId(doc) ?? DetectedFsrarId;
 
             if (kind.StartsWith("WayBill", StringComparison.OrdinalIgnoreCase) && !kind.Contains("Act", StringComparison.OrdinalIgnoreCase)
                 && !kind.Contains("Ticket", StringComparison.OrdinalIgnoreCase))
@@ -274,6 +277,9 @@ namespace Kumashaurma.API.Services.Egais
         private async Task<bool> ApplyTicketAsync(TicketData t, CancellationToken ct)
         {
             // Квитанция на наш запрос по транспортному ID (в т.ч. CryptoTicket — отказ на уровне «конверта»)
+            var certId = System.Text.RegularExpressions.Regex.Match(t.Comment ?? "", @"сертификате\s*\[(\d+)\]");
+            if (certId.Success) DetectedFsrarId = certId.Groups[1].Value;
+
             if (t.TransportId != null && Sent.TryGetValue(t.TransportId, out var sent))
             {
                 if (t.Accepted == false)
