@@ -340,6 +340,10 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("address");
 
+                    b.Property<int?>("CashierId")
+                        .HasColumnType("integer")
+                        .HasColumnName("cashier_id");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("completed_at");
@@ -428,6 +432,12 @@ namespace Kumashaurma.API.Migrations
                     b.Property<DateTime?>("ScheduledFor")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("scheduled_for");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("source");
 
                     b.Property<string>("Status")
                         .IsRequired()
