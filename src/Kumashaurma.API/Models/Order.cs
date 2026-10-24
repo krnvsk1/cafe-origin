@@ -91,6 +91,19 @@ namespace Kumashaurma.API.Models
         [NotMapped]
         public bool IsVisibleToStaff => PaymentMethod != "online" || PaymentStatus == "paid";
 
+        // Доставка: зона, координаты адреса и стоимость доставки (входит в Total)
+        [Column("delivery_zone_id")]
+        public int? DeliveryZoneId { get; set; }
+
+        [Column("latitude")]
+        public double? Latitude { get; set; }
+
+        [Column("longitude")]
+        public double? Longitude { get; set; }
+
+        [Column("delivery_price", TypeName = "decimal(10,2)")]
+        public decimal DeliveryPrice { get; set; }
+
         // Курьер, взявший заказ
         [Column("courier_id")]
         public int? CourierId { get; set; }

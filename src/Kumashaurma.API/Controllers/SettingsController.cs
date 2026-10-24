@@ -32,6 +32,8 @@ namespace Kumashaurma.API.Controllers
                 _restaurant.CloseTime,
                 _restaurant.MinLeadMinutes,
                 _restaurant.MaxDaysAhead,
+                _restaurant.Latitude,
+                _restaurant.Longitude,
                 IsOpenNow = _restaurant.IsWithinWorkingHours(nowUtc),
                 OnlinePaymentEnabled = _payments.OnlineEnabled,
                 ServerTimeUtc = nowUtc

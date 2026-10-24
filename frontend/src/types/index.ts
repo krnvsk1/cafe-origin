@@ -101,6 +101,8 @@ export interface Shawarma {
     paymentMethod?: PaymentMethod;
     paymentStatus?: PaymentStatus;
     paidAt?: string | null;
+    deliveryPrice?: number;
+    deliveryZoneId?: number | null;
     orderItems?: OrderItem[];   // Связь с элементами заказа (может отсутствовать при обновлении статуса)
     deliveryType?: string;
     discountAmount?: number;
@@ -118,6 +120,8 @@ export interface Shawarma {
     pointsDiscountAmount?: number;
     scheduledFor?: string | null;
     paymentMethod?: PaymentMethod;
+    latitude?: number;
+    longitude?: number;
     items: {
       shawarmaId: number;
       quantity: number;
@@ -335,6 +339,8 @@ export interface Shawarma {
     closeTime: string;  // HH:mm
     minLeadMinutes: number;
     maxDaysAhead: number;
+    latitude: number;
+    longitude: number;
     isOpenNow: boolean;
     onlinePaymentEnabled: boolean;
     serverTimeUtc: string;

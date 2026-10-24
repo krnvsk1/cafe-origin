@@ -310,6 +310,25 @@ namespace Kumashaurma.API.Controllers
                         return BadRequest(new { Message = "Промокод не найден или неактивен" });
                 }
 
+                // Зона доставки: если зоны настроены, адрес доставки должен в них попадать
+                DeliveryZone? deliveryZone = null;
+                var deliveryType = !string.IsNullOrEmpty(request.DeliveryType) ? request.DeliveryType : "Доставка";
+                if (deliveryType == "Доставка")
+                {
+                    var zones = await _context.DeliveryZones.AsNoTracking()
+                        .Where(z => z.IsActive)
+                        .OrderBy(z => z.SortOrder).ThenBy(z => z.Id)
+                        .ToListAsync();
+                    if (zones.Count > 0)
+                    {
+                        if (request.Latitude is not double lat || request.Longitude is not double lng)
+                            return BadRequest(new { Message = "Укажите адрес доставки на карте" });
+                        deliveryZone = zones.FirstOrDefault(z => z.Contains(lat, lng));
+                        if (deliveryZone == null)
+                            return BadRequest(new { Message = "К сожалению, по этому адресу мы пока не доставляем" });
+                    }
+                }
+
                 // Скидка баллами: только для авторизованных и в пределах баланса
                 var requestedPoints = (int)Math.Floor(request.PointsDiscountAmount ?? 0);
                 if (requestedPoints < 0)
@@ -330,7 +349,10 @@ namespace Kumashaurma.API.Controllers
                     Total = 0,
                     Status = "Новый",
                     Notes = request.Notes,
-                    DeliveryType = !string.IsNullOrEmpty(request.DeliveryType) ? request.DeliveryType : "Доставка",
+                    DeliveryType = deliveryType,
+                    DeliveryZoneId = deliveryZone?.Id,
+                    Latitude = deliveryType == "Доставка" ? request.Latitude : null,
+                    Longitude = deliveryType == "Доставка" ? request.Longitude : null,
                     PromoCodeId = request.PromoCodeId,
                     DiscountAmount = 0,
                     CreatedAt = DateTime.UtcNow,
@@ -396,6 +418,16 @@ namespace Kumashaurma.API.Controllers
                     total += (basePrice + addonsTotal) * itemRequest.Quantity;
                 }
 
+                // Минимальная сумма и стоимость доставки по зоне
+                decimal deliveryPrice = 0;
+                if (deliveryZone != null)
+                {
+                    if (total < deliveryZone.MinOrderAmount)
+                        return BadRequest(new { Message = $"Минимальная сумма заказа для зоны «{deliveryZone.Name}» — {deliveryZone.MinOrderAmount:0.##} ₽" });
+                    deliveryPrice = deliveryZone.PriceFor(total);
+                }
+                newOrder.DeliveryPrice = deliveryPrice;
+
                 // Применяем промокод
                 if (promoCode != null)
                 {
@@ -444,7 +476,7 @@ namespace Kumashaurma.API.Controllers
                 }
 
                 // Обновляем общую сумму заказа (с учётом промокода и баллов)
-                newOrder.Total = Math.Max(0, total - discountAmount - pointsDiscount);
+                newOrder.Total = Math.Max(0, total - discountAmount - pointsDiscount) + deliveryPrice;
                 await _context.SaveChangesAsync();
                 await dbTransaction.CommitAsync();
 
@@ -505,6 +537,9 @@ namespace Kumashaurma.API.Controllers
             public string DeliveryType { get; set; } = "Доставка";
             public int? PromoCodeId { get; set; }
             public decimal? PointsDiscountAmount { get; set; }
+            /// <summary>Координаты адреса доставки (с карты)</summary>
+            public double? Latitude { get; set; }
+            public double? Longitude { get; set; }
             /// <summary>cash | card | online</summary>
             public string? PaymentMethod { get; set; }
             /// <summary>Желаемое время (UTC, ISO 8601). null — как можно скорее</summary>

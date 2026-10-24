@@ -33,6 +33,10 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useCreateOrder, useRestaurantSettings } from '../api/hooks';
 import { buildScheduleDays } from '../utils/schedule';
+import AddressMapPicker from './AddressMapPicker';
+import { useDeliveryZones } from '../api/zones';
+import type { ZoneCheck } from '../api/zones';
+import { isMapsConfigured } from '../utils/yandexMaps';
 import type { CreateOrderDto, PromoCodeValidation, PaymentMethod } from '../types';
 import { useCartStore } from '../store/cartStore';
 import type { DeliveryType } from '../store/orderFlowStore';
@@ -122,7 +126,15 @@ const OrderModal: React.FC<OrderModalProps> = ({
   }, [cartItems]);
 
   const discountAmount = promoInfo?.discountAmount ?? 0;
-  const finalTotal = Math.max(0, totalAmount - discountAmount - pointsDiscount);
+  // Зоны доставки (если настроены и подключены Яндекс Карты)
+  const { data: zones } = useDeliveryZones();
+  const useZones = deliveryType === 'Доставка' && isMapsConfigured() && (zones?.length ?? 0) > 0;
+  const [coords, setCoords] = React.useState<[number, number] | null>(null);
+  const [zoneCheck, setZoneCheck] = React.useState<ZoneCheck | null>(null);
+  const deliveryPrice = useZones && zoneCheck?.deliverable ? zoneCheck.deliveryPrice ?? 0 : 0;
+  const zoneBlocked = useZones && (!coords || !zoneCheck?.deliverable || !zoneCheck.minOrderReached);
+
+  const finalTotal = Math.max(0, totalAmount - discountAmount - pointsDiscount) + deliveryPrice;
 
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
     setSnackbar({ open: true, message, severity });
@@ -145,6 +157,18 @@ const OrderModal: React.FC<OrderModalProps> = ({
       showSnackbar('Корзина пуста', 'error');
       return;
     }
+    if (useZones && !coords) {
+      showSnackbar('Отметьте адрес доставки на карте', 'error');
+      return;
+    }
+    if (useZones && zoneCheck && !zoneCheck.deliverable) {
+      showSnackbar(zoneCheck.message || 'По этому адресу доставки нет', 'error');
+      return;
+    }
+    if (useZones && zoneCheck && !zoneCheck.minOrderReached) {
+      showSnackbar(`Минимальная сумма заказа для этого адреса — ${zoneCheck.minOrderAmount} ₽`, 'error');
+      return;
+    }
     if (effectiveTimeMode === 'scheduled' && !scheduledSlot) {
       showSnackbar('Выберите время заказа', 'error');
       return;
@@ -160,6 +184,8 @@ const OrderModal: React.FC<OrderModalProps> = ({
       pointsDiscountAmount: pointsDiscount > 0 ? pointsDiscount : undefined,
       scheduledFor: effectiveTimeMode === 'scheduled' ? scheduledSlot : null,
       paymentMethod: effectivePayment,
+      latitude: useZones && coords ? coords[0] : undefined,
+      longitude: useZones && coords ? coords[1] : undefined,
       items: cartItems.map(item => ({
         shawarmaId: item.selectedChild?.id ?? item.id,
         quantity: item.quantity,
@@ -181,6 +207,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
       setNotes('');
       setTimeMode('asap');
       setScheduledSlot('');
+      setCoords(null);
       onCustomerNameChange('');
       onPhoneChange('');
       onAddressChange('');
@@ -282,7 +309,18 @@ const OrderModal: React.FC<OrderModalProps> = ({
               disabled={createOrder.isPending}
               sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
             />
-            {deliveryType === 'Доставка' && (
+            {deliveryType === 'Доставка' && useZones && (
+              <AddressMapPicker
+                address={address}
+                onAddressChange={onAddressChange}
+                coords={coords}
+                onCoordsChange={setCoords}
+                subtotal={totalAmount}
+                onZoneCheck={setZoneCheck}
+                disabled={createOrder.isPending}
+              />
+            )}
+            {deliveryType === 'Доставка' && !useZones && (
               <TextField
                 fullWidth
                 label="Адрес доставки *"
@@ -507,6 +545,12 @@ const OrderModal: React.FC<OrderModalProps> = ({
                 {finalTotal} ₽
               </Typography>
             </Box>
+            {useZones && zoneCheck?.deliverable && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                <Typography variant="body2" color="text.secondary">Доставка</Typography>
+                <Typography variant="body2" fontWeight={600}>{deliveryPrice > 0 ? `${deliveryPrice} ₽` : 'бесплатно'}</Typography>
+              </Box>
+            )}
             {discountAmount > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
                 <Typography variant="body2" color="success.main">Скидка по промокоду</Typography>
@@ -544,7 +588,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
             onClick={handleSubmit}
             fullWidth
             disabled={cartItems.length === 0 || createOrder.isPending ||
-              (deliveryType === 'Доставка' && !address.trim()) ||
+              (deliveryType === 'Доставка' && !address.trim()) || zoneBlocked ||
               !customerName.trim() || !phone.trim() // Добавлена валидация для имени и телефона
             }
             startIcon={createOrder.isPending ? <CircularProgress size={20} color="inherit" /> : null}

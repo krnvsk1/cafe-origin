@@ -26,6 +26,7 @@ import {
   RateReview as ReviewsIcon,
   SoupKitchen as KitchenIcon,
   DeliveryDining as DeliveryIcon,
+  Map as MapIcon,
   ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -56,6 +57,7 @@ import AdminStopListPage from './pages/AdminStopListPage';
 import AdminReviewsPage from './pages/AdminReviewsPage';
 import KitchenPage from './pages/KitchenPage';
 import CourierPage from './pages/CourierPage';
+import AdminDeliveryZonesPage from './pages/AdminDeliveryZonesPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -199,6 +201,7 @@ function App() {
     { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', roles: ['courier', 'admin', 'manager'] },
     { text: 'Товары', icon: <AddIcon />, path: '/admin/menu', roles: ['admin', 'manager'] },
     { text: 'Стоп-лист', icon: <BlockIcon />, path: '/admin/stoplist', roles: ['admin', 'manager'] },
+    { text: 'Зоны доставки', icon: <MapIcon />, path: '/admin/zones', roles: ['admin', 'manager'] },
     { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', roles: ['admin', 'manager'] },
     { text: 'Отзывы', icon: <ReviewsIcon />, path: '/admin/reviews', roles: ['admin', 'manager'] },
     { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', roles: ['admin'] },
@@ -462,6 +465,7 @@ function App() {
                     <Route path="/admin/stoplist" element={<AdminStopListPage />} />
                     <Route path="/admin/reviews" element={<AdminReviewsPage />} />
                     <Route path="/kitchen" element={<KitchenPage />} />
+                    <Route path="/admin/zones" element={<AdminDeliveryZonesPage />} />
                   </>
                 )}
 

@@ -241,6 +241,67 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.DeliveryZone", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("color");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("DeliveryMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("delivery_minutes");
+
+                    b.Property<decimal>("DeliveryPrice")
+                        .HasColumnType("decimal(10,2)")
+                        .HasColumnName("delivery_price");
+
+                    b.Property<decimal?>("FreeDeliveryFrom")
+                        .HasColumnType("decimal(10,2)")
+                        .HasColumnName("free_delivery_from");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<decimal>("MinOrderAmount")
+                        .HasColumnType("decimal(10,2)")
+                        .HasColumnName("min_order_amount");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("PolygonJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("polygon");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("delivery_zones");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.Order", b =>
                 {
                     b.Property<int>("Id")
@@ -281,15 +342,31 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("customer_name");
 
+                    b.Property<decimal>("DeliveryPrice")
+                        .HasColumnType("decimal(10,2)")
+                        .HasColumnName("delivery_price");
+
                     b.Property<string>("DeliveryType")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")
                         .HasColumnName("delivery_type");
 
+                    b.Property<int?>("DeliveryZoneId")
+                        .HasColumnType("integer")
+                        .HasColumnName("delivery_zone_id");
+
                     b.Property<decimal>("DiscountAmount")
                         .HasColumnType("decimal(10,2)")
                         .HasColumnName("discount_amount");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latitude");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("longitude");
 
                     b.Property<string>("Notes")
                         .HasColumnType("text")

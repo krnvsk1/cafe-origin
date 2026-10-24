@@ -41,6 +41,9 @@ namespace Kumashaurma.API.Data
         // Reviews
         public DbSet<OrderReview> OrderReviews { get; set; } = null!;
 
+        // Delivery zones
+        public DbSet<DeliveryZone> DeliveryZones { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -262,6 +265,12 @@ namespace Kumashaurma.API.Data
                     .WithMany()
                     .HasForeignKey(e => e.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // DeliveryZone configuration
+            modelBuilder.Entity<DeliveryZone>(entity =>
+            {
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             });
 
             // Shawarma self-referencing hierarchy (parent_id)

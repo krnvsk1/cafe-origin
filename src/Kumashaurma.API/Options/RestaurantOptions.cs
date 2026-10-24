@@ -22,6 +22,10 @@ namespace Kumashaurma.API.Options
         /// <summary>На сколько дней вперёд можно оформить заказ</summary>
         public int MaxDaysAhead { get; set; } = 7;
 
+        /// <summary>Координаты заведения (центр карты доставки)</summary>
+        public double Latitude { get; set; } = 55.751244;
+        public double Longitude { get; set; } = 37.618423;
+
         public TimeZoneInfo GetTimeZone()
         {
             try { return TimeZoneInfo.FindSystemTimeZoneById(TimeZone); }
