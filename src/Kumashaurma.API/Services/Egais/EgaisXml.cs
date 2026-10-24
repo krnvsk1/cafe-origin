@@ -36,7 +36,7 @@ namespace Kumashaurma.API.Services.Egais
         Dictionary<string, string> F2RegIdByPosition);
 
     /// <summary>Квитанция ЕГАИС</summary>
-    public record TicketData(string? RegId, string? DocType, bool? Accepted, string Comment);
+    public record TicketData(string? RegId, string? DocType, bool? Accepted, string Comment, string? TransportId = null);
 
     public enum ActDecision { Accepted, Rejected, Differences }
 
@@ -182,23 +182,28 @@ namespace Kumashaurma.API.Services.Egais
             return sb.ToString();
         }
 
+        /// <summary>ФСРАР ID владельца документа (во входящих — это ID нашего УТМ)</summary>
+        public static string? OwnerFsrarId(XDocument doc) =>
+            Desc(doc, "Owner").Select(o => Text(o, "FSRAR_ID")).FirstOrDefault(x => x != null);
+
         public static TicketData ParseTicket(XDocument doc)
         {
             var ticket = Desc(doc, "Ticket").FirstOrDefault() ?? throw new FormatException("Это не квитанция");
             var regId = ChildText(ticket, "RegID");
             var docType = ChildText(ticket, "DocType");
+            var transportId = ChildText(ticket, "TransportId");
 
             var result = Child(ticket, "Result");
             if (result != null)
             {
                 var conclusion = ChildText(result, "Conclusion");
-                return new TicketData(regId, docType, conclusion == null ? null : conclusion == "Accepted", ChildText(result, "Comments") ?? conclusion ?? "");
+                return new TicketData(regId, docType, conclusion == null ? null : conclusion == "Accepted", ChildText(result, "Comments") ?? conclusion ?? "", transportId);
             }
 
             var op = Child(ticket, "OperationResult");
             var opResult = ChildText(op, "OperationResult");
             return new TicketData(regId, docType, opResult == null ? null : opResult == "Accepted",
-                ChildText(op, "OperationComment") ?? opResult ?? "");
+                ChildText(op, "OperationComment") ?? opResult ?? "", transportId);
         }
 
         /// <summary>

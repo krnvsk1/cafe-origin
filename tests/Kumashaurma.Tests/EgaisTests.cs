@@ -177,7 +177,7 @@ namespace Kumashaurma.Tests
         public void SettingsValidation()
         {
             Assert.Null(EgaisSettingsProvider.Validate(new EgaisOptions { Enabled = true, UtmUrl = "http://192.168.1.10:8080", FsrarId = "030000123456", AutoSyncMinutes = 10 }));
-            Assert.NotNull(EgaisSettingsProvider.Validate(new EgaisOptions { Enabled = true, UtmUrl = "http://localhost:8080", FsrarId = "123" }));
+            Assert.NotNull(EgaisSettingsProvider.Validate(new EgaisOptions { Enabled = true, UtmUrl = "http://localhost:8080", FsrarId = "12" }));
             Assert.NotNull(EgaisSettingsProvider.Validate(new EgaisOptions { UtmUrl = "ftp://host" }));
             // Выключенный ЕГАИС можно сохранить без ФСРАР ID
             Assert.Null(EgaisSettingsProvider.Validate(new EgaisOptions { Enabled = false, UtmUrl = "http://localhost:8080" }));

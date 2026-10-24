@@ -108,6 +108,20 @@ namespace Kumashaurma.API.Services.Egais
             return (!hasError, body);
         }
 
+        /// <summary>Транспортный идентификатор из ответа УТМ на отправку (по нему потом приходит квитанция)</summary>
+        public static string? ExtractTransportId(string response)
+        {
+            try
+            {
+                var doc = EgaisXml.Load(response);
+                return doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "url")?.Value.Trim() is { Length: > 0 } id ? id : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public static string? ExtractError(string response)
         {
             try

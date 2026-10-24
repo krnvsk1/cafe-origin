@@ -4,7 +4,7 @@ import {
   CircularProgress, Box, Typography, InputAdornment, useMediaQuery, useTheme,
 } from '@mui/material';
 import { CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon } from '@mui/icons-material';
-import { useEgaisSettings, useSaveEgaisSettings, testUtmConnection } from '../../api/egais';
+import { useEgaisSettings, useSaveEgaisSettings, testUtmConnection, useEgaisState } from '../../api/egais';
 import { apiError } from '../../api/inventory';
 import { tokens } from '../../theme';
 
@@ -15,6 +15,8 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const { data: settings, isLoading } = useEgaisSettings(open);
   const save = useSaveEgaisSettings();
+  const { data: state } = useEgaisState();
+  const detected = state?.detectedFsrarId ?? null;
 
   const [enabled, setEnabled] = React.useState(true);
   const [utmUrl, setUtmUrl] = React.useState('http://localhost:8080');
@@ -53,8 +55,8 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
 
   const handleSave = async () => {
     setError('');
-    if (enabled && !/^\d{12}$/.test(fsrarId.trim())) {
-      setError('ФСРАР ID — 12 цифр. Он виден на главной странице УТМ.');
+    if (enabled && !/^\d{3,12}$/.test(fsrarId.trim())) {
+      setError('ФСРАР ID — только цифры, точно как на главной странице УТМ.');
       return;
     }
     try {
@@ -115,9 +117,17 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
               value={fsrarId}
               onChange={e => setFsrarId(e.target.value.replace(/\D/g, '').slice(0, 12))}
               placeholder="030000000000"
-              helperText="12 цифр — указан на главной странице УТМ и в личном кабинете ЕГАИС"
+              helperText="Точно как на главной странице УТМ — по нему ЕГАИС проверяет подпись запросов"
               slotProps={{ htmlInput: { inputMode: 'numeric' } }}
             />
+            {detected && detected !== fsrarId.trim() && (
+              <Alert
+                severity="warning"
+                action={<Button color="inherit" size="small" onClick={() => setFsrarId(detected)}>Подставить</Button>}
+              >
+                УТМ указывает в документах ФСРАР ID <b>{detected}</b>. Если в настройках другой — ЕГАИС отклонит запросы («Нарушена целостность конверта»).
+              </Alert>
+            )}
 
             <TextField
               label="Проверять входящие"

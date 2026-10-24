@@ -15,6 +15,7 @@ export interface EgaisState {
   deleteProcessed: boolean;
   lastSyncAt: string | null;
   lastSyncError: string | null;
+  detectedFsrarId: string | null;
   toProcess: number;
   awaitingRegId: number;
   awaitingTicket: number;
@@ -177,6 +178,9 @@ export interface EgaisDiagnostics {
   inbox: { type: string; url: string; seen: boolean }[];
   inboxError: string | null;
   lastSyncError: string | null;
+  configuredFsrarId: string;
+  detectedFsrarId: string | null;
+  rejections: { at: string; what: string; reason: string }[];
 }
 
 export const fetchEgaisDiagnostics = () =>

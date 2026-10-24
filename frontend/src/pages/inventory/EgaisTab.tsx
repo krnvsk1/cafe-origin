@@ -332,6 +332,22 @@ const DiagnosticsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ o
                 <Typography key={type} variant="body2">{type}: {c.total}{c.seen ? ` (прочитано сервисом: ${c.seen})` : ''}</Typography>
               ))}
             </Box>
+            {data?.detectedFsrarId && data.configuredFsrarId && data.detectedFsrarId.replace(/^0+/, '') !== data.configuredFsrarId.replace(/^0+/, '') && (
+              <Alert severity="error">
+                ФСРАР ID в настройках ({data.configuredFsrarId}) не совпадает с ID УТМ ({data.detectedFsrarId}). Исправьте его в «Настройках» — иначе ЕГАИС отклоняет запросы.
+              </Alert>
+            )}
+            {(data?.rejections.length ?? 0) > 0 && (
+              <Box>
+                <Typography sx={{ fontWeight: 700, mb: 0.75 }}>ЕГАИС отклонил</Typography>
+                {data!.rejections.map((x, i) => (
+                  <Box key={i} sx={{ py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                    <Typography sx={{ fontWeight: 600 }}>{x.what}</Typography>
+                    <Typography variant="body2" sx={{ color: tokens.chili }}>{x.reason} · {fmtDateTime(x.at)}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            )}
             {data?.lastSyncError && <Alert severity="warning">Последняя проверка: {data.lastSyncError}</Alert>}
           </>
         )}

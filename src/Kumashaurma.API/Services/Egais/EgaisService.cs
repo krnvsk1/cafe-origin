@@ -40,6 +40,24 @@ namespace Kumashaurma.API.Services.Egais
         public static IReadOnlyList<NoAnswerState> LastNoAnswer { get; private set; } = Array.Empty<NoAnswerState>();
 
         public static bool IsSeen(string url) => Seen.ContainsKey(url);
+
+        /// <summary>ФСРАР ID, который УТМ указывает во входящих документах — сверяем с настройками</summary>
+        public static string? DetectedFsrarId { get; private set; }
+
+        /// <summary>Что и когда отправляли в УТМ — чтобы сопоставить квитанции по транспортному ID</summary>
+        public record SentRecord(string TransportId, string What, int? DocumentId, DateTime SentAt);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SentRecord> Sent = new();
+
+        /// <summary>Отказы ЕГАИС на наши запросы (например, «Нарушена целостность конверта»)</summary>
+        public record Rejection(DateTime At, string What, string Reason);
+        private static readonly System.Collections.Concurrent.ConcurrentQueue<Rejection> Rejections = new();
+        public static IReadOnlyList<Rejection> RecentRejections => Rejections.Reverse().Take(20).ToList();
+
+        private static void Remember(string response, string what, int? documentId)
+        {
+            var id = UtmClient.ExtractTransportId(response);
+            if (id != null) Sent[id] = new SentRecord(id, what, documentId, DateTime.UtcNow);
+        }
         public static string? LastSyncError { get; private set; }
 
         // ================= Синхронизация =================
@@ -97,6 +115,8 @@ namespace Kumashaurma.API.Services.Egais
                 }
 
                 LastSyncAt = DateTime.UtcNow;
+                if (DetectedFsrarId != null && !string.IsNullOrWhiteSpace(_options.FsrarId) && DetectedFsrarId.TrimStart('0') != _options.FsrarId.TrimStart('0'))
+                    errors.Insert(0, $"ФСРАР ID в настройках ({_options.FsrarId}) не совпадает с ID УТМ ({DetectedFsrarId}) — ЕГАИС будет отклонять запросы и акты");
                 LastSyncError = errors.Count > 0 ? string.Join("; ", errors.Take(3)) : null;
                 return new SyncResult(wayBills, regInfos, tickets, skipped, errors, resend);
             }
@@ -121,6 +141,7 @@ namespace Kumashaurma.API.Services.Egais
             var xml = EgaisXml.BuildQuery(_options.FsrarId, "QueryNATTN", "КОД", _options.FsrarId);
             var (ok, response) = await _utm.SendAsync("QueryNATTN", xml, ct);
             if (!ok) throw new EgaisException($"УТМ не принял запрос: {UtmClient.ExtractError(response)}");
+            Remember(response, "Запрос накладных без акта (QueryNATTN)", null);
         }
 
         /// <summary>По списку неподтверждённых накладных запрашиваем повторную отправку тех, которых у нас нет</summary>
@@ -140,7 +161,11 @@ namespace Kumashaurma.API.Services.Egais
                 }
                 var xml = EgaisXml.BuildQuery(_options.FsrarId, "QueryResendDoc", "WBREGID", ttn.WbRegId);
                 var (ok, response) = await _utm.SendAsync("QueryResendDoc", xml, ct);
-                if (ok) requested++;
+                if (ok)
+                {
+                    requested++;
+                    Remember(response, $"Повторная отправка накладной {ttn.WbRegId}" + (ttn.Number != null ? $" (№ {ttn.Number})" : ""), null);
+                }
                 states.Add(new NoAnswerState(ttn.WbRegId, ttn.Number, ttn.Date, ttn.ShipperFsrarId,
                     ok ? "запрошена повторная отправка" : $"УТМ не принял запрос: {UtmClient.ExtractError(response)}"));
             }
@@ -153,12 +178,13 @@ namespace Kumashaurma.API.Services.Egais
         private async Task<string?> HandleAsync(UtmDocumentRef r, CancellationToken ct)
         {
             var type = r.Type.ToLowerInvariant();
-            if (!(type.StartsWith("waybill") || type is "form2reginfo" or "formbreginfo" or "ticket"))
+            if (!(type.StartsWith("waybill") || type is "form2reginfo" or "formbreginfo" or "ticket" or "cryptoticket"))
                 return null; // чужие документы (остатки, справки и т.п.) не трогаем
 
             var xml = await _utm.GetAsync(r.Url, ct);
             var doc = EgaisXml.Load(xml);
             var kind = EgaisXml.DetectType(doc) ?? r.Type;
+            DetectedFsrarId = EgaisXml.OwnerFsrarId(doc) ?? DetectedFsrarId;
 
             if (kind.StartsWith("WayBill", StringComparison.OrdinalIgnoreCase) && !kind.Contains("Act", StringComparison.OrdinalIgnoreCase)
                 && !kind.Contains("Ticket", StringComparison.OrdinalIgnoreCase))
@@ -247,6 +273,28 @@ namespace Kumashaurma.API.Services.Egais
 
         private async Task<bool> ApplyTicketAsync(TicketData t, CancellationToken ct)
         {
+            // Квитанция на наш запрос по транспортному ID (в т.ч. CryptoTicket — отказ на уровне «конверта»)
+            if (t.TransportId != null && Sent.TryGetValue(t.TransportId, out var sent))
+            {
+                if (t.Accepted == false)
+                {
+                    Rejections.Enqueue(new Rejection(DateTime.UtcNow, sent.What, t.Comment));
+                    while (Rejections.Count > 50) Rejections.TryDequeue(out _);
+                    if (sent.DocumentId is int docId)
+                    {
+                        var d = await _context.EgaisDocuments.FirstOrDefaultAsync(x => x.Id == docId, ct);
+                        if (d != null && d.Status == EgaisStatuses.ActSent)
+                        {
+                            d.Status = EgaisStatuses.Error;
+                            d.ResultComment = Trunc(t.Comment, 1000);
+                            d.ResultAt = DateTime.UtcNow;
+                            await _context.SaveChangesAsync(ct);
+                        }
+                    }
+                }
+                if (string.IsNullOrEmpty(t.RegId)) return true;
+            }
+
             if (string.IsNullOrEmpty(t.RegId)) return false;
             var doc = await _context.EgaisDocuments.FirstOrDefaultAsync(d => d.WbRegId == t.RegId, ct);
             if (doc == null) return false;
@@ -362,6 +410,7 @@ namespace Kumashaurma.API.Services.Egais
             var (ok, response) = await _utm.SendAsync("WayBillAct_v4", xml);
             if (!ok)
                 throw new EgaisException($"УТМ не принял акт: {UtmClient.ExtractError(response)}");
+            Remember(response, $"Акт по накладной № {doc.Number}", doc.Id);
 
             doc.ActNumber = actNumber;
             doc.ActDecision = decision.ToString();

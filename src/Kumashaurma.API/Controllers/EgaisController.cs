@@ -142,6 +142,7 @@ namespace Kumashaurma.API.Controllers
                 sendActs = _options.SendActs,
                 deleteProcessed = _options.DeleteProcessed,
                 lastSyncAt = EgaisService.LastSyncAt,
+                detectedFsrarId = EgaisService.DetectedFsrarId,
                 lastSyncError = EgaisService.LastSyncError,
                 toProcess = counts.GetValueOrDefault(EgaisStatuses.Ready) + counts.GetValueOrDefault(EgaisStatuses.Error),
                 awaitingRegId = counts.GetValueOrDefault(EgaisStatuses.AwaitingRegId),
@@ -221,7 +222,10 @@ namespace Kumashaurma.API.Controllers
                 }),
                 inbox,
                 inboxError,
-                lastSyncError = EgaisService.LastSyncError
+                lastSyncError = EgaisService.LastSyncError,
+                configuredFsrarId = _options.FsrarId,
+                detectedFsrarId = EgaisService.DetectedFsrarId,
+                rejections = EgaisService.RecentRejections
             });
         }
 

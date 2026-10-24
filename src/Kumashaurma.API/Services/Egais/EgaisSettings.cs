@@ -73,8 +73,8 @@ namespace Kumashaurma.API.Services.Egais
         {
             if (!Uri.TryCreate(o.UtmUrl?.Trim(), UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
                 return "Адрес УТМ должен начинаться с http:// или https://, например http://localhost:8080";
-            if (o.Enabled && !System.Text.RegularExpressions.Regex.IsMatch(o.FsrarId ?? "", @"^\d{12}$"))
-                return "ФСРАР ID — 12 цифр (виден на главной странице УТМ)";
+            if (o.Enabled && !System.Text.RegularExpressions.Regex.IsMatch(o.FsrarId ?? "", @"^\d{3,12}$"))
+                return "ФСРАР ID — только цифры, как на главной странице УТМ";
             if (o.AutoSyncMinutes is < 0 or > 1440)
                 return "Интервал автопроверки — от 0 до 1440 минут";
             return null;
