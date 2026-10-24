@@ -8,6 +8,7 @@ export const P = {
   Analytics: 'analytics',
   OrdersView: 'orders.view',
   OrdersManage: 'orders.manage',
+  Pos: 'pos',
   Kitchen: 'kitchen',
   Delivery: 'delivery',
   CouriersAssign: 'couriers.assign',
@@ -34,11 +35,12 @@ export const userCan = (user: User | null | undefined, ...permissions: string[])
   !!user && (user.roles?.includes('admin') || permissions.some(p => user.permissions?.includes(p)));
 
 /** Сотрудник, которому видны все заказы */
-export const STAFF_PERMISSIONS = [P.OrdersView, P.Kitchen, P.Delivery];
+export const STAFF_PERMISSIONS = [P.OrdersView, P.Pos, P.Kitchen, P.Delivery];
 
 /** Куда вести из «Панели управления»: первый доступный раздел */
 const STAFF_HOME: [string[], string][] = [
   [[P.Dashboard], '/admin/dashboard'],
+  [[P.Pos], '/pos'],
   [[P.OrdersView, P.OrdersManage], '/orders'],
   [[P.Kitchen], '/kitchen'],
   [[P.Delivery, P.CouriersAssign], '/courier'],

@@ -28,6 +28,7 @@ import {
   ShoppingBagOutlined as ShoppingBagIcon,
   Inventory2Outlined as InventoryIcon,
   AdminPanelSettingsOutlined as RolesIcon,
+  PointOfSaleOutlined as PosIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
@@ -65,6 +66,7 @@ import AdminDeliveryZonesPage from './pages/AdminDeliveryZonesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 import RolesPage from './pages/RolesPage';
+import PosPage from './pages/PosPage';
 import { P, useCan } from './auth/permissions';
 import { apiClient } from './api/client';
 
@@ -187,6 +189,7 @@ function App() {
   const staffLinks = ([
     { text: 'Дашборд', icon: <DashboardIcon />, path: '/admin/dashboard', perms: [P.Dashboard] },
     { text: 'Аналитика', icon: <InsightsIcon />, path: '/admin/analytics', perms: [P.Analytics] },
+    { text: 'Касса', icon: <PosIcon />, path: '/pos', perms: [P.Pos] },
     { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', perms: [P.Kitchen] },
     { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', perms: [P.Delivery, P.CouriersAssign] },
     { text: 'Товары', icon: <AddIcon />, path: '/admin/menu', perms: [P.Menu] },
@@ -377,6 +380,7 @@ function App() {
                 {/* Разделы управления — только при наличии прав */}
                 {can(P.Dashboard) && <Route path="/admin/dashboard" element={<DashboardPage />} />}
                 {can(P.Analytics) && <Route path="/admin/analytics" element={<AnalyticsPage />} />}
+                {can(P.Pos) && <Route path="/pos" element={<PosPage />} />}
                 {can(P.Kitchen) && <Route path="/kitchen" element={<KitchenPage />} />}
                 {can(P.Delivery, P.CouriersAssign) && <Route path="/courier" element={<CourierPage />} />}
                 {can(P.Menu) && <Route path="/admin/menu" element={<AdminMenuPage />} />}
