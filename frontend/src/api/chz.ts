@@ -34,6 +34,8 @@ export interface ChzDocumentRow {
 
 export interface ChzDocumentDetail extends ChzDocumentRow {
   codes: string[];
+  /** Коды, на которые пожаловался Честный знак */
+  badCodes: string[];
   productDocument: string | null;
 }
 

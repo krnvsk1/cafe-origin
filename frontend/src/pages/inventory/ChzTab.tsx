@@ -248,7 +248,24 @@ const DocumentDialog: React.FC<{ id: number | null; thumbprint: string | null; s
     return chzSubmit(doc.id, signature);
   });
 
+  // Новый документ без кодов, на которые пожаловался ЧЗ; старый с ошибкой удаляем
+  const resendWithoutBad = () => run(async () => {
+    if (!doc || !thumbprint) throw new Error('Выберите сертификат и войдите');
+    const bad = new Set(doc.badCodes);
+    const good = doc.codes.filter(c => !bad.has(c));
+    const draft = await chzPrepare({
+      productGroup: doc.productGroup, action: doc.action, date: doc.actionDate.slice(0, 10),
+      codes: good.join('\n'), comment: doc.comment ?? undefined,
+    });
+    const signature = await signBase64(thumbprint, draft.productDocument!, true);
+    const sent = await chzSubmit(draft.id, signature);
+    await chzDelete(doc.id);
+    return sent;
+  });
+
   const s = doc ? CHZ_STATUS[doc.status] : null;
+  const bad = new Set(doc?.badCodes ?? []);
+  const canDropBad = !!doc && doc.status === 'error' && bad.size > 0 && bad.size < doc.codes.length;
 
   return (
     <Dialog open={!!id} onClose={() => !busy && onClose()} fullScreen={fullScreen} maxWidth="sm" fullWidth>
@@ -261,13 +278,23 @@ const DocumentDialog: React.FC<{ id: number | null; thumbprint: string | null; s
         {error && <Alert severity="error">{error}</Alert>}
         {!doc ? <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}><CircularProgress /></Box> : (
           <>
-            {doc.result && <Alert severity={doc.status === 'ok' ? 'success' : doc.status === 'error' ? 'error' : 'info'}>{doc.result}</Alert>}
+            {doc.result && (
+              <Alert severity={doc.status === 'ok' ? 'success' : doc.status === 'error' ? 'error' : 'info'}
+                sx={{ maxHeight: 220, overflowY: 'auto', wordBreak: 'break-word' }}>
+                {doc.result}
+              </Alert>
+            )}
+            {canDropBad && (
+              <Typography>
+                Честный знак не принял {bad.size} из {doc.codes.length} кодов (выделены красным). Остальные можно вывести отдельным документом.
+              </Typography>
+            )}
             <Typography color="text.secondary">
               {fmtDate(doc.actionDate)} · {doc.codesCount} код(ов){doc.chzDocumentId ? ` · № в ЧЗ ${doc.chzDocumentId}` : ''}
             </Typography>
             {doc.comment && <Typography>«{doc.comment}»</Typography>}
             <Box sx={{ maxHeight: 260, overflowY: 'auto', fontFamily: 'monospace', fontSize: '0.8rem', bgcolor: 'action.hover', borderRadius: '12px', p: 1.5 }}>
-              {doc.codes.map(c => <div key={c}>{c}</div>)}
+              {doc.codes.map(c => <div key={c} style={bad.has(c) ? { color: tokens.chili, fontWeight: 700 } : undefined}>{c}</div>)}
             </Box>
           </>
         )}
@@ -281,7 +308,19 @@ const DocumentDialog: React.FC<{ id: number | null; thumbprint: string | null; s
         {doc?.status === 'sent' && (
           <Button onClick={() => run(() => chzRefresh(doc.id))} disabled={busy || !signedIn}>Проверить статус</Button>
         )}
-        {doc && (doc.status === 'draft' || doc.status === 'error') && (
+        {canDropBad && (
+          <Button variant="contained" color="secondary" onClick={resendWithoutBad} disabled={busy || !signedIn || !thumbprint}
+            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
+            Вывести без проблемных · {doc!.codes.length - bad.size}
+          </Button>
+        )}
+        {doc && doc.status === 'error' && !canDropBad && (
+          <Button variant="contained" color="secondary" onClick={resendWithoutBad} disabled={busy || !signedIn || !thumbprint}
+            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
+            Собрать и отправить заново
+          </Button>
+        )}
+        {doc && doc.status === 'draft' && (
           <Button variant="contained" color="secondary" onClick={resend} disabled={busy || !signedIn || !thumbprint}
             startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
             Подписать и отправить
@@ -366,7 +405,7 @@ const BalancePanel: React.FC<{
       </Box>
 
       {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
-      {message && <Alert severity={message.ok ? 'success' : 'error'} sx={{ mb: 1.5, whiteSpace: 'pre-line' }} onClose={onCloseMessage}>{message.text}</Alert>}
+      {message && <Alert severity={message.ok ? 'success' : 'error'} sx={{ mb: 1.5, whiteSpace: 'pre-line', maxHeight: 260, overflowY: 'auto', wordBreak: 'break-word' }} onClose={onCloseMessage}>{message.text}</Alert>}
 
       {data && data.total === 0 && <Alert severity="info">По группе «{groupTitle}» на балансе ничего нет</Alert>}
       {data && data.total > 0 && (
@@ -481,7 +520,7 @@ const ChzTab: React.FC = () => {
         const sent = await chzSubmit(draft.id, signature);
         if (sent.status === 'error') {
           allOk = false;
-          results.push(`${sent.documentNumber}: ${sent.result ?? 'Честный знак отклонил документ'}`);
+          results.push(`${sent.documentNumber}: ${sent.result ?? 'Честный знак отклонил документ'}\n→ Откройте документ в истории ниже: там можно вывести коды без проблемных`);
         } else sentIds.push(sent.id);
       }
       await qc.invalidateQueries({ queryKey: ['chz', 'documents'] });
@@ -498,7 +537,8 @@ const ChzTab: React.FC = () => {
             if (r.status === 'sent') next.push(id);
             else {
               if (r.status !== 'ok') allOk = false;
-              results.push(`${r.documentNumber}: ${r.result ?? CHZ_STATUS[r.status].label}`);
+              results.push(`${r.documentNumber}: ${r.result ?? CHZ_STATUS[r.status].label}`
+                + (r.status === 'error' ? '\n→ Откройте документ в истории ниже: там можно вывести коды без проблемных' : ''));
             }
           }
           pending = next;
@@ -626,7 +666,7 @@ const ChzTab: React.FC = () => {
 
           <TextField fullWidth size="small" label="Комментарий" value={comment} onChange={e => setComment(e.target.value)} sx={{ mb: 2 }} />
 
-          {message && messageAt === 'form' && <Alert severity={message.ok ? 'success' : 'error'} sx={{ mb: 1.5, whiteSpace: 'pre-line' }} onClose={() => setMessage(null)}>{message.text}</Alert>}
+          {message && messageAt === 'form' && <Alert severity={message.ok ? 'success' : 'error'} sx={{ mb: 1.5, whiteSpace: 'pre-line', maxHeight: 260, overflowY: 'auto', wordBreak: 'break-word' }} onClose={() => setMessage(null)}>{message.text}</Alert>}
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
             <Button

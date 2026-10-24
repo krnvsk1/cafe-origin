@@ -166,6 +166,8 @@ namespace Kumashaurma.API.Controllers
                 d.Id, d.ProductGroup, d.Action, d.ActionDate, d.DocumentNumber, d.CodesCount, d.Status, d.ChzDocumentId,
                 d.Result, d.Comment, d.CreatedAt, d.SentAt, d.CheckedAt, d.StockDocumentId,
                 codes = d.Codes.Split('\n', StringSplitOptions.RemoveEmptyEntries),
+                // Коды, на которые пожаловался ЧЗ — чтобы отправить документ заново без них
+                badCodes = ChzService.BadCodes(d),
                 // Это подписывается в браузере (откреплённая подпись)
                 productDocument = d.Status is "draft" or "error" ? d.ProductDocument : null
             });

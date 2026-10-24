@@ -194,7 +194,7 @@ namespace Kumashaurma.API.Services.Chz
                         .Where(d => d.Status == ChzStatuses.Sent && d.ProductGroup == productGroup)
                         .Select(d => d.Codes).ToListAsync(ct))
                     .SelectMany(c => c.Split('\n')).ToHashSet();
-                return (codes.Where(c => !pending.Contains(c.Cis)).ToList(), truncated);
+                return (TopLevel(codes).Where(c => !pending.Contains(c.Cis)).ToList(), truncated);
             }
             catch (ChzApiException ex) when (ex.StatusCode == 401)
             {
@@ -202,6 +202,23 @@ namespace Kumashaurma.API.Services.Chz
                 throw new ChzApiException("Сессия Честного знака истекла — войдите заново", 401);
             }
         }
+
+        /// <summary>
+        /// Убрать повторы и вложенные коды: если на балансе есть и упаковка, и её содержимое,
+        /// выводим только упаковку — иначе ЧЗ ругается «код не уникален в документе».
+        /// </summary>
+        public static List<ChzClient.BalanceCode> TopLevel(IEnumerable<ChzClient.BalanceCode> codes)
+        {
+            var unique = codes.GroupBy(c => c.Cis).Select(g => g.First()).ToList();
+            var all = unique.Select(c => c.Cis).ToHashSet();
+            return unique.Where(c => string.IsNullOrEmpty(c.Parent) || !all.Contains(c.Parent)).ToList();
+        }
+
+        /// <summary>Коды документа, которые упомянуты в ответе ЧЗ с ошибкой</summary>
+        public static List<string> BadCodes(ChzDocument d) =>
+            d.Status != ChzStatuses.Error || string.IsNullOrEmpty(d.Result)
+                ? new List<string>()
+                : d.Codes.Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(c => d.Result.Contains(c)).ToList();
 
         /// <summary>Узнать результат проверки документа</summary>
         public async Task<ChzDocument> RefreshAsync(int id, CancellationToken ct)

@@ -66,6 +66,32 @@ namespace Kumashaurma.Tests
         }
 
         [Fact]
+        public void BalanceKeepsOnlyTopLevelCodes()
+        {
+            var codes = new[]
+            {
+                new ChzClient.BalanceCode("PACK", "1", null),
+                new ChzClient.BalanceCode("BOTTLE1", "2", null, "PACK"),
+                new ChzClient.BalanceCode("BOTTLE2", "2", null, "OTHER_PACK"),
+                new ChzClient.BalanceCode("PACK", "1", null),
+            };
+            var top = ChzService.TopLevel(codes).Select(c => c.Cis).ToList();
+            Assert.Equal(new[] { "PACK", "BOTTLE2" }, top);
+        }
+
+        [Fact]
+        public void FindsBadCodesInResult()
+        {
+            var d = new Kumashaurma.API.Models.ChzDocument
+            {
+                Status = "error",
+                Codes = "0104610017253991215SM6XiV\n0104640033503572215z=ptQO",
+                Result = "14: Недопустимый статус кода идентификации 0104610017253991215SM6XiV."
+            };
+            Assert.Equal(new[] { "0104610017253991215SM6XiV" }, ChzService.BadCodes(d));
+        }
+
+        [Fact]
         public void ParsesBalanceSearch()
         {
             var (page, isLast) = ChzClient.ParseSearch("{\"isLastPage\":true,\"result\":[{\"gtin\":\"04607009471233\",\"sgtin\":\"010460700947123321aB3dEf\",\"status\":\"INTRODUCED\",\"emissionDate\":\"2026-10-01T10:00:00.000Z\"},{\"sgtin\":\"010460700947124021XyZ123\"}]}");

@@ -137,7 +137,8 @@ namespace Kumashaurma.API.Services.Chz
             return ParseStatus(body);
         }
 
-        public record BalanceCode(string Cis, string Gtin, DateTime? EmissionDate);
+        /// <param name="Parent">Код упаковки, в которую вложен этот код (групповая упаковка, короб)</param>
+        public record BalanceCode(string Cis, string Gtin, DateTime? EmissionDate, string? Parent = null);
 
         /// <summary>
         /// Коды маркировки на балансе участника (статус INTRODUCED — «в обороте») по товарной группе.
@@ -196,7 +197,7 @@ namespace Kumashaurma.API.Services.Chz
                     DateTime? date = DateTime.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture,
                         System.Globalization.DateTimeStyles.AdjustToUniversal, out var d) ? d : null;
                     var gtin = Str("gtin") ?? (cis.Length >= 16 && cis.StartsWith("01") ? cis.Substring(2, 14) : "");
-                    list.Add((new BalanceCode(cis, gtin, date), raw));
+                    list.Add((new BalanceCode(cis, gtin, date, Str("parent")), raw));
                 }
             return (list, isLast);
         }
