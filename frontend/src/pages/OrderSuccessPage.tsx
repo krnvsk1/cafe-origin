@@ -18,6 +18,7 @@ import {
 } from '@mui/icons-material';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useOrder } from '../api/hooks';
+import { formatScheduled } from '../utils/schedule';
 
 // Animated checkmark circle using @keyframes
 const checkmarkKeyframes = `
@@ -47,6 +48,7 @@ const OrderSuccessPage: React.FC = () => {
 
   // Estimated delivery time (30-45 minutes from order creation)
   const estimatedDelivery = React.useMemo(() => {
+    if (order?.scheduledFor) return `ко времени: ${formatScheduled(order.scheduledFor)}`;
     if (!order?.createdAt) return '30–45 минут';
     const created = new Date(order.createdAt);
     const min = new Date(created.getTime() + 30 * 60 * 1000);
@@ -54,7 +56,7 @@ const OrderSuccessPage: React.FC = () => {
     const fmt = (d: Date) =>
       d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     return `${fmt(min)} — ${fmt(max)}`;
-  }, [order?.createdAt]);
+  }, [order?.createdAt, order?.scheduledFor]);
 
   if (isLoading) {
     return (

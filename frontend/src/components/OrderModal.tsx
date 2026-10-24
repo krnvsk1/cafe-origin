@@ -20,7 +20,10 @@ import {
   Slide,
   Paper,
   useTheme,
-  useMediaQuery
+  useMediaQuery,
+  ToggleButton,
+  ToggleButtonGroup,
+  MenuItem,
 } from '@mui/material';
 import type { SlideProps } from '@mui/material';
 import {
@@ -28,7 +31,8 @@ import {
   ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { useCreateOrder } from '../api/hooks';
+import { useCreateOrder, useRestaurantSettings } from '../api/hooks';
+import { buildScheduleDays } from '../utils/schedule';
 import type { CreateOrderDto, PromoCodeValidation } from '../types';
 import { useCartStore } from '../store/cartStore';
 import type { DeliveryType } from '../store/orderFlowStore';
@@ -78,6 +82,26 @@ const OrderModal: React.FC<OrderModalProps> = ({
 
   const [notes, setNotes] = React.useState('');
 
+  // Заказ ко времени
+  const { data: settings } = useRestaurantSettings();
+  const [timeMode, setTimeMode] = React.useState<'asap' | 'scheduled'>('asap');
+  const [scheduledDay, setScheduledDay] = React.useState('');
+  const [scheduledSlot, setScheduledSlot] = React.useState('');
+  const scheduleDays = React.useMemo(
+    () => (settings && open ? buildScheduleDays(settings) : []),
+    [settings, open]
+  );
+  const isClosedNow = settings ? !settings.isOpenNow : false;
+  const effectiveTimeMode = isClosedNow ? 'scheduled' : timeMode;
+  const currentDay = scheduleDays.find(d => d.key === scheduledDay) ?? scheduleDays[0];
+
+  React.useEffect(() => {
+    // Если выбранный слот устарел — сбрасываем
+    if (currentDay && scheduledSlot && !currentDay.slots.some(s => s.iso === scheduledSlot)) {
+      setScheduledSlot('');
+    }
+  }, [currentDay, scheduledSlot]);
+
   const [snackbar, setSnackbar] = React.useState({
     open: false,
     message: '',
@@ -116,6 +140,10 @@ const OrderModal: React.FC<OrderModalProps> = ({
       showSnackbar('Корзина пуста', 'error');
       return;
     }
+    if (effectiveTimeMode === 'scheduled' && !scheduledSlot) {
+      showSnackbar('Выберите время заказа', 'error');
+      return;
+    }
 
     const orderData: CreateOrderDto = {
       customerName: customerName.trim(),
@@ -125,6 +153,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
       deliveryType: deliveryType,
       promoCodeId: promoInfo?.promoCodeId ?? null,
       pointsDiscountAmount: pointsDiscount > 0 ? pointsDiscount : undefined,
+      scheduledFor: effectiveTimeMode === 'scheduled' ? scheduledSlot : null,
       items: cartItems.map(item => ({
         shawarmaId: item.selectedChild?.id ?? item.id,
         quantity: item.quantity,
@@ -144,13 +173,15 @@ const OrderModal: React.FC<OrderModalProps> = ({
       showSnackbar(`Заказ #${result.id} создан успешно!`, 'success');
       clearCart();
       setNotes('');
+      setTimeMode('asap');
+      setScheduledSlot('');
       onCustomerNameChange('');
       onPhoneChange('');
       onAddressChange('');
       onClose();
       navigate(`/order/${result.id}/success`);
     } catch (error: any) {
-      showSnackbar(error.message || 'Ошибка при создании заказа', 'error');
+      showSnackbar(error?.response?.data?.message || error.message || 'Ошибка при создании заказа', 'error');
     }
   };
 
@@ -250,6 +281,60 @@ const OrderModal: React.FC<OrderModalProps> = ({
                 placeholder="ул. Ленина, д. 1, кв. 1"
                 sx={{ mt: 2, '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               />
+            )}
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+              Когда {deliveryType === 'Доставка' ? 'доставить' : 'приготовить'}
+            </Typography>
+            {isClosedNow && (
+              <Alert severity="info" sx={{ mb: 1.5 }}>
+                Сейчас мы закрыты{settings ? ` (работаем ${settings.openTime}–${settings.closeTime})` : ''}. Выберите удобное время.
+              </Alert>
+            )}
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              size="small"
+              value={effectiveTimeMode}
+              onChange={(_, v) => v && setTimeMode(v)}
+              disabled={createOrder.isPending}
+              sx={{ mb: effectiveTimeMode === 'scheduled' ? 2 : 0 }}
+            >
+              <ToggleButton value="asap" disabled={isClosedNow}>Как можно скорее</ToggleButton>
+              <ToggleButton value="scheduled">Ко времени</ToggleButton>
+            </ToggleButtonGroup>
+            {effectiveTimeMode === 'scheduled' && (
+              scheduleDays.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">Нет доступного времени</Typography>
+              ) : (
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <TextField
+                    select
+                    label="День"
+                    value={currentDay?.key ?? ''}
+                    onChange={(e) => { setScheduledDay(e.target.value); setScheduledSlot(''); }}
+                    sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                  >
+                    {scheduleDays.map(d => (
+                      <MenuItem key={d.key} value={d.key}>{d.label}</MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    select
+                    label="Время"
+                    value={scheduledSlot}
+                    onChange={(e) => setScheduledSlot(e.target.value)}
+                    sx={{ flex: 1, '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+                    SelectProps={{ MenuProps: { PaperProps: { sx: { maxHeight: 320 } } } }}
+                  >
+                    {(currentDay?.slots ?? []).map(slot => (
+                      <MenuItem key={slot.iso} value={slot.iso}>{slot.label}</MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
+              )
             )}
           </Box>
 

@@ -22,6 +22,7 @@ import type {
   RedeemPointsRequest,
   RedeemPointsResponse,
   AdminGrantPointsRequest,
+  RestaurantSettings,
 } from '../types';
 
 // ==================== SHAWARMA HOOKS ====================
@@ -151,7 +152,8 @@ export const useOrder = (id: number) => {
 export const useCreateOrder = () => {
   const queryClient = useQueryClient();
   return useMutation<Order, Error, CreateOrderDto>({
-    mutationFn: (data) => apiClient.post('/api/orders', data).then(res => res.data),
+    // Бэкенд отвечает { order, pointsEarned } — достаём сам заказ
+    mutationFn: (data) => apiClient.post('/api/orders', data).then(res => res.data?.order ?? res.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       // Баллы списываются при создании заказа — обновляем баланс и историю
@@ -453,5 +455,14 @@ export const useRedeemPoints = () => {
   return useMutation<RedeemPointsResponse, Error, RedeemPointsRequest>({
     mutationFn: (data) =>
       apiClient.post('/api/points/redeem', data).then(res => res.data),
+  });
+};
+// ==================== SETTINGS ====================
+
+export const useRestaurantSettings = () => {
+  return useQuery<RestaurantSettings>({
+    queryKey: ['restaurant-settings'],
+    queryFn: () => apiClient.get('/api/settings').then(res => res.data),
+    staleTime: 5 * 60 * 1000,
   });
 };

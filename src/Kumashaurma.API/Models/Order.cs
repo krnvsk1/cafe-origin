@@ -57,6 +57,10 @@ namespace Kumashaurma.API.Models
         [Column("completed_at")]
         public DateTime? CompletedAt { get; set; }
 
+        // Заказ ко времени (UTC). null — «как можно скорее»
+        [Column("scheduled_for")]
+        public DateTime? ScheduledFor { get; set; }
+
         // Navigation properties
         [JsonIgnore]
         public AppUser? User { get; set; }

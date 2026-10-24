@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
+using Kumashaurma.API.Options;
+using Microsoft.Extensions.Options;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -13,11 +15,13 @@ namespace Kumashaurma.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<OrdersController> _logger;
+        private readonly RestaurantOptions _restaurant;
 
-        public OrdersController(ApplicationDbContext context, ILogger<OrdersController> logger)
+        public OrdersController(ApplicationDbContext context, ILogger<OrdersController> logger, IOptions<RestaurantOptions> restaurant)
         {
             _context = context;
             _logger = logger;
+            _restaurant = restaurant.Value;
         }
 
         [HttpGet]
@@ -129,6 +133,25 @@ namespace Kumashaurma.API.Controllers
                     }
                 }
 
+                // Заказ ко времени
+                DateTime? scheduledFor = null;
+                if (request.ScheduledFor.HasValue)
+                {
+                    var requested = request.ScheduledFor.Value.Kind == DateTimeKind.Unspecified
+                        ? DateTime.SpecifyKind(request.ScheduledFor.Value, DateTimeKind.Utc)
+                        : request.ScheduledFor.Value.ToUniversalTime();
+                    var nowUtc = DateTime.UtcNow;
+
+                    if (requested < nowUtc.AddMinutes(_restaurant.MinLeadMinutes))
+                        return BadRequest(new { Message = $"Заказ ко времени можно оформить минимум за {_restaurant.MinLeadMinutes} минут" });
+                    if (requested > nowUtc.AddDays(_restaurant.MaxDaysAhead))
+                        return BadRequest(new { Message = $"Заказ можно оформить не более чем на {_restaurant.MaxDaysAhead} дней вперёд" });
+                    if (!_restaurant.IsWithinWorkingHours(requested))
+                        return BadRequest(new { Message = $"Выберите время в часы работы: {_restaurant.OpenTime}–{_restaurant.CloseTime}" });
+
+                    scheduledFor = requested;
+                }
+
                 // Получаем актуальные цены из базы данных (только доступные шаурмы)
                 var shawarmaIds = request.Items.Select(i => i.ShawarmaId).Distinct();
                 var shawarmas = await _context.Shawarmas
@@ -204,7 +227,8 @@ namespace Kumashaurma.API.Controllers
                     PromoCodeId = request.PromoCodeId,
                     DiscountAmount = 0,
                     CreatedAt = DateTime.UtcNow,
-                    CompletedAt = null
+                    CompletedAt = null,
+                    ScheduledFor = scheduledFor
                 };
 
                 await _context.Orders.AddAsync(newOrder);
@@ -354,6 +378,8 @@ namespace Kumashaurma.API.Controllers
             public string DeliveryType { get; set; } = "Доставка";
             public int? PromoCodeId { get; set; }
             public decimal? PointsDiscountAmount { get; set; }
+            /// <summary>Желаемое время (UTC, ISO 8601). null — как можно скорее</summary>
+            public DateTime? ScheduledFor { get; set; }
             public List<CreateOrderItemRequest> Items { get; set; } = new();
         }
 

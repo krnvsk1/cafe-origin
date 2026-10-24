@@ -42,6 +42,7 @@ import {
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import { useOrders, useMyOrders, useUpdateOrderStatus, useDeleteOrder, useUpdateOrder, useShawarmas } from '../api/hooks';
+import { formatScheduled } from '../utils/schedule';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import type { Order, OrderStatus, OrderItemAddon, UpdateOrderDto, SelectedAddon } from '../types';
@@ -213,6 +214,11 @@ const OrderCard: React.FC<{
                 <Typography variant="body2" color="text.secondary">
                   Создан: <strong>{formatDate(order.createdAt)}</strong>
                 </Typography>
+                {order.scheduledFor && (
+                  <Typography variant="body2" color="warning.main">
+                    Ко времени: <strong>{formatScheduled(order.scheduledFor)}</strong>
+                  </Typography>
+                )}
                 {order.completedAt && (
                   <Typography variant="body2" color="text.secondary">
                     Завершён: <strong>{formatDate(order.completedAt)}</strong>

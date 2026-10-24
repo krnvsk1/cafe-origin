@@ -283,6 +283,10 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("promo_code_id");
 
+                    b.Property<DateTime?>("ScheduledFor")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("scheduled_for");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)

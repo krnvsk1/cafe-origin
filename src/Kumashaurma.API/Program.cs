@@ -7,6 +7,7 @@ using Microsoft.OpenApi.Models;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
 using Kumashaurma.API.Services;
+using Kumashaurma.API.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -135,6 +136,9 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorization();
+
+// Настройки заведения
+builder.Services.Configure<RestaurantOptions>(builder.Configuration.GetSection(RestaurantOptions.SectionName));
 
 // Custom Services
 builder.Services.AddScoped<ISmsService, SmsService>();

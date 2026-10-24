@@ -83,6 +83,7 @@ export interface Shawarma {
     notes: string | null;       // Может быть null
     createdAt: string;          // ISO date
     completedAt: string | null; // Может быть null
+    scheduledFor?: string | null; // Заказ ко времени (ISO, UTC); null — как можно скорее
     orderItems?: OrderItem[];   // Связь с элементами заказа (может отсутствовать при обновлении статуса)
     deliveryType?: string;
     discountAmount?: number;
@@ -98,6 +99,7 @@ export interface Shawarma {
     deliveryType?: string;
     promoCodeId?: number | null;
     pointsDiscountAmount?: number;
+    scheduledFor?: string | null;
     items: {
       shawarmaId: number;
       quantity: number;
@@ -306,4 +308,15 @@ export interface Shawarma {
     userId: number;
     amount: number;
     description: string;
+  }
+  // ==================== SETTINGS (настройки заведения) ====================
+
+  export interface RestaurantSettings {
+    timeZone: string;
+    openTime: string;   // HH:mm
+    closeTime: string;  // HH:mm
+    minLeadMinutes: number;
+    maxDaysAhead: number;
+    isOpenNow: boolean;
+    serverTimeUtc: string;
   }
