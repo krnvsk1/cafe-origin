@@ -170,3 +170,14 @@ export const testUtmConnection = (utmUrl: string) =>
 
 export const requestUnaccepted = () =>
   apiClient.post<{ message: string }>('/api/egais/request-unaccepted').then(r => r.data);
+
+export interface EgaisDiagnostics {
+  lastNoAnswerAt: string | null;
+  noAnswer: { wbRegId: string; number: string | null; date: string | null; shipperFsrarId: string | null; action: string; inService: boolean }[];
+  inbox: { type: string; url: string; seen: boolean }[];
+  inboxError: string | null;
+  lastSyncError: string | null;
+}
+
+export const fetchEgaisDiagnostics = () =>
+  apiClient.get<EgaisDiagnostics>('/api/egais/diagnostics').then(r => r.data);

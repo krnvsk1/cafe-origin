@@ -33,6 +33,13 @@ namespace Kumashaurma.API.Services.Egais
         private EgaisOptions _options => _settings.Current;
 
         public static DateTime? LastSyncAt { get; private set; }
+
+        /// <summary>Последний ответ ЕГАИС на «какие накладные без акта» и что с ними сделали — для диагностики</summary>
+        public record NoAnswerState(string WbRegId, string? Number, DateTime? Date, string? ShipperFsrarId, string Action);
+        public static DateTime? LastNoAnswerAt { get; private set; }
+        public static IReadOnlyList<NoAnswerState> LastNoAnswer { get; private set; } = Array.Empty<NoAnswerState>();
+
+        public static bool IsSeen(string url) => Seen.ContainsKey(url);
         public static string? LastSyncError { get; private set; }
 
         // ================= Синхронизация =================
@@ -123,12 +130,23 @@ namespace Kumashaurma.API.Services.Egais
             var known = await _context.EgaisDocuments.AsNoTracking()
                 .Where(d => d.WbRegId != null).Select(d => d.WbRegId!).ToListAsync(ct);
             var requested = 0;
-            foreach (var ttn in list.Where(t => !known.Contains(t.WbRegId)))
+            var states = new List<NoAnswerState>();
+            foreach (var ttn in list)
             {
+                if (known.Contains(ttn.WbRegId))
+                {
+                    states.Add(new NoAnswerState(ttn.WbRegId, ttn.Number, ttn.Date, ttn.ShipperFsrarId, "уже есть в сервисе"));
+                    continue;
+                }
                 var xml = EgaisXml.BuildQuery(_options.FsrarId, "QueryResendDoc", "WBREGID", ttn.WbRegId);
-                var (ok, _) = await _utm.SendAsync("QueryResendDoc", xml, ct);
+                var (ok, response) = await _utm.SendAsync("QueryResendDoc", xml, ct);
                 if (ok) requested++;
+                states.Add(new NoAnswerState(ttn.WbRegId, ttn.Number, ttn.Date, ttn.ShipperFsrarId,
+                    ok ? "запрошена повторная отправка" : $"УТМ не принял запрос: {UtmClient.ExtractError(response)}"));
             }
+            LastNoAnswer = states;
+            LastNoAnswerAt = DateTime.UtcNow;
+            _logger.LogInformation("ЕГАИС: без акта {Count} накладных, запрошено повторно {Requested}", list.Count, requested);
             return requested;
         }
 

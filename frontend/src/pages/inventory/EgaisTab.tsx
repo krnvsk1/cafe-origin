@@ -10,7 +10,7 @@ import {
 } from '@mui/icons-material';
 import {
   useEgaisState, useEgaisDocuments, useEgaisDocument, useEgaisSync, useEgaisMapping, useEgaisAct, EGAIS_STATUS,
-  requestUnaccepted,
+  requestUnaccepted, fetchEgaisDiagnostics, type EgaisDiagnostics,
   type EgaisLine,
 } from '../../api/egais';
 import { useStockItems, apiError, fmtMoney, fmtDate, fmtDateTime, fmtQty, UNIT_LABELS, type StockItem } from '../../api/inventory';
@@ -265,6 +265,81 @@ const EgaisDocumentDialog: React.FC<{ id: number | null; onClose: () => void }> 
   );
 };
 
+// ============ Диагностика ============
+
+const DiagnosticsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
+  const theme = useTheme();
+  const t = tokens[theme.palette.mode];
+  const [data, setData] = React.useState<EgaisDiagnostics | null>(null);
+  const [error, setError] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try { setData(await fetchEgaisDiagnostics()); } catch (e) { setError(apiError(e)); } finally { setLoading(false); }
+  }, []);
+
+  React.useEffect(() => { if (open) void load(); }, [open, load]);
+
+  // Сколько документов каждого типа в очереди УТМ
+  const byType = (data?.inbox ?? []).reduce<Record<string, { total: number; seen: number }>>((acc, d) => {
+    const x = acc[d.type] ?? { total: 0, seen: 0 };
+    x.total++; if (d.seen) x.seen++;
+    acc[d.type] = x;
+    return acc;
+  }, {});
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', pr: 1.5 }}>
+        <Box sx={{ flex: 1 }}>Диагностика ЕГАИС</Box>
+        <IconButton aria-label="Обновить" onClick={load} disabled={loading}><SyncIcon /></IconButton>
+        <IconButton aria-label="Закрыть" onClick={onClose}><CloseIcon /></IconButton>
+      </DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {loading && !data ? <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}><CircularProgress /></Box> : (
+          <>
+            {error && <Alert severity="error">{error}</Alert>}
+            <Box>
+              <Typography sx={{ fontWeight: 700, mb: 0.75 }}>Накладные без акта по данным ЕГАИС</Typography>
+              {!data?.lastNoAnswerAt ? (
+                <Typography color="text.secondary">Ответа ещё не было. Нажмите «Запросить из ЕГАИС», через 3–5 минут — «Проверить входящие».</Typography>
+              ) : data.noAnswer.length === 0 ? (
+                <Typography color="text.secondary">ЕГАИС ответил {fmtDateTime(data.lastNoAnswerAt)}: неподтверждённых накладных нет.</Typography>
+              ) : (
+                <>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Ответ от {fmtDateTime(data.lastNoAnswerAt)}</Typography>
+                  {data.noAnswer.map(n => (
+                    <Box key={n.wbRegId} sx={{ display: 'flex', gap: 1, alignItems: 'center', py: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+                      {n.inService ? <OkIcon sx={{ color: tokens.herb }} fontSize="small" /> : <ErrIcon sx={{ color: '#C77700' }} fontSize="small" />}
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 600 }}>№ {n.number ?? '—'} от {fmtDate(n.date)}</Typography>
+                        <Typography variant="body2" color="text.secondary">{n.wbRegId} · {n.inService ? 'есть в сервисе' : n.action}</Typography>
+                      </Box>
+                    </Box>
+                  ))}
+                </>
+              )}
+            </Box>
+            <Box sx={{ bgcolor: t.surfaceMuted, borderRadius: '14px', p: 2 }}>
+              <Typography sx={{ fontWeight: 700, mb: 0.75 }}>Сейчас в очереди УТМ</Typography>
+              {data?.inboxError ? (
+                <Typography sx={{ color: tokens.chili }}>{data.inboxError}</Typography>
+              ) : Object.keys(byType).length === 0 ? (
+                <Typography color="text.secondary">Очередь пуста</Typography>
+              ) : Object.entries(byType).map(([type, c]) => (
+                <Typography key={type} variant="body2">{type}: {c.total}{c.seen ? ` (прочитано сервисом: ${c.seen})` : ''}</Typography>
+              ))}
+            </Box>
+            {data?.lastSyncError && <Alert severity="warning">Последняя проверка: {data.lastSyncError}</Alert>}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 // ============ Вкладка ============
 
 const EgaisTab: React.FC = () => {
@@ -279,6 +354,7 @@ const EgaisTab: React.FC = () => {
   const [message, setMessage] = React.useState<{ ok: boolean; text: string } | null>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [requesting, setRequesting] = React.useState(false);
+  const [diagOpen, setDiagOpen] = React.useState(false);
 
   const runRequest = async () => {
     setRequesting(true);
@@ -366,6 +442,9 @@ const EgaisTab: React.FC = () => {
           <ToggleButton value="">Все накладные</ToggleButton>
         </ToggleButtonGroup>
         {state && state.toProcess > 0 && <Pill color="#C77700" bg="rgba(232,137,12,0.12)">к приёмке: {state.toProcess}</Pill>}
+        {state?.enabled && (
+          <Button size="small" onClick={() => setDiagOpen(true)} sx={{ ml: 'auto', color: 'text.secondary' }}>Диагностика</Button>
+        )}
       </Box>
 
       <Panel padding={false}>
@@ -402,6 +481,7 @@ const EgaisTab: React.FC = () => {
 
       <EgaisDocumentDialog id={openId} onClose={() => setOpenId(null)} />
       <EgaisSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <DiagnosticsDialog open={diagOpen} onClose={() => setDiagOpen(false)} />
     </Box>
   );
 };

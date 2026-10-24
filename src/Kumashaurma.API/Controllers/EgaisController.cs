@@ -187,6 +187,44 @@ namespace Kumashaurma.API.Controllers
             }
         }
 
+        // GET: api/egais/diagnostics — что лежит в очереди УТМ и что ЕГАИС ответил на запрос накладных без акта
+        [HttpGet("diagnostics")]
+        public async Task<IActionResult> Diagnostics()
+        {
+            List<object> inbox = new();
+            string? inboxError = null;
+            if (_options.Enabled)
+            {
+                try
+                {
+                    inbox = (await _utm.ListIncomingAsync(HttpContext.RequestAborted))
+                        .Select(r => (object)new { r.Type, r.Url, seen = EgaisService.IsSeen(r.Url) })
+                        .ToList();
+                }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or FormatException or System.Xml.XmlException)
+                {
+                    inboxError = ex.Message;
+                }
+            }
+
+            var known = await _context.EgaisDocuments.AsNoTracking()
+                .Select(d => new { d.WbRegId, d.Number, d.Status })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                lastNoAnswerAt = EgaisService.LastNoAnswerAt,
+                noAnswer = EgaisService.LastNoAnswer.Select(n => new
+                {
+                    n.WbRegId, n.Number, n.Date, n.ShipperFsrarId, n.Action,
+                    inService = known.Any(k => k.WbRegId == n.WbRegId || (n.Number != null && k.Number == n.Number))
+                }),
+                inbox,
+                inboxError,
+                lastSyncError = EgaisService.LastSyncError
+            });
+        }
+
         // GET: api/egais/documents?status=
         [HttpGet("documents")]
         public async Task<IActionResult> List([FromQuery] string? status)
