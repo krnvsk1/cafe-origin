@@ -669,7 +669,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpPatch("{id}/status")]
-        [HasPermission(Permissions.OrdersManage, Permissions.Kitchen, Permissions.Delivery)]
+        [HasPermission(Permissions.OrdersManage, Permissions.Kitchen, Permissions.Delivery, Permissions.Pos)]
         public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateOrderRequest request)
         {
             try

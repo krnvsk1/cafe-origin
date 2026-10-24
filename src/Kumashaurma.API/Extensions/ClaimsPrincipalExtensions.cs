@@ -12,8 +12,8 @@ namespace Kumashaurma.API.Extensions
             return int.TryParse(value, out var id) ? id : null;
         }
 
-        /// <summary>Сотрудник, которому видны все заказы: «Все заказы», «Кухня» или «Доставка»</summary>
+        /// <summary>Сотрудник, которому видны все заказы: «Все заказы», «Касса», «Кухня» или «Доставка»</summary>
         public static bool IsStaff(this ClaimsPrincipal user) =>
-            user.HasAnyPermission(Permissions.OrdersView, Permissions.Kitchen, Permissions.Delivery);
+            user.HasAnyPermission(Permissions.OrdersView, Permissions.Kitchen, Permissions.Delivery, Permissions.Pos);
     }
 }

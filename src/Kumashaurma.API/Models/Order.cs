@@ -112,6 +112,15 @@ namespace Kumashaurma.API.Models
         [Column("picked_up_at")]
         public DateTime? PickedUpAt { get; set; }
 
+        // Откуда заказ: online — сайт/приложение, pos — касса в заведении
+        [MaxLength(20)]
+        [Column("source")]
+        public string Source { get; set; } = "online";
+
+        // Сотрудник, принявший заказ на кассе
+        [Column("cashier_id")]
+        public int? CashierId { get; set; }
+
         // Когда продукты списаны со склада по техкартам (null — не списаны или возвращены)
         [Column("stock_deducted_at")]
         [JsonIgnore]
