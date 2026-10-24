@@ -75,6 +75,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          { echo '## npm run build'; grep -E "error TS|error " build.txt | head -300 || true; } > report.md
+          { echo '## npm run build'; grep -E "error TS" build.txt | head -300 || true; echo; echo '## tail'; tail -40 build.txt | sed 's/\x1b\[[0-9;]*m//g'; } > report.md
           gh api repos/${{ github.repository }}/check-runs -f name="frontend-report" -f head_sha="${{ github.sha }}" \
             -f status=completed -f conclusion=neutral -f "output[title]=Frontend report" -F "output[summary]=@report.md"
