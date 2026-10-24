@@ -71,7 +71,6 @@ namespace Kumashaurma.API.Controllers
             Response.Headers.ContentType = "text/event-stream";
             Response.Headers.CacheControl = "no-cache";
             Response.Headers["X-Accel-Buffering"] = "no"; // отключить буферизацию в nginx
-            Response.Headers.Connection = "keep-alive";
 
             using var subscription = _bus.Subscribe();
 
