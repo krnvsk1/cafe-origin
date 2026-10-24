@@ -105,6 +105,80 @@ namespace Kumashaurma.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Данные для повтора заказа: позиции с актуальными ценами и доступностью
+        /// </summary>
+        [HttpGet("{id}/reorder")]
+        [Authorize]
+        public async Task<IActionResult> GetReorder(int id)
+        {
+            var order = await _context.Orders
+                .AsNoTracking()
+                .Include(o => o.OrderItems)
+                    .ThenInclude(oi => oi.SelectedAddons)
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (order == null)
+                return NotFound(new { Message = $"Заказ с ID {id} не найден" });
+
+            var isStaff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Courier);
+            var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!isStaff && (!int.TryParse(currentUserIdClaim, out var currentUserId) || order.UserId != currentUserId))
+                return NotFound(new { Message = $"Заказ с ID {id} не найден" });
+
+            var shawarmaIds = order.OrderItems.Select(i => i.ShawarmaId).Distinct().ToList();
+            var shawarmas = await _context.Shawarmas
+                .AsNoTracking()
+                .Include(s => s.Parent)
+                .Where(s => shawarmaIds.Contains(s.Id))
+                .ToDictionaryAsync(s => s.Id);
+
+            var addonIds = order.OrderItems
+                .SelectMany(i => i.SelectedAddons)
+                .Select(a => a.AddonId)
+                .Distinct()
+                .ToList();
+            var addons = await _context.Addons
+                .AsNoTracking()
+                .Include(a => a.Category)
+                .Where(a => addonIds.Contains(a.Id))
+                .ToDictionaryAsync(a => a.Id);
+
+            var items = order.OrderItems.Select(item =>
+            {
+                shawarmas.TryGetValue(item.ShawarmaId, out var current);
+                var parentAvailable = current?.Parent == null || current.Parent.IsAvailable;
+                return new
+                {
+                    item.ShawarmaId,
+                    CardId = current?.ParentId ?? item.ShawarmaId,
+                    Name = current != null
+                        ? (current.Parent != null ? $"{current.Parent.Name} — {current.Name}" : current.Name)
+                        : item.Name,
+                    item.Quantity,
+                    Available = current != null && current.IsAvailable && parentAvailable,
+                    Price = current?.Price ?? item.Price,
+                    OldPrice = item.Price,
+                    Addons = item.SelectedAddons.Select(a =>
+                    {
+                        addons.TryGetValue(a.AddonId, out var addon);
+                        return new
+                        {
+                            a.AddonId,
+                            Name = addon?.Name ?? a.AddonName,
+                            Price = addon?.Price ?? a.Price,
+                            CategoryId = addon?.AddonCategoryId ?? a.AddonCategoryId,
+                            CategoryName = addon?.Category?.Name ?? a.AddonCategoryName,
+                            a.Quantity,
+                            Available = addon != null && addon.IsAvailable
+                        };
+                    }).ToList()
+                };
+            }).ToList();
+
+            return Ok(new { OrderId = order.Id, Items = items });
+        }
+
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateOrderRequest request)
         {

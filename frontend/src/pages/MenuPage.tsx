@@ -30,9 +30,12 @@ import {
   LocationOn as LocationIcon,
   Star as StarIcon,
   LocalOffer as OfferIcon,
+  Favorite as FavoriteIcon,
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
 import MenuItemCard from '../components/MenuItemCard';
+import RepeatLastOrderBanner from '../components/RepeatLastOrderBanner';
+import { useFavoriteIds, useToggleFavorite } from '../api/favorites';
 import { useShawarmas } from '../api/hooks';
 import type { Shawarma, SelectedAddon } from '../types';
 import ProductModal from '../components/ProductModal';
@@ -60,6 +63,12 @@ const MenuPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Избранное
+  const { data: favoriteIds = [] } = useFavoriteIds();
+  const toggleFavorite = useToggleFavorite();
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
+  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
   
   const { openCart, orderOpen, closeOrder, backToCart, deliveryType, address, setAddress, customerName, setCustomerName, phone, setPhone } = useOrderFlowStore(
     (state) => ({
@@ -136,10 +145,11 @@ const MenuPage: React.FC = () => {
   // === ПОИСК ===
   // Поиск работает по дочерним позициям, но возвращает карточки-родители, у которых есть совпадения
   const filteredCards = useMemo(() => {
-    if (!searchQuery) return cards;
+    const base = onlyFavorites ? cards.filter(card => favoriteSet.has(card.id)) : cards;
+    if (!searchQuery) return base;
 
     const q = searchQuery.toLowerCase();
-    return cards.map(card => {
+    return base.map(card => {
       const matchingChildren = (card.children || []).filter(child =>
         child.name.toLowerCase().includes(q) ||
         child.description?.toLowerCase().includes(q) ||
@@ -147,7 +157,7 @@ const MenuPage: React.FC = () => {
       );
       return matchingChildren.length > 0 ? { ...card, children: matchingChildren } : null;
     }).filter(Boolean) as Shawarma[];
-  }, [cards, searchQuery]);
+  }, [cards, searchQuery, onlyFavorites, favoriteSet]);
 
   // Навигационные категории — названия карточек
   const navCategories = useMemo<NavCategory[]>(() => {
@@ -254,7 +264,13 @@ const MenuPage: React.FC = () => {
   // Рендер одной карточки-родителя в сетке (клик → модалка с выбором варианта)
   const renderProductCard = (card: Shawarma) => (
     <Box key={card.id} onClick={() => handleProductClick(card)} sx={{ cursor: 'pointer' }}>
-      <MenuItemCard item={card} />
+      <MenuItemCard
+        item={card}
+        isFavorite={favoriteSet.has(card.id)}
+        onToggleFavorite={isAuthenticated
+          ? () => toggleFavorite.mutate({ shawarmaId: card.id, isFavorite: !favoriteSet.has(card.id) })
+          : undefined}
+      />
     </Box>
   );
 
@@ -317,6 +333,8 @@ const MenuPage: React.FC = () => {
 
             {/* Правая колонка – товары */}
             <Grid size={{ md: 9, lg: 9.5 }}>
+              <RepeatLastOrderBanner />
+
               {/* Поиск */}
               <Paper
                 elevation={0}
@@ -342,6 +360,16 @@ const MenuPage: React.FC = () => {
                     }}
                     sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9999px' } }}
                   />
+                  {isAuthenticated && (favoriteIds.length > 0 || onlyFavorites) && (
+                    <Chip
+                      icon={<FavoriteIcon />}
+                      label="Избранное"
+                      color={onlyFavorites ? 'error' : 'default'}
+                      variant={onlyFavorites ? 'filled' : 'outlined'}
+                      onClick={() => setOnlyFavorites(v => !v)}
+                      sx={{ borderRadius: '9999px', alignSelf: 'center' }}
+                    />
+                  )}
                   {isAdminRole && (
                     <Button
                       component={Link}
@@ -387,6 +415,8 @@ const MenuPage: React.FC = () => {
       ) : (
         /* Мобильная версия */
         <Container maxWidth="xl" sx={{ py: 3 }}>
+          <RepeatLastOrderBanner />
+
           {/* Поиск */}
           <Paper
             elevation={0}
@@ -412,6 +442,16 @@ const MenuPage: React.FC = () => {
                 }}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: '9999px' } }}
               />
+              {isAuthenticated && (favoriteIds.length > 0 || onlyFavorites) && (
+                <Chip
+                  icon={<FavoriteIcon />}
+                  label="Избранное"
+                  color={onlyFavorites ? 'error' : 'default'}
+                  variant={onlyFavorites ? 'filled' : 'outlined'}
+                  onClick={() => setOnlyFavorites(v => !v)}
+                  sx={{ borderRadius: '9999px', alignSelf: 'center' }}
+                />
+              )}
               {isAdminRole && (
                 <Button
                   component={Link}

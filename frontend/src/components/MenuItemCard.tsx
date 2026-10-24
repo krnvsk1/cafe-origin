@@ -9,16 +9,19 @@ import {
   useTheme,
   alpha,
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon } from '@mui/icons-material';
 import type { Shawarma } from '../types';
 import placeholderImage from '../assets/placeholder-shawarma.svg';
 import { resolveMediaUrl } from '../utils/media';
 
 interface MenuItemCardProps {
   item: Shawarma;
+  isFavorite?: boolean;
+  // Если не передан — кнопка «в избранное» не показывается (например, для гостей)
+  onToggleFavorite?: () => void;
 }
 
-const MenuItemCard: React.FC<MenuItemCardProps> = ({ item }) => {
+const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, isFavorite = false, onToggleFavorite }) => {
   const theme = useTheme();
 
   const imageUrl = item.images && item.images.length > 0
@@ -66,6 +69,28 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item }) => {
             borderBottomLeftRadius: { xs: 0, md: 16 },
           }}
         />
+        {onToggleFavorite && (
+          <IconButton
+            size="small"
+            aria-label={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite();
+            }}
+            sx={{
+              position: 'absolute',
+              top: 6,
+              right: 6,
+              zIndex: 2,
+              bgcolor: alpha(theme.palette.background.paper, 0.85),
+              '&:hover': { bgcolor: theme.palette.background.paper },
+            }}
+          >
+            {isFavorite
+              ? <FavoriteIcon fontSize="small" sx={{ color: 'error.main' }} />
+              : <FavoriteBorderIcon fontSize="small" />}
+          </IconButton>
+        )}
         {/* Бейджи на фото */}
         <Box
           sx={{

@@ -41,11 +41,11 @@ import {
   Replay as ReplayIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import { useOrders, useMyOrders, useUpdateOrderStatus, useDeleteOrder, useUpdateOrder, useShawarmas } from '../api/hooks';
+import { useOrders, useMyOrders, useUpdateOrderStatus, useDeleteOrder, useUpdateOrder } from '../api/hooks';
 import { formatScheduled } from '../utils/schedule';
+import { useRepeatOrder, describeRepeatResult } from '../api/reorder';
 import { useAuthStore } from '../store/authStore';
-import { useCartStore } from '../store/cartStore';
-import type { Order, OrderStatus, OrderItemAddon, UpdateOrderDto, SelectedAddon } from '../types';
+import type { Order, OrderStatus, OrderItemAddon, UpdateOrderDto } from '../types';
 import { getStatusColor } from '../utils/statusColors';
 
 // Компонент для отображения статуса с цветом
@@ -408,29 +408,19 @@ const OrdersPage: React.FC = () => {
   const deleteOrder = useDeleteOrder();
   const updateOrder = useUpdateOrder();
   
-  // Repeat order
-  const addItem = useCartStore(state => state.addItem);
-  const shawarmasQuery = useShawarmas();
+  // Повтор заказа: актуальные цены и наличие берутся с сервера
+  const repeatOrder = useRepeatOrder();
 
-  const handleRepeatOrder = (order: Order) => {
-    const shawarmas = shawarmasQuery.data || [];
-    order.orderItems.forEach(item => {
-      const shawarma = shawarmas.find(s => s.id === item.shawarmaId);
-      if (shawarma) {
-        const addons: SelectedAddon[] = (item.selectedAddons || []).map(a => ({
-          addonId: a.addonId,
-          addonName: a.addonName,
-          price: a.price,
-          quantity: a.quantity,
-          categoryId: a.addonCategoryId,
-          categoryName: a.addonCategoryName,
-        }));
-        addItem(shawarma, item.quantity, addons, '');
-      }
-    });
-    setSnackbar({ open: true, message: `Товары из заказа #${order.id} добавлены в корзину`, severity: 'success' });
+  const handleRepeatOrder = async (order: Order) => {
+    try {
+      const result = await repeatOrder.mutateAsync(order.id);
+      const { message, severity } = describeRepeatResult(order.id, result);
+      setSnackbar({ open: true, message, severity });
+    } catch {
+      setSnackbar({ open: true, message: 'Не удалось повторить заказ', severity: 'error' });
+    }
   };
-  
+
   // Состояния для диалогов
   const [editDialog, setEditDialog] = React.useState<{
     open: boolean;
@@ -440,7 +430,7 @@ const OrdersPage: React.FC = () => {
   const [snackbar, setSnackbar] = React.useState({
     open: false,
     message: '',
-    severity: 'success' as 'success' | 'error'
+    severity: 'success' as 'success' | 'error' | 'warning'
   });
 
   const [statusFilter, setStatusFilter] = React.useState<OrderStatus | 'all'>('all');

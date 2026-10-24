@@ -779,6 +779,39 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("user_addresses");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.UserFavorite", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("ShawarmaId")
+                        .HasColumnType("integer")
+                        .HasColumnName("shawarma_id");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShawarmaId");
+
+                    b.HasIndex("UserId", "ShawarmaId")
+                        .IsUnique();
+
+                    b.ToTable("user_favorites");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.UserPointsTransaction", b =>
                 {
                     b.Property<int>("Id")
@@ -1084,6 +1117,25 @@ namespace Kumashaurma.API.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.UserFavorite", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.Shawarma", "Shawarma")
+                        .WithMany()
+                        .HasForeignKey("ShawarmaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Kumashaurma.API.Models.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Shawarma");
 
                     b.Navigation("User");
                 });

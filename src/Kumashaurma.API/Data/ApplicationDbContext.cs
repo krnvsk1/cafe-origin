@@ -35,6 +35,9 @@ namespace Kumashaurma.API.Data
         // Loyalty points
         public DbSet<UserPointsTransaction> UserPointsTransactions { get; set; } = null!;
 
+        // Favorites
+        public DbSet<UserFavorite> UserFavorites { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -210,6 +213,22 @@ namespace Kumashaurma.API.Data
                     .WithMany()
                     .HasForeignKey(e => e.PerformedBy)
                     .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // UserFavorite configuration
+            modelBuilder.Entity<UserFavorite>(entity =>
+            {
+                entity.HasIndex(e => new { e.UserId, e.ShawarmaId }).IsUnique();
+                entity.HasIndex(e => e.ShawarmaId);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(e => e.Shawarma)
+                    .WithMany()
+                    .HasForeignKey(e => e.ShawarmaId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             // Shawarma self-referencing hierarchy (parent_id)
