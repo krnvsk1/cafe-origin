@@ -6,6 +6,7 @@ export type EgaisStatus = 'awaiting_regid' | 'ready' | 'act_sent' | 'accepted' |
 
 export interface EgaisState {
   enabled: boolean;
+  configured: boolean;
   utmUrl: string;
   fsrarId: string | null;
   reachable: boolean;
@@ -133,3 +134,32 @@ export const useEgaisAct = () => {
     },
   });
 };
+
+// ================= Настройки =================
+
+export interface EgaisSettings {
+  enabled: boolean;
+  utmUrl: string;
+  fsrarId: string;
+  autoSyncMinutes: number;
+  savedInAdmin?: boolean;
+  updatedAt?: string | null;
+}
+
+export const useEgaisSettings = (enabled = true) =>
+  useQuery<EgaisSettings>({
+    queryKey: ['egais', 'settings'],
+    queryFn: () => apiClient.get('/api/egais/settings').then(r => r.data),
+    enabled,
+  });
+
+export const useSaveEgaisSettings = () => {
+  const qc = useQueryClient();
+  return useMutation<EgaisSettings, Error, Omit<EgaisSettings, 'savedInAdmin' | 'updatedAt'>>({
+    mutationFn: (data) => apiClient.put('/api/egais/settings', data).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['egais'] }),
+  });
+};
+
+export const testUtmConnection = (utmUrl: string) =>
+  apiClient.post<{ ok: boolean; message: string }>('/api/egais/settings/test', { utmUrl }).then(r => r.data);

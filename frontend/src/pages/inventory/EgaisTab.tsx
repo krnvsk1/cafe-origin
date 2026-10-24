@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import {
   Sync as SyncIcon, Close as CloseIcon, ChevronRight as ChevronRightIcon, LocalBarOutlined as BeerIcon,
-  Add as AddIcon, CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon,
+  Add as AddIcon, CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon, SettingsOutlined as SettingsIcon,
 } from '@mui/icons-material';
 import {
   useEgaisState, useEgaisDocuments, useEgaisDocument, useEgaisSync, useEgaisMapping, useEgaisAct, EGAIS_STATUS,
@@ -17,6 +17,7 @@ import { useCan, P } from '../../auth/permissions';
 import { tokens } from '../../theme';
 import { Panel, ListRow, EmptyState, Pill } from './ui';
 import StockItemDialog from './StockItemDialog';
+import EgaisSettingsDialog from './EgaisSettingsDialog';
 
 type CreateOption = { create: true; inputValue: string };
 const isCreate = (o: unknown): o is CreateOption => !!o && typeof o === 'object' && 'create' in (o as object);
@@ -267,6 +268,8 @@ const EgaisTab: React.FC = () => {
   const sync = useEgaisSync();
   const [openId, setOpenId] = React.useState<number | null>(null);
   const [message, setMessage] = React.useState<{ ok: boolean; text: string } | null>(null);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const canSettings = can(P.Settings);
 
   const runSync = async () => {
     setMessage(null);
@@ -301,11 +304,22 @@ const EgaisTab: React.FC = () => {
             </Box>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {!state?.enabled
-                ? 'Укажите в настройках сервера Egais:Enabled, адрес УТМ и ФСРАР ID — см. инструкцию ниже.'
+                ? (canSettings ? 'Нажмите «Подключить», укажите адрес УТМ и ФСРАР ID заведения.' : 'Попросите администратора подключить ЕГАИС.')
                 : `${state.utmUrl} · ФСРАР ID ${state.fsrarId ?? 'не указан'} · проверено ${state.lastSyncAt ? fmtDateTime(state.lastSyncAt) : 'ещё не было'}`}
             </Typography>
             {state?.lastSyncError && <Typography variant="body2" sx={{ color: tokens.chili, mt: 0.5 }}>{state.lastSyncError}</Typography>}
           </Box>
+          {canSettings && (
+            <Button
+              onClick={() => setSettingsOpen(true)}
+              startIcon={<SettingsIcon />}
+              variant={state?.enabled ? 'text' : 'contained'}
+              color={state?.enabled ? 'inherit' : 'secondary'}
+              sx={state?.enabled ? { bgcolor: t.surfaceMuted } : undefined}
+            >
+              {state?.enabled ? 'Настройки' : 'Подключить ЕГАИС'}
+            </Button>
+          )}
           {state?.enabled && can(P.InventoryManage) && (
             <Button variant="contained" color="secondary" onClick={runSync} disabled={sync.isPending}
               startIcon={sync.isPending ? <CircularProgress size={16} color="inherit" /> : <SyncIcon />}>
@@ -315,19 +329,6 @@ const EgaisTab: React.FC = () => {
         </Box>
         {message && <Alert severity={message.ok ? 'success' : 'warning'} sx={{ mt: 1.5 }} onClose={() => setMessage(null)}>{message.text}</Alert>}
       </Panel>
-
-      {!state?.enabled && (
-        <Panel>
-          <Typography sx={{ fontWeight: 700, mb: 1 }}>Как подключить</Typography>
-          <Box component="ol" sx={{ m: 0, pl: 2.5, color: 'text.secondary', '& li': { mb: 0.75 } }}>
-            <li>Установите УТМ с сайта egais.ru на компьютер в заведении и вставьте ключ с КЭП (Рутокен / JaCarta).</li>
-            <li>Проверьте, что УТМ открывается в браузере на этом компьютере: <b>http://localhost:8080</b>.</li>
-            <li>Узнайте ФСРАР ID заведения — он виден на главной странице УТМ.</li>
-            <li>В настройках сервера включите: <code>Egais:Enabled = true</code>, <code>Egais:UtmUrl</code>, <code>Egais:FsrarId</code>. Сервер должен «видеть» УТМ — быть на том же компьютере или в той же сети.</li>
-            <li>Перезапустите сервер и нажмите «Проверить входящие».</li>
-          </Box>
-        </Panel>
-      )}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
         <ToggleButtonGroup exclusive size="small" value={filter} onChange={(_, v) => v !== null && setFilter(v)}>
@@ -370,6 +371,7 @@ const EgaisTab: React.FC = () => {
       </Panel>
 
       <EgaisDocumentDialog id={openId} onClose={() => setOpenId(null)} />
+      <EgaisSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </Box>
   );
 };
