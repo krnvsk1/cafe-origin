@@ -160,7 +160,6 @@ const OrderCard: React.FC<{
   onEdit: (order: Order) => void;
   onRepeatOrder: (order: Order) => void;
 }> = ({ order, isAdmin, onDelete, onEdit, onRepeatOrder }) => {
-  const theme = useTheme();
   const [expanded, setExpanded] = React.useState(false);
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const updateStatus = useUpdateOrderStatus();
