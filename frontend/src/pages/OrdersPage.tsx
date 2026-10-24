@@ -48,6 +48,7 @@ import OrderReviewBlock from '../components/OrderReviewBlock';
 import { useAuthStore } from '../store/authStore';
 import type { Order, OrderStatus, OrderItemAddon, UpdateOrderDto } from '../types';
 import { getStatusColor } from '../utils/statusColors';
+import { useCan, P } from '../auth/permissions';
 
 // Компонент для отображения статуса с цветом
 const StatusChip: React.FC<{ status: OrderStatus }> = ({ status }) => {
@@ -160,6 +161,7 @@ const OrderCard: React.FC<{
   onEdit: (order: Order) => void;
   onRepeatOrder: (order: Order) => void;
 }> = ({ order, isAdmin, onDelete, onEdit, onRepeatOrder }) => {
+  const canManage = useCan()(P.OrdersManage);
   const [expanded, setExpanded] = React.useState(false);
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const updateStatus = useUpdateOrderStatus();
@@ -272,7 +274,7 @@ const OrderCard: React.FC<{
                 </Tooltip>
               )}
 
-              {isAdmin && (
+              {isAdmin && canManage && (
                 <>
                   <Tooltip title="Редактировать заказ">
                     <IconButton 
@@ -398,8 +400,9 @@ const OrderCard: React.FC<{
 // Основной компонент страницы
 const OrdersPage: React.FC = () => {
   const theme = useTheme();
-  const { isAuthenticated, hasRole, user } = useAuthStore();
-  const isAdmin = isAuthenticated && (hasRole('admin') || hasRole('manager') || hasRole('courier'));
+  const { isAuthenticated, user } = useAuthStore();
+  const can = useCan();
+  const isAdmin = isAuthenticated && can(P.OrdersView, P.OrdersManage, P.Kitchen, P.Delivery);
   
   // Используем разные хуки в зависимости от роли
   const allOrdersQuery = useOrders(isAdmin);

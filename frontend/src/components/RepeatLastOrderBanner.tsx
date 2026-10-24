@@ -4,14 +4,16 @@ import { Replay as ReplayIcon } from '@mui/icons-material';
 import { useMyOrders } from '../api/hooks';
 import { useAuthStore } from '../store/authStore';
 import { useRepeatOrder, describeRepeatResult } from '../api/reorder';
+import { useCan, STAFF_PERMISSIONS } from '../auth/permissions';
 
 /**
  * Плашка «Повторить прошлый заказ» для авторизованных клиентов.
  * Показывается, если у пользователя есть хотя бы один не отменённый заказ.
  */
 const RepeatLastOrderBanner: React.FC = () => {
-  const { isAuthenticated, hasRole } = useAuthStore();
-  const isStaff = isAuthenticated && (hasRole('admin') || hasRole('manager') || hasRole('courier'));
+  const { isAuthenticated } = useAuthStore();
+  const can = useCan();
+  const isStaff = isAuthenticated && can(...STAFF_PERMISSIONS);
   const { data: orders } = useMyOrders(isAuthenticated && !isStaff);
   const repeatOrder = useRepeatOrder();
   const [toast, setToast] = React.useState<{ message: string; severity: 'success' | 'warning' | 'error' } | null>(null);

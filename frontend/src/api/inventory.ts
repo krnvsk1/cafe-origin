@@ -295,7 +295,8 @@ export const fmtDateTime = (iso: string | null | undefined) =>
 
 /** Текст ошибки из ответа API */
 export const apiError = (error: unknown, fallback = 'Что-то пошло не так') => {
-  const e = error as { response?: { data?: { message?: string; Message?: string } }; message?: string };
+  const e = error as { response?: { status?: number; data?: { message?: string; Message?: string } }; message?: string };
+  if (e?.response?.status === 403) return 'Недостаточно прав — попросите администратора добавить их вашей роли';
   return e?.response?.data?.message || e?.response?.data?.Message || e?.message || fallback;
 };
 

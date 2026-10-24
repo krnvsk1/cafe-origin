@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import TelegramConnectDialog from './TelegramConnectDialog';
 import { Telegram as TelegramIcon } from '@mui/icons-material';
+import { staffHomePath } from '../auth/permissions';
 
 interface ProfileMenuProps {
   onLoginClick: () => void;
@@ -28,7 +29,7 @@ interface ProfileMenuProps {
 
 export default function ProfileMenu({ onLoginClick }: ProfileMenuProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const { user, isAuthenticated, logout, hasRole } = useAuthStore();
+  const { user, isAuthenticated, logout } = useAuthStore();
   const navigate = useNavigate();
 
   const [telegramOpen, setTelegramOpen] = useState(false);
@@ -58,7 +59,7 @@ export default function ProfileMenu({ onLoginClick }: ProfileMenuProps) {
   };
 
   const handleAdminDashboard = () => {
-    navigate('/admin/dashboard');
+    navigate(staffHomePath(user) ?? '/');
     handleClose();
   };
 
@@ -89,7 +90,8 @@ export default function ProfileMenu({ onLoginClick }: ProfileMenuProps) {
   }
 
   // Авторизован - показать меню профиля
-  const isAdmin = hasRole('admin') || hasRole('manager');
+  const staffHome = staffHomePath(user);
+  const isAdmin = staffHome !== null;
   const initials = user.firstName
     ? `${user.firstName[0]}${user.lastName?.[0] || ''}`.toUpperCase()
     : user.phone.slice(-2);
@@ -150,9 +152,9 @@ export default function ProfileMenu({ onLoginClick }: ProfileMenuProps) {
           </Typography>
           {user.roles.length > 0 && (
             <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5 }}>
-              {user.roles.includes('admin') ? 'Администратор' :
-               user.roles.includes('manager') ? 'Менеджер' :
-               user.roles.includes('courier') ? 'Курьер' : 'Клиент'}
+              {user.roleTitles?.length
+                ? user.roleTitles.join(', ')
+                : user.roles.includes('admin') ? 'Администратор' : 'Клиент'}
             </Typography>
           )}
         </Box>

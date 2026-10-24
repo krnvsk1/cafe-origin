@@ -6,7 +6,7 @@ import {
 import { CloudDownloadOutlined as ImportIcon } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
-import { useAuthStore } from '../store/authStore';
+import { useCan, P } from '../auth/permissions';
 
 interface ImportResult {
   categories: number;
@@ -20,7 +20,7 @@ interface ImportResult {
 
 /** Кнопка «Импорт с kumashaurma.ru» для администратора */
 const MenuImportButton: React.FC = () => {
-  const isAdmin = useAuthStore(s => s.hasRole('admin'));
+  const isAdmin = useCan()(P.MenuImport);
   const queryClient = useQueryClient();
   const [open, setOpen] = React.useState(false);
   const [downloadImages, setDownloadImages] = React.useState(true);

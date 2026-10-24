@@ -10,6 +10,7 @@ import SuppliersTab from './SuppliersTab';
 import ReportsTab from './ReportsTab';
 import TechCardEditor from './TechCardEditor';
 import DocumentEditor from './DocumentEditor';
+import { useCan, P } from '../../auth/permissions';
 
 const TABS = [
   { value: 'stock', label: 'Остатки' },
@@ -30,7 +31,11 @@ type TabValue = typeof TABS[number]['value'];
 const InventoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { tab: tabParam } = useParams();
-  const tab: TabValue = (TABS.find(t => t.value === tabParam)?.value ?? 'stock');
+  const can = useCan();
+  // Только техкарты (без доступа к складу) — показываем одну вкладку «Блюда»
+  const canView = can(P.InventoryView);
+  const tabs = canView ? TABS : TABS.filter(t => t.value === 'dishes');
+  const tab: TabValue = (tabs.find(t => t.value === tabParam)?.value ?? tabs[0].value);
   const { data: summary } = useInventorySummary();
 
   const [lowOnly, setLowOnly] = React.useState(false);
@@ -46,7 +51,7 @@ const InventoryPage: React.FC = () => {
       <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.75rem', sm: '2.1rem' }, mb: 2 }}>Склад</Typography>
 
       {/* Сводка */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: { xs: 1, sm: 1.5 }, mb: 2.5 }}>
+      <Box sx={{ display: canView ? 'grid' : 'none', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: { xs: 1, sm: 1.5 }, mb: 2.5 }}>
         <StatTile
           label="На складе на сумму"
           value={summary ? fmtMoney(summary.stockValue) : '…'}
@@ -97,7 +102,7 @@ const InventoryPage: React.FC = () => {
           },
         }}
       >
-        {TABS.map(t => <Tab key={t.value} value={t.value} label={t.label} />)}
+        {tabs.map(t => <Tab key={t.value} value={t.value} label={t.label} />)}
       </Tabs>
 
       {tab === 'stock' && <StockTab mode="stock" lowOnlyDefault={lowOnly} onOpenDocument={setOpenDocId} />}

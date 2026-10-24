@@ -240,7 +240,7 @@ export interface Shawarma {
 
   // ==================== USERS (Пользователи) ====================
 
-  export type UserRole = 'user' | 'admin' | 'manager' | 'courier';
+  export type UserRole = string;
 
   export interface User {
     id: number;
@@ -249,6 +249,10 @@ export interface Shawarma {
     lastName?: string | null;
     phoneVerified: boolean;
     roles: string[];
+    /** Разрешения по всем ролям (приходят с профилем) */
+    permissions?: string[];
+    /** Названия ролей для интерфейса */
+    roleTitles?: string[];
     createdAt?: string;
   }
 

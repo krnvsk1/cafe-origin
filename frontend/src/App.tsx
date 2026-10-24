@@ -27,6 +27,7 @@ import {
   LightModeOutlined as LightModeIcon,
   ShoppingBagOutlined as ShoppingBagIcon,
   Inventory2Outlined as InventoryIcon,
+  AdminPanelSettingsOutlined as RolesIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
@@ -63,6 +64,9 @@ import CourierPage from './pages/CourierPage';
 import AdminDeliveryZonesPage from './pages/AdminDeliveryZonesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import InventoryPage from './pages/inventory/InventoryPage';
+import RolesPage from './pages/RolesPage';
+import { P, useCan } from './auth/permissions';
+import { apiClient } from './api/client';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -100,7 +104,9 @@ function App() {
   const phone = useOrderFlowStore((state) => state.phone);
   const setPhone = useOrderFlowStore((state) => state.setPhone);
 
-  const { isAuthenticated, hasRole, logout } = useAuthStore();
+  const { isAuthenticated, logout } = useAuthStore();
+  const setUser = useAuthStore((state) => state.setUser);
+  const can = useCan();
   const user = useAuthStore((state) => state.user);
   const clearCart = useCartStore((state) => state.clearCart);
   const resetCustomerData = useOrderFlowStore((state) => state.resetCustomerData);
@@ -137,6 +143,15 @@ function App() {
     }
   }, [orderOpen, isAuthenticated, user]);
 
+  // При запуске обновляем профиль: роли и права могли измениться, пока вкладка была закрыта
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    apiClient.get('/api/auth/me')
+      .then(res => setUser(res.data))
+      .catch(() => { /* 401 обработает перехватчик */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, userId]);
+
   // Открыто как мини-приложение Telegram — разворачиваем и пробуем войти;
   // запоминаем реферальный код из ссылки ?ref=
   useEffect(() => {
@@ -155,8 +170,6 @@ function App() {
     };
   }, [logout]);
 
-  const isAdmin = isAuthenticated && (hasRole('admin') || hasRole('manager'));
-  const isAdminRole = isAuthenticated && hasRole('admin');
 
   const theme = React.useMemo(() => createAppTheme(themeMode), [themeMode]);
 
@@ -170,22 +183,23 @@ function App() {
     setMobileMenuOpen(false);
   };
 
-  // Разделы управления: показываются по ролям (и в меню «Управление», и в боковом меню)
+  // Разделы управления: показываются по правам ролей (и в меню «Управление», и в боковом меню)
   const staffLinks = ([
-    { text: 'Дашборд', icon: <DashboardIcon />, path: '/admin/dashboard', roles: ['admin', 'manager'] },
-    { text: 'Аналитика', icon: <InsightsIcon />, path: '/admin/analytics', roles: ['admin', 'manager'] },
-    { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', roles: ['admin', 'manager'] },
-    { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', roles: ['courier', 'admin', 'manager'] },
-    { text: 'Товары', icon: <AddIcon />, path: '/admin/menu', roles: ['admin', 'manager'] },
-    { text: 'Стоп-лист', icon: <BlockIcon />, path: '/admin/stoplist', roles: ['admin', 'manager'] },
-    { text: 'Зоны доставки', icon: <MapIcon />, path: '/admin/zones', roles: ['admin', 'manager'] },
-    { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', roles: ['admin', 'manager'] },
-    { text: 'Отзывы', icon: <ReviewsIcon />, path: '/admin/reviews', roles: ['admin', 'manager'] },
-    { text: 'Склад', icon: <InventoryIcon />, path: '/admin/inventory', roles: ['admin'] },
-    { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', roles: ['admin'] },
-    { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', roles: ['admin'] },
-  ] as { text: string; icon: React.ReactNode; path: string; roles: string[] }[])
-    .filter(link => isAuthenticated && link.roles.some(r => hasRole(r)));
+    { text: 'Дашборд', icon: <DashboardIcon />, path: '/admin/dashboard', perms: [P.Dashboard] },
+    { text: 'Аналитика', icon: <InsightsIcon />, path: '/admin/analytics', perms: [P.Analytics] },
+    { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', perms: [P.Kitchen] },
+    { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', perms: [P.Delivery, P.CouriersAssign] },
+    { text: 'Товары', icon: <AddIcon />, path: '/admin/menu', perms: [P.Menu] },
+    { text: 'Стоп-лист', icon: <BlockIcon />, path: '/admin/stoplist', perms: [P.StopList] },
+    { text: 'Зоны доставки', icon: <MapIcon />, path: '/admin/zones', perms: [P.Zones] },
+    { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', perms: [P.PromoCodes] },
+    { text: 'Отзывы', icon: <ReviewsIcon />, path: '/admin/reviews', perms: [P.Reviews] },
+    { text: 'Склад', icon: <InventoryIcon />, path: '/admin/inventory', perms: [P.InventoryView, P.TechCards] },
+    { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', perms: [P.Menu] },
+    { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', perms: [P.UsersView, P.UsersRoles] },
+    { text: 'Роли и доступы', icon: <RolesIcon />, path: '/admin/roles', perms: [P.Roles] },
+  ] as { text: string; icon: React.ReactNode; path: string; perms: string[] }[])
+    .filter(link => isAuthenticated && can(...link.perms));
 
   const getMenuItems = () => {
     const items: { text: string; icon: React.ReactNode; path: string }[] = [
@@ -360,35 +374,22 @@ function App() {
                 <Route path="/order" element={<Navigate to="/" replace />} />
                 <Route path="/order/:id/success" element={<OrderSuccessPage />} />
 
-                {isAdmin && (
-                  <>
-                    <Route path="/admin/dashboard" element={<DashboardPage />} />
-                    <Route path="/admin/menu" element={<AdminMenuPage />} />
-                    <Route path="/admin/promocodes" element={<AdminPromoCodesPage />} />
-                    <Route path="/admin/stoplist" element={<AdminStopListPage />} />
-                    <Route path="/admin/reviews" element={<AdminReviewsPage />} />
-                    <Route path="/kitchen" element={<KitchenPage />} />
-                    <Route path="/admin/zones" element={<AdminDeliveryZonesPage />} />
-                    <Route path="/admin/analytics" element={<AnalyticsPage />} />
-                  </>
-                )}
-
-                {isAdminRole && (
-                  <>
-                    <Route path="/admin/create" element={<CreateMenuItemPage />} />
-                    <Route path="/admin/inventory" element={<InventoryPage />} />
-                    <Route path="/admin/inventory/:tab" element={<InventoryPage />} />
-                    <Route path="/admin/users" element={<UsersPage />} />
-                  </>
-                )}
-
-                {isAuthenticated && (hasRole('courier') || isAdmin) && (
-                  <Route path="/courier" element={<CourierPage />} />
-                )}
-
-                <Route path="/admin/edit/:id" element={
-                  isAdminRole ? <CreateMenuItemPage /> : <Navigate to="/" replace />
-                } />
+                {/* Разделы управления — только при наличии прав */}
+                {can(P.Dashboard) && <Route path="/admin/dashboard" element={<DashboardPage />} />}
+                {can(P.Analytics) && <Route path="/admin/analytics" element={<AnalyticsPage />} />}
+                {can(P.Kitchen) && <Route path="/kitchen" element={<KitchenPage />} />}
+                {can(P.Delivery, P.CouriersAssign) && <Route path="/courier" element={<CourierPage />} />}
+                {can(P.Menu) && <Route path="/admin/menu" element={<AdminMenuPage />} />}
+                {can(P.Menu) && <Route path="/admin/create" element={<CreateMenuItemPage />} />}
+                {can(P.Menu) && <Route path="/admin/edit/:id" element={<CreateMenuItemPage />} />}
+                {can(P.StopList) && <Route path="/admin/stoplist" element={<AdminStopListPage />} />}
+                {can(P.Zones) && <Route path="/admin/zones" element={<AdminDeliveryZonesPage />} />}
+                {can(P.PromoCodes) && <Route path="/admin/promocodes" element={<AdminPromoCodesPage />} />}
+                {can(P.Reviews) && <Route path="/admin/reviews" element={<AdminReviewsPage />} />}
+                {can(P.InventoryView, P.TechCards) && <Route path="/admin/inventory" element={<InventoryPage />} />}
+                {can(P.InventoryView, P.TechCards) && <Route path="/admin/inventory/:tab" element={<InventoryPage />} />}
+                {can(P.UsersView, P.UsersRoles) && <Route path="/admin/users" element={<UsersPage />} />}
+                {can(P.Roles) && <Route path="/admin/roles" element={<RolesPage />} />}
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

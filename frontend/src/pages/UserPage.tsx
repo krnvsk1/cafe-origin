@@ -20,22 +20,33 @@ import {
   Remove as RemoveIcon,
   FilterList as FilterIcon,
   Star as StarIcon,
+  Shield as ShieldIcon,
 } from '@mui/icons-material';
+import { useRoles, roleColor } from '../api/roles';
+import { useCan, P } from '../auth/permissions';
+import { apiError } from '../api/inventory';
 import { useUsers, useAssignRole, useRemoveRole, useUserPointsBalance, useAdminGrantPoints } from '../api/hooks';
 import type { User, UserRole } from '../types';
 
-// Конфигурация ролей
-const ROLES_CONFIG: Record<UserRole, { label: string; color: string; icon: React.ReactNode }> = {
-  user: { label: 'Пользователь', color: '#6b7280', icon: <PersonIcon fontSize="small" /> },
-  admin: { label: 'Администратор', color: '#dc2626', icon: <AdminIcon fontSize="small" /> },
-  manager: { label: 'Менеджер', color: '#2563eb', icon: <ManagerIcon fontSize="small" /> },
-  courier: { label: 'Курьер', color: '#16a34a', icon: <CourierIcon fontSize="small" /> },
+// Иконки встроенных ролей; у созданных админом — общая
+const ROLE_ICONS: Record<string, React.ReactNode> = {
+  user: <PersonIcon fontSize="small" />,
+  admin: <AdminIcon fontSize="small" />,
+  manager: <ManagerIcon fontSize="small" />,
+  courier: <CourierIcon fontSize="small" />,
 };
-
-const ALL_ROLES: UserRole[] = ['user', 'admin', 'manager', 'courier'];
 
 const UsersPage: React.FC = () => {
   const theme = useTheme();
+  const can = useCan();
+  const canAssign = can(P.UsersRoles);
+  const canPoints = can(P.Points);
+  const { data: roles = [] } = useRoles();
+  const ALL_ROLES = roles.map(r => r.name);
+  const roleCfg = (key: string) => {
+    const info = roles.find(r => r.name === key);
+    return { label: info?.title ?? key, color: roleColor(key), icon: ROLE_ICONS[key] ?? <ShieldIcon fontSize="small" /> };
+  };
   const [roleFilter, setRoleFilter] = React.useState<UserRole | ''>('');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -105,13 +116,13 @@ const UsersPage: React.FC = () => {
       await assignRole.mutateAsync({ userId: userForDialog.id, role: { role: roleToAdd } });
       setSnackbar({
         open: true,
-        message: `Роль "${ROLES_CONFIG[roleToAdd].label}" успешно назначена`,
+        message: `Роль "${roleCfg(roleToAdd).label}" успешно назначена`,
         severity: 'success'
       });
     } catch (error) {
       setSnackbar({
         open: true,
-        message: 'Ошибка при назначении роли',
+        message: apiError(error, 'Ошибка при назначении роли'),
         severity: 'error'
       });
     }
@@ -126,13 +137,13 @@ const UsersPage: React.FC = () => {
       await removeRole.mutateAsync({ userId: selectedUser.id, role });
       setSnackbar({
         open: true,
-        message: `Роль "${role}" успешно удалена`,
+        message: `Роль «${roleCfg(role).label}» снята`,
         severity: 'success'
       });
     } catch (error) {
       setSnackbar({
         open: true,
-        message: 'Ошибка при удалении роли',
+        message: apiError(error, 'Ошибка при удалении роли'),
         severity: 'error'
       });
     }
@@ -188,7 +199,7 @@ const UsersPage: React.FC = () => {
   };
 
   const getRoleChip = (role: string) => {
-    const config = ROLES_CONFIG[role as UserRole] || ROLES_CONFIG.user;
+    const config = roleCfg(role);
     return (
       <Chip
         size="small"
@@ -300,7 +311,7 @@ const UsersPage: React.FC = () => {
                 <MenuItem value="">Все роли</MenuItem>
                 {ALL_ROLES.map(role => (
                   <MenuItem key={role} value={role}>
-                    {ROLES_CONFIG[role].label}
+                    {roleCfg(role).label}
                   </MenuItem>
                 ))}
               </Select>
@@ -446,7 +457,7 @@ const UsersPage: React.FC = () => {
           {selectedUser ? `Действия для ${getFullName(selectedUser)}` : ''}
         </Typography>
         
-        {selectedUser && getAvailableRolesToAdd(selectedUser).length > 0 && (
+        {canAssign && selectedUser && getAvailableRolesToAdd(selectedUser).length > 0 && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 1, display: 'block' }}>
               Добавить роль:
@@ -454,17 +465,17 @@ const UsersPage: React.FC = () => {
             {getAvailableRolesToAdd(selectedUser).map((role) => (
               <MenuItem key={role} onClick={() => handleOpenRoleDialog(role)}>
                 <ListItemIcon>
-                  <AddIcon fontSize="small" sx={{ color: ROLES_CONFIG[role].color }} />
+                  <AddIcon fontSize="small" sx={{ color: roleCfg(role).color }} />
                 </ListItemIcon>
                 <ListItemText>
-                  {ROLES_CONFIG[role].label}
+                  {roleCfg(role).label}
                 </ListItemText>
               </MenuItem>
             ))}
           </>
         )}
 
-        {selectedUser && selectedUser.roles.length > 0 && (
+        {canAssign && selectedUser && selectedUser.roles.length > 0 && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 1, display: 'block' }}>
               Удалить роль:
@@ -475,14 +486,14 @@ const UsersPage: React.FC = () => {
                   <RemoveIcon fontSize="small" color="error" />
                 </ListItemIcon>
                 <ListItemText>
-                  {ROLES_CONFIG[role as UserRole]?.label || role}
+                  {roleCfg(role).label}
                 </ListItemText>
               </MenuItem>
             ))}
           </>
         )}
 
-        {selectedUser && (
+        {canPoints && selectedUser && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 1, display: 'block' }}>
               Баллы:
@@ -508,7 +519,7 @@ const UsersPage: React.FC = () => {
         <DialogTitle>Подтверждение</DialogTitle>
         <DialogContent>
           <Typography>
-            Добавить роль <strong>{ROLES_CONFIG[roleToAdd].label}</strong> пользователю{' '}
+            Добавить роль <strong>{roleCfg(roleToAdd).label}</strong> пользователю{' '}
             <strong>{userForDialog ? getFullName(userForDialog) : ''}</strong>?
           </Typography>
         </DialogContent>

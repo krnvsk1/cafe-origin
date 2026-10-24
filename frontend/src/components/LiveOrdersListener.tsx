@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
 import type { OrderEvent } from '../types';
+import { useCan, STAFF_PERMISSIONS } from '../auth/permissions';
 
 const CUSTOMER_MESSAGES: Partial<Record<OrderEvent['status'], string>> = {
   'Готовится': 'начали готовить',
@@ -20,8 +21,9 @@ const CUSTOMER_MESSAGES: Partial<Record<OrderEvent['status'], string>> = {
  * клиенту — о смене статуса его заказа).
  */
 const LiveOrdersListener: React.FC = () => {
-  const { isAuthenticated, hasRole } = useAuthStore();
-  const isStaff = isAuthenticated && (hasRole('admin') || hasRole('manager') || hasRole('courier'));
+  const { isAuthenticated } = useAuthStore();
+  const can = useCan();
+  const isStaff = isAuthenticated && can(...STAFF_PERMISSIONS);
   const invalidate = useInvalidateOnOrderEvent();
   const navigate = useNavigate();
   const [toast, setToast] = React.useState<{ text: string; orderId: number } | null>(null);

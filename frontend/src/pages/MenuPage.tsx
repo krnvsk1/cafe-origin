@@ -32,6 +32,7 @@ import ProductModal from '../components/ProductModal';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { tokens } from '../theme';
+import { useCan, P } from '../auth/permissions';
 
 // Сетка карточек: 2 колонки на телефоне, 3 на планшете и ноутбуке, 4 на широком экране
 const gridSx = {
@@ -129,8 +130,9 @@ const MenuPage: React.FC = () => {
   const theme = useTheme();
   const isWide = useMediaQuery(theme.breakpoints.up('lg'));
 
-  const { isAuthenticated, hasRole } = useAuthStore();
-  const isAdminRole = isAuthenticated && hasRole('admin');
+  const { isAuthenticated } = useAuthStore();
+  const can = useCan();
+  const isAdminRole = isAuthenticated && can(P.Menu);
 
   const { data: menuItems, isLoading, error, refetch } = useShawarmas();
 
