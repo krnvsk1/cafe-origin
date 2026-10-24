@@ -53,6 +53,10 @@ namespace Kumashaurma.API.Data
         public DbSet<TechCard> TechCards { get; set; } = null!;
         public DbSet<TechCardLine> TechCardLines { get; set; } = null!;
 
+        // ЕГАИС
+        public DbSet<EgaisDocument> EgaisDocuments { get; set; } = null!;
+        public DbSet<EgaisDocumentLine> EgaisDocumentLines { get; set; } = null!;
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -368,6 +372,29 @@ namespace Kumashaurma.API.Data
                     .HasForeignKey(e => e.StockItemId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
+
+            modelBuilder.Entity<EgaisDocument>(entity =>
+            {
+                entity.HasIndex(e => e.WbRegId);
+                entity.HasIndex(e => new { e.ShipperFsrarId, e.Number, e.Date });
+                entity.HasIndex(e => e.Status);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.HasMany(e => e.Lines)
+                    .WithOne(l => l.Document)
+                    .HasForeignKey(l => l.DocumentId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<EgaisDocumentLine>(entity =>
+            {
+                entity.HasIndex(e => e.DocumentId);
+                entity.HasOne(e => e.StockItem)
+                    .WithMany()
+                    .HasForeignKey(e => e.StockItemId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<StockItem>(entity => entity.HasIndex(e => e.EgaisAlcCode));
 
             // Shawarma self-referencing hierarchy (parent_id)
             modelBuilder.Entity<Shawarma>(entity =>

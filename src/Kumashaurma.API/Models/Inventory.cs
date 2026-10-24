@@ -92,6 +92,11 @@ namespace Kumashaurma.API.Models
         [Column("is_archived")]
         public bool IsArchived { get; set; }
 
+        /// <summary>Код продукции ЕГАИС (AlcCode) — чтобы позиции накладных сопоставлялись автоматически</summary>
+        [MaxLength(64)]
+        [Column("egais_alc_code")]
+        public string? EgaisAlcCode { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }

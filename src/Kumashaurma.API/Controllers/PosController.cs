@@ -91,7 +91,9 @@ namespace Kumashaurma.API.Controllers
                     s.ParentId,
                     ParentName = s.Parent != null ? s.Parent.Name : null,
                     ParentAvailable = s.Parent == null || s.Parent.IsAvailable,
-                    HasChildren = s.Children.Any()
+                    HasChildren = s.Children.Any(),
+                    s.OrderTypes,
+                    ParentTypes = s.Parent != null ? s.Parent.OrderTypes : null
                 })
                 .ToDictionaryAsync(s => s.Id);
 
@@ -100,6 +102,8 @@ namespace Kumashaurma.API.Controllers
                 if (!dishes.TryGetValue(id, out var d)) return BadRequest(new { message = "Позиция не найдена — обновите меню" });
                 if (!d.IsAvailable || !d.ParentAvailable) return BadRequest(new { message = $"«{d.ParentName ?? d.Name}» сейчас в стоп-листе" });
                 if (d.HasChildren) return BadRequest(new { message = $"Выберите вариант для «{d.Name}»" });
+                if (!SalesChannels.Allows(d.OrderTypes, d.ParentTypes, request.OrderType))
+                    return BadRequest(new { message = $"«{d.ParentName ?? d.Name}» нельзя продать {(request.OrderType == SalesChannels.DineIn ? "в зале" : "с собой")}" });
             }
 
             // Цены добавок — как в карточке товара: своя цена для блюда или базовая

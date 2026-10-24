@@ -111,7 +111,8 @@ namespace Kumashaurma.API.Controllers
                 ParentId = dto.ParentId,
                 SortOrder = dto.SortOrder,
                 Category = dto.Category?.Trim() ?? string.Empty,
-                Badge = string.IsNullOrWhiteSpace(dto.Badge) ? null : dto.Badge.Trim()
+                Badge = string.IsNullOrWhiteSpace(dto.Badge) ? null : dto.Badge.Trim(),
+                OrderTypes = SalesChannels.Format(dto.AvailableOrderTypes)
             };
 
             _context.Shawarmas.Add(shawarma);
@@ -145,6 +146,8 @@ namespace Kumashaurma.API.Controllers
             if (dto.SortOrder.HasValue) shawarma.SortOrder = dto.SortOrder.Value;
             if (dto.Category != null) shawarma.Category = dto.Category.Trim();
             if (dto.Badge != null) shawarma.Badge = string.IsNullOrWhiteSpace(dto.Badge) ? null : dto.Badge.Trim();
+            // Пустой список или все способы — без ограничений
+            if (dto.AvailableOrderTypes != null) shawarma.OrderTypes = SalesChannels.Format(dto.AvailableOrderTypes);
 
             shawarma.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -202,6 +205,8 @@ namespace Kumashaurma.API.Controllers
         public int SortOrder { get; set; }
         public string? Category { get; set; }
         public string? Badge { get; set; }
+        /// <summary>Где можно заказать: «Доставка», «Самовывоз», «В зале»; пусто/все — везде</summary>
+        public List<string>? AvailableOrderTypes { get; set; }
     }
 
     public class UpdateShawarmaDto
@@ -217,6 +222,8 @@ namespace Kumashaurma.API.Controllers
         public int? SortOrder { get; set; }
         public string? Category { get; set; }
         public string? Badge { get; set; }
+        /// <summary>Где можно заказать: «Доставка», «Самовывоз», «В зале»; пусто/все — везде</summary>
+        public List<string>? AvailableOrderTypes { get; set; }
     }
 
     public class ReorderItem

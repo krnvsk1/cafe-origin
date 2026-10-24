@@ -315,6 +315,18 @@ namespace Kumashaurma.API.Controllers
                 // Зона доставки: если зоны настроены, адрес доставки должен в них попадать
                 DeliveryZone? deliveryZone = null;
                 var deliveryType = !string.IsNullOrEmpty(request.DeliveryType) ? request.DeliveryType : "Доставка";
+
+                // Позиции с ограничением по способу получения (например, пиво — только в зале)
+                var restricted = await _context.Shawarmas.AsNoTracking()
+                    .Where(s => shawarmaIds.Contains(s.Id) && (s.OrderTypes != null || (s.Parent != null && s.Parent.OrderTypes != null)))
+                    .Select(s => new { s.Name, s.OrderTypes, ParentName = s.Parent != null ? s.Parent.Name : null, ParentTypes = s.Parent != null ? s.Parent.OrderTypes : null })
+                    .ToListAsync();
+                var blocked = restricted.FirstOrDefault(r => !SalesChannels.Allows(r.OrderTypes, r.ParentTypes, deliveryType));
+                if (blocked != null)
+                {
+                    var allowed = SalesChannels.Parse(blocked.OrderTypes) ?? SalesChannels.Parse(blocked.ParentTypes) ?? SalesChannels.All;
+                    return BadRequest(new { Message = $"«{blocked.ParentName ?? blocked.Name}» можно заказать {SalesChannels.Describe(allowed)} — уберите позицию из корзины или выберите другой способ получения" });
+                }
                 if (deliveryType == "Доставка")
                 {
                     var zones = await _context.DeliveryZones.AsNoTracking()

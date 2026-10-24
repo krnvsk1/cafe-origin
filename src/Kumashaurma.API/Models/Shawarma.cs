@@ -66,6 +66,23 @@ namespace Kumashaurma.API.Models
         public string? Badge { get; set; }
         
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        /// <summary>
+        /// Где позицию можно заказать: «Доставка», «Самовывоз», «В зале» через запятую.
+        /// null — везде. Например, пиво — только «В зале».
+        /// </summary>
+        [MaxLength(60)]
+        [Column("order_types")]
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? OrderTypes { get; set; }
+
+        /// <summary>Способы получения, для которых позиция доступна (null — все)</summary>
+        [NotMapped]
+        public string[]? AvailableOrderTypes
+        {
+            get => SalesChannels.Parse(OrderTypes);
+            set => OrderTypes = SalesChannels.Format(value);
+        }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         
