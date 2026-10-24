@@ -34,3 +34,6 @@ frontend/frontend@0.0.0
 frontend/tsc
 frontend/dist/
 xcuserdata/
+
+# Фото, загруженные локально через админку и импорт меню (уже добавленные в репозиторий остаются)
+src/Kumashaurma.API/wwwroot/uploads/*
