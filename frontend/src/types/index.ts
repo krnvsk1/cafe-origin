@@ -59,7 +59,17 @@ export interface Shawarma {
   
   // ==================== ORDER (Заказы) ====================
   
-  export type OrderStatus = 'Новый' | 'Готовится' | 'Готов' | 'Доставлен' | 'Отменён';
+  export type OrderStatus = 'Новый' | 'Готовится' | 'Готов' | 'В пути' | 'Доставлен' | 'Выполнен' | 'Отменён';
+
+  // Событие по заказу из потока /api/events
+  export interface OrderEvent {
+    type: 'created' | 'status' | 'updated' | 'deleted';
+    orderId: number;
+    userId: number | null;
+    status: OrderStatus;
+    previousStatus: OrderStatus | null;
+    occurredAt: string;
+  }
   
   export interface OrderItem {
     id: number;

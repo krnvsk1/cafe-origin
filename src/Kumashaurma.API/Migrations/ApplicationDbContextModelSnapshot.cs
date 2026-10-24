@@ -237,6 +237,11 @@ namespace Kumashaurma.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AccessToken")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("access_token");
+
                     b.Property<string>("Address")
                         .IsRequired()
                         .HasMaxLength(500)

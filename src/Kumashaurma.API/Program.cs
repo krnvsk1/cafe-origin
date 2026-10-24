@@ -133,6 +133,18 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
         ClockSkew = TimeSpan.Zero
     };
+
+    // EventSource (SSE) не умеет отправлять заголовки — для /api/events берём токен из ?access_token=
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/api/events"))
+                context.Token = accessToken;
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();
@@ -144,6 +156,10 @@ builder.Services.Configure<RestaurantOptions>(builder.Configuration.GetSection(R
 builder.Services.AddScoped<ISmsService, SmsService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IVerificationService, VerificationService>();
+
+// Живые обновления заказов
+builder.Services.AddSingleton<IOrderEventBus, OrderEventBus>();
+builder.Services.AddScoped<IOrderStatusService, OrderStatusService>();
 
 // CORS
 builder.Services.AddCors(options =>

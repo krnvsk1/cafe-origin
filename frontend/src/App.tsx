@@ -37,6 +37,7 @@ import CartModal from './components/CartModal';
 import OrderModal from './components/OrderModal';
 import AuthModal from './components/AuthModal';
 import ProfileMenu from './components/ProfileMenu';
+import LiveOrdersListener from './components/LiveOrdersListener';
 
 // Страницы
 import DashboardPage from './pages/DashboardPage';
@@ -433,6 +434,7 @@ function App() {
                 px: { xs: 2, sm: 3, md: 4 },
               }}
             >
+              <LiveOrdersListener />
               <Routes>
                 <Route path="/" element={<MenuPage />} />
                 <Route path="/orders" element={<OrdersPage />} />

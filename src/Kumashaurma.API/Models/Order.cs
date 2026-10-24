@@ -57,6 +57,13 @@ namespace Kumashaurma.API.Models
         [Column("completed_at")]
         public DateTime? CompletedAt { get; set; }
 
+        // Секретный токен для отслеживания заказа без входа (гостевые заказы).
+        // Не отдаётся в обычных ответах API — только при создании заказа.
+        [MaxLength(64)]
+        [Column("access_token")]
+        [JsonIgnore]
+        public string? AccessToken { get; set; }
+
         // Заказ ко времени (UTC). null — «как можно скорее»
         [Column("scheduled_for")]
         public DateTime? ScheduledFor { get; set; }

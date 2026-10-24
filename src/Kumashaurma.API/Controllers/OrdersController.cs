@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
 using Kumashaurma.API.Options;
+using Kumashaurma.API.Services;
 using Microsoft.Extensions.Options;
 
 namespace Kumashaurma.API.Controllers
@@ -16,12 +17,21 @@ namespace Kumashaurma.API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ILogger<OrdersController> _logger;
         private readonly RestaurantOptions _restaurant;
+        private readonly IOrderStatusService _statusService;
+        private readonly IOrderEventBus _events;
 
-        public OrdersController(ApplicationDbContext context, ILogger<OrdersController> logger, IOptions<RestaurantOptions> restaurant)
+        public OrdersController(
+            ApplicationDbContext context,
+            ILogger<OrdersController> logger,
+            IOptions<RestaurantOptions> restaurant,
+            IOrderStatusService statusService,
+            IOrderEventBus events)
         {
             _context = context;
             _logger = logger;
             _restaurant = restaurant.Value;
+            _statusService = statusService;
+            _events = events;
         }
 
         [HttpGet]
@@ -74,8 +84,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpGet("{id}")]
-        [Authorize]
-        public async Task<IActionResult> GetById(int id)
+        public async Task<IActionResult> GetById(int id, [FromQuery] string? token)
         {
             try
             {
@@ -87,14 +96,9 @@ namespace Kumashaurma.API.Controllers
                 if (order == null)
                     return NotFound(new { Message = $"Заказ с ID {id} не найден" });
 
-                // Обычный пользователь видит только свои заказы; персонал — все
-                var isStaff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Courier);
-                if (!isStaff)
-                {
-                    var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                    if (!int.TryParse(currentUserIdClaim, out var currentUserId) || order.UserId != currentUserId)
-                        return NotFound(new { Message = $"Заказ с ID {id} не найден" });
-                }
+                // Персонал видит все заказы, клиент — свои, гость — по токену из ссылки
+                if (!CanAccessOrder(order, token))
+                    return NotFound(new { Message = $"Заказ с ID {id} не найден" });
 
                 return Ok(order);
             }
@@ -103,6 +107,25 @@ namespace Kumashaurma.API.Controllers
                 _logger.LogError(ex, "Ошибка при получении заказа ID {OrderId}", id);
                 return StatusCode(500, new { Message = "Ошибка сервера при получении заказа" });
             }
+        }
+
+        /// <summary>
+        /// Доступ к заказу: персонал — ко всем, клиент — к своим, гость — по секретному токену
+        /// </summary>
+        private bool CanAccessOrder(Order order, string? token)
+        {
+            if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Courier))
+                return true;
+
+            var currentUserIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(currentUserIdClaim, out var currentUserId) && order.UserId == currentUserId)
+                return true;
+
+            return !string.IsNullOrEmpty(token)
+                && !string.IsNullOrEmpty(order.AccessToken)
+                && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(token),
+                    System.Text.Encoding.UTF8.GetBytes(order.AccessToken));
         }
 
         /// <summary>
@@ -302,7 +325,8 @@ namespace Kumashaurma.API.Controllers
                     DiscountAmount = 0,
                     CreatedAt = DateTime.UtcNow,
                     CompletedAt = null,
-                    ScheduledFor = scheduledFor
+                    ScheduledFor = scheduledFor,
+                    AccessToken = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant()
                 };
 
                 await _context.Orders.AddAsync(newOrder);
@@ -424,10 +448,14 @@ namespace Kumashaurma.API.Controllers
                 // Рассчитываем баллы, которые будут начислены за заказ (1 балл за 100 рублей)
                 var pointsEarned = (int)(Math.Floor(newOrder.Total / 100));
 
+                _events.Publish(new OrderEvent("created", newOrder.Id, newOrder.UserId, newOrder.Status, null, DateTime.UtcNow));
+
                 return CreatedAtAction(nameof(GetById), new { id = newOrder.Id }, new
                 {
                     Order = createdOrder,
-                    PointsEarned = pointsEarned
+                    PointsEarned = pointsEarned,
+                    // Токен для отслеживания заказа без входа (сохраняется на устройстве клиента)
+                    AccessToken = newOrder.AccessToken
                 });
             }
             catch (DbUpdateException ex)
@@ -472,7 +500,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Roles = "admin,manager,courier")]
+        [Authorize(Roles = "admin,manager")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateOrderRequest request)
         {
             try
@@ -484,56 +512,6 @@ namespace Kumashaurma.API.Controllers
                 if (order == null)
                     return NotFound(new { Message = $"Заказ с ID {id} не найден" });
 
-                // Обновляем поля
-                if (!string.IsNullOrEmpty(request.Status))
-                {
-                    var oldStatus = order.Status;
-                    order.Status = request.Status;
-                    
-                    if ((request.Status == "Доставлен" || request.Status == "Выполнен") && order.CompletedAt == null)
-                    {
-                        order.CompletedAt = DateTime.UtcNow;
-
-                        // Начисляем бонусные баллы при доставке заказа (1 балл за 100 рублей)
-                        if (order.UserId.HasValue)
-                        {
-                            var user = await _context.Users.FindAsync(order.UserId.Value);
-                            if (user != null)
-                            {
-                                var alreadyAwarded = await _context.UserPointsTransactions
-                                    .AnyAsync(t => t.OrderId == order.Id && t.Type == "earned");
-
-                                if (!alreadyAwarded)
-                                {
-                                    var pointsEarned = (int)Math.Floor(order.Total / 100);
-                                    if (pointsEarned > 0)
-                                    {
-                                        user.PointsBalance += pointsEarned;
-
-                                        var transaction = new UserPointsTransaction
-                                        {
-                                            UserId = user.Id,
-                                            Type = "earned",
-                                            Amount = pointsEarned,
-                                            Description = $"Начисление за заказ #{order.Id}",
-                                            OrderId = order.Id,
-                                            CreatedAt = DateTime.UtcNow
-                                        };
-
-                                        _context.UserPointsTransactions.Add(transaction);
-                                        _logger.LogInformation("💰 Начислено {Points} баллов пользователю {UserId} за заказ {OrderId}",
-                                            pointsEarned, user.Id, order.Id);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    else if ((oldStatus == "Доставлен" || oldStatus == "Выполнен") && request.Status != "Доставлен" && request.Status != "Выполнен")
-                    {
-                        order.CompletedAt = null;
-                    }
-                }
-                
                 if (request.Total > 0)
                     order.Total = request.Total;
 
@@ -549,11 +527,19 @@ namespace Kumashaurma.API.Controllers
                 if (request.Notes != null)
                     order.Notes = request.Notes.Trim();
 
-                await _context.SaveChangesAsync();
-                
-                _logger.LogInformation("🔄 Заказ обновлен: ID {OrderId}, новый статус: {Status}", 
-                    id, order.Status);
-                    
+                if (!string.IsNullOrEmpty(request.Status) && request.Status != order.Status)
+                {
+                    // Сохраняет и остальные изменённые поля, начисляет баллы, публикует событие
+                    if (!await _statusService.ChangeStatusAsync(order, request.Status))
+                        return BadRequest(new { Message = $"Неизвестный статус: {request.Status}" });
+                }
+                else
+                {
+                    await _context.SaveChangesAsync();
+                    _events.Publish(new OrderEvent("updated", order.Id, order.UserId, order.Status, null, DateTime.UtcNow));
+                }
+
+                _logger.LogInformation("🔄 Заказ обновлен: ID {OrderId}, статус: {Status}", id, order.Status);
                 return Ok(order);
             }
             catch (Exception ex)
@@ -576,6 +562,7 @@ namespace Kumashaurma.API.Controllers
                 _context.Orders.Remove(order);
                 
                 await _context.SaveChangesAsync();
+                _events.Publish(new OrderEvent("deleted", order.Id, order.UserId, order.Status, null, DateTime.UtcNow));
                 
                 _logger.LogInformation("🗑️ Заказ удален: ID {OrderId}, клиент: {CustomerName}", 
                     id, order.CustomerName);
@@ -630,61 +617,12 @@ namespace Kumashaurma.API.Controllers
                 if (order == null)
                     return NotFound(new { Message = $"Заказ с ID {id} не найден" });
 
-                if (!string.IsNullOrEmpty(request.Status))
-                {
-                    var oldStatus = order.Status;
-                    order.Status = request.Status;
-                    
-                    if ((request.Status == "Доставлен" || request.Status == "Выполнен") && order.CompletedAt == null)
-                    {
-                        order.CompletedAt = DateTime.UtcNow;
+                if (string.IsNullOrEmpty(request.Status))
+                    return BadRequest(new { Message = "Укажите статус" });
 
-                        // Начисляем бонусные баллы при доставке заказа (1 балл за 100 рублей)
-                        if (order.UserId.HasValue)
-                        {
-                            var user = await _context.Users.FindAsync(order.UserId.Value);
-                            if (user != null)
-                            {
-                                // Проверяем, не начислялись ли уже баллы за этот заказ
-                                var alreadyAwarded = await _context.UserPointsTransactions
-                                    .AnyAsync(t => t.OrderId == order.Id && t.Type == "earned");
+                if (!await _statusService.ChangeStatusAsync(order, request.Status))
+                    return BadRequest(new { Message = $"Неизвестный статус: {request.Status}" });
 
-                                if (!alreadyAwarded)
-                                {
-                                    var pointsEarned = (int)Math.Floor(order.Total / 100);
-                                    if (pointsEarned > 0)
-                                    {
-                                        user.PointsBalance += pointsEarned;
-
-                                        var transaction = new UserPointsTransaction
-                                        {
-                                            UserId = user.Id,
-                                            Type = "earned",
-                                            Amount = pointsEarned,
-                                            Description = $"Начисление за заказ #{order.Id}",
-                                            OrderId = order.Id,
-                                            CreatedAt = DateTime.UtcNow
-                                        };
-
-                                        _context.UserPointsTransactions.Add(transaction);
-                                        _logger.LogInformation("💰 Начислено {Points} баллов пользователю {UserId} за заказ {OrderId}",
-                                            pointsEarned, user.Id, order.Id);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    else if ((oldStatus == "Доставлен" || oldStatus == "Выполнен") && request.Status != "Доставлен" && request.Status != "Выполнен")
-                    {
-                        order.CompletedAt = null;
-                    }
-                }
-
-                await _context.SaveChangesAsync();
-                
-                _logger.LogInformation("🔄 Статус заказа обновлен: ID {OrderId}, новый статус: {Status}", 
-                    id, order.Status);
-                    
                 return Ok(order);
             }
             catch (Exception ex)

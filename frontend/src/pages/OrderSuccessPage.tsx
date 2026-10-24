@@ -19,6 +19,9 @@ import {
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useOrder } from '../api/hooks';
 import { formatScheduled } from '../utils/schedule';
+import { getOrderToken } from '../utils/orderTokens';
+import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
+import OrderProgress from '../components/OrderProgress';
 
 // Animated checkmark circle using @keyframes
 const checkmarkKeyframes = `
@@ -45,6 +48,14 @@ const OrderSuccessPage: React.FC = () => {
 
   const orderId = Number(id);
   const { data: order, isLoading, error } = useOrder(orderId);
+
+  // Живые обновления статуса (работает и для гостя — по токену заказа)
+  const invalidateOnEvent = useInvalidateOnOrderEvent();
+  useEventStream(
+    orderId ? `/api/events/order/${orderId}` : null,
+    invalidateOnEvent,
+    { token: orderId ? getOrderToken(orderId) : null }
+  );
 
   // Estimated delivery time (30-45 minutes from order creation)
   const estimatedDelivery = React.useMemo(() => {
@@ -156,7 +167,7 @@ const OrderSuccessPage: React.FC = () => {
           fontSize: { xs: '1.5rem', sm: '2rem' },
         }}
       >
-        Заказ успешно оформлен!
+        {order.status === 'Новый' ? 'Заказ успешно оформлен!' : `Заказ: ${order.status.toLowerCase()}`}
       </Typography>
 
       {/* Order number */}
@@ -208,6 +219,8 @@ const OrderSuccessPage: React.FC = () => {
             })}
           </Typography>
         </Box>
+
+        <OrderProgress status={order.status} deliveryType={order.deliveryType} />
 
         <Divider sx={{ mb: 2 }} />
 

@@ -7,21 +7,26 @@ export const apiClient = axios.create({
   },
 });
 
-apiClient.interceptors.request.use((config) => {
-  // Пытаемся достать токен из хранилища Zustand (первоисточник)
+// Текущий access token (из localStorage или хранилища Zustand)
+export const getAccessToken = (): string | null => {
   let token = localStorage.getItem('token');
-  
+
   if (!token) {
     const authStorage = localStorage.getItem('kumashaurma-auth');
     if (authStorage) {
       try {
         const authData = JSON.parse(authStorage);
-        token = authData.state?.accessToken;
+        token = authData.state?.accessToken ?? null;
       } catch (e) {
         console.error('Error parsing auth storage', e);
       }
     }
   }
+  return token;
+};
+
+apiClient.interceptors.request.use((config) => {
+  const token = getAccessToken();
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

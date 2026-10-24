@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from './client';
+import { saveOrderToken, getOrderToken } from '../utils/orderTokens';
 import type { 
   Shawarma, 
   CreateShawarmaDto,
@@ -144,7 +145,10 @@ export const useMyOrders = (enabled = true) => {
 export const useOrder = (id: number) => {
   return useQuery<Order>({
     queryKey: ['order', id],
-    queryFn: () => apiClient.get(`/api/orders/${id}`).then(res => res.data),
+    // Гость открывает свой заказ по токену, сохранённому при оформлении
+    queryFn: () => apiClient
+      .get(`/api/orders/${id}`, { params: { token: getOrderToken(id) ?? undefined } })
+      .then(res => res.data),
     enabled: !!id,
   });
 };
@@ -153,9 +157,14 @@ export const useCreateOrder = () => {
   const queryClient = useQueryClient();
   return useMutation<Order, Error, CreateOrderDto>({
     // Бэкенд отвечает { order, pointsEarned } — достаём сам заказ
-    mutationFn: (data) => apiClient.post('/api/orders', data).then(res => res.data?.order ?? res.data),
+    mutationFn: (data) => apiClient.post('/api/orders', data).then(res => {
+      const order: Order = res.data?.order ?? res.data;
+      saveOrderToken(order.id, res.data?.accessToken);
+      return order;
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['my-orders'] });
       // Баллы списываются при создании заказа — обновляем баланс и историю
       queryClient.invalidateQueries({ queryKey: ['points-balance'] });
       queryClient.invalidateQueries({ queryKey: ['points-history'] });
