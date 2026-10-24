@@ -84,6 +84,21 @@ export const loadCryptoPro = async (): Promise<Plugin> => {
   const plugin = window.cadesplugin;
   if (!plugin || typeof plugin.CreateObjectAsync !== 'function')
     throw new Error('Плагин КриптоПро загружен не полностью — обновите страницу (Ctrl+F5) и проверьте, что расширение включено');
+  // Проверка связи «расширение → плагин»: если расширение есть, а сам плагин (nmcades) не установлен
+  // или не запущен, внутри cadesplugin_api падает «reading 'CreateObjectAsync'»
+  try {
+    const about = await plugin.CreateObjectAsync('CAdESCOM.About');
+    const version = await about.PluginVersion;
+    console.info('[КриптоПро] плагин', version ? await version.toString() : '?');
+  } catch (e) {
+    console.error('[КриптоПро] нет связи с плагином', e);
+    throw new Error(
+      'Расширение КриптоПро есть, но оно не может связаться с «КриптоПро ЭЦП Browser plug-in». ' +
+      'Установите или переустановите плагин (cadesplugin.exe с сайта cryptopro.ru), перезапустите браузер ' +
+      'и проверьте, что расширение «CryptoPro Extension for CAdES Browser Plug-in» включено. ' +
+      `Подробности: ${(e as { message?: string })?.message ?? e}`
+    );
+  }
   return plugin;
 };
 
