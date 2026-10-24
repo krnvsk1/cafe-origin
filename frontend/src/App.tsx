@@ -4,6 +4,7 @@ import {
   ThemeProvider, createTheme, CssBaseline, Badge,
   IconButton, Drawer, List, ListItem, ListItemButton,
   ListItemIcon, ListItemText, Divider, useMediaQuery,
+  Menu, MenuItem,
 } from '@mui/material';
 import {
   LocalDining as RestaurantIcon,
@@ -21,9 +22,11 @@ import {
   People as PeopleIcon,
   LocalOffer as PromoIcon,
   Star as StarIcon,
+  Block as BlockIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from './hooks/useTheme';
 import type { PromoCodeValidation } from './types';
 import { useCartStore, useTotalItems, useTotalPrice } from './store/cartStore';
@@ -44,6 +47,7 @@ import AdminMenuPage from './pages/AdminMenuPage';
 import UsersPage from './pages/UserPage';
 import AdminPromoCodesPage from './pages/AdminPromoCodesPage';
 import PointsPage from './pages/PointsPage';
+import AdminStopListPage from './pages/AdminStopListPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,6 +67,7 @@ function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [promoInfo, setPromoInfo] = useState<PromoCodeValidation | null>(null);
   const [pointsDiscount, setPointsDiscount] = useState(0);
+  const [adminMenuAnchor, setAdminMenuAnchor] = useState<HTMLElement | null>(null);
 
   const cartOpen = useOrderFlowStore((state) => state.cartOpen);
   const deliveryType = useOrderFlowStore((state) => state.deliveryType);
@@ -174,29 +179,26 @@ function App() {
     setMobileMenuOpen(false);
   };
 
+  // Разделы управления: показываются по ролям (и в меню «Управление», и в боковом меню)
+  const staffLinks = ([
+    { text: 'Дашборд', icon: <DashboardIcon />, path: '/admin/dashboard', roles: ['admin', 'manager'] },
+    { text: 'Товары', icon: <AddIcon />, path: '/admin/menu', roles: ['admin', 'manager'] },
+    { text: 'Стоп-лист', icon: <BlockIcon />, path: '/admin/stoplist', roles: ['admin', 'manager'] },
+    { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', roles: ['admin', 'manager'] },
+    { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', roles: ['admin'] },
+    { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', roles: ['admin'] },
+  ] as { text: string; icon: React.ReactNode; path: string; roles: string[] }[])
+    .filter(link => isAuthenticated && link.roles.some(r => hasRole(r)));
+
   const getMenuItems = () => {
-    const items = [
+    const items: { text: string; icon: React.ReactNode; path: string; highlight?: boolean }[] = [
       { text: 'Меню', icon: <HomeIcon />, path: '/' },
       { text: 'Мои заказы', icon: <ListAltIcon />, path: '/orders' },
       { text: 'Мои баллы', icon: <StarIcon />, path: '/points' },
       { text: 'Новый заказ', icon: <AddCartIcon />, path: '/order', highlight: true },
     ];
 
-    if (isAdmin) {
-      items.push(
-        { text: 'Дашборд', icon: <DashboardIcon />, path: '/admin/dashboard' },
-        { text: 'Товары', icon: <AddIcon />, path: '/admin/menu' },
-        { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes' },
-      );
-    }
-
-    if (isAdminRole) {
-      items.push(
-        { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create' },
-        { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users' },
-      );
-    }
-
+    staffLinks.forEach(link => items.push({ text: link.text, icon: link.icon, path: link.path }));
     return items;
   };
 
@@ -318,42 +320,33 @@ function App() {
                       </Button>
                     </Box>
 
-                    {isAdmin && (
-                      <Box sx={{ display: 'flex', gap: 1, ml: 2 }}>
+                    {staffLinks.length > 0 && (
+                      <Box sx={{ ml: 2 }}>
                         <Button
-                          component={Link}
-                          to="/admin/dashboard"
+                          onClick={(e) => setAdminMenuAnchor(e.currentTarget)}
                           startIcon={<DashboardIcon />}
+                          endIcon={<ExpandMoreIcon />}
                           sx={{ color: 'text.primary' }}
                         >
-                          Дашборд
+                          Управление
                         </Button>
-                        <Button
-                          component={Link}
-                          to="/admin/menu"
-                          startIcon={<AddIcon />}
-                          sx={{ color: 'text.primary' }}
+                        <Menu
+                          anchorEl={adminMenuAnchor}
+                          open={Boolean(adminMenuAnchor)}
+                          onClose={() => setAdminMenuAnchor(null)}
                         >
-                          Товары
-                        </Button>
-                        <Button
-                          component={Link}
-                          to="/admin/promocodes"
-                          startIcon={<PromoIcon />}
-                          sx={{ color: 'text.primary' }}
-                        >
-                          Промокоды
-                        </Button>
-                        {isAdminRole && (
-                          <Button
-                            component={Link}
-                            to="/admin/users"
-                            startIcon={<PeopleIcon />}
-                            sx={{ color: 'text.primary' }}
-                          >
-                            Пользователи
-                          </Button>
-                        )}
+                          {staffLinks.map((link) => (
+                            <MenuItem
+                              key={link.path}
+                              component={Link}
+                              to={link.path}
+                              onClick={() => setAdminMenuAnchor(null)}
+                            >
+                              <ListItemIcon>{link.icon}</ListItemIcon>
+                              <ListItemText>{link.text}</ListItemText>
+                            </MenuItem>
+                          ))}
+                        </Menu>
                       </Box>
                     )}
                   </>
@@ -449,6 +442,7 @@ function App() {
                     <Route path="/admin/dashboard" element={<DashboardPage />} />
                     <Route path="/admin/menu" element={<AdminMenuPage />} />
                     <Route path="/admin/promocodes" element={<AdminPromoCodesPage />} />
+                    <Route path="/admin/stoplist" element={<AdminStopListPage />} />
                   </>
                 )}
 

@@ -153,8 +153,13 @@ namespace Kumashaurma.API.Controllers
                 {
                     addons = await _context.Addons
                         .Include(a => a.Category)
-                        .Where(a => allAddonIds.Contains(a.Id))
+                        .Where(a => allAddonIds.Contains(a.Id) && a.IsAvailable)
                         .ToDictionaryAsync(a => a.Id, a => a);
+
+                    // Добавки из стоп-листа заказать нельзя
+                    var unavailableAddonIds = allAddonIds.Where(id => !addons.ContainsKey(id)).ToList();
+                    if (unavailableAddonIds.Any())
+                        return BadRequest(new { Message = "Некоторые добавки сейчас недоступны. Обновите корзину." });
                 }
 
                 // Получаем UserId если пользователь авторизован

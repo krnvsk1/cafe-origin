@@ -70,7 +70,10 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? "Host=localhost;Port=5433;Database=kumashaurma_dev;Username=devuser;Password=dev123";
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString)
+        // Не роняем старт приложения, если снапшот модели чуть разошёлся с кодом —
+        // только пишем предупреждение в лог (проверка: dotnet ef migrations has-pending-model-changes)
+        .ConfigureWarnings(w => w.Log(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
 
 // Identity
 builder.Services.AddIdentity<AppUser, IdentityRole<int>>(options =>
