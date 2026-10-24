@@ -35,24 +35,28 @@ export interface Certificate {
   validTo: Date;
 }
 
-let loading: Promise<Plugin> | null = null;
+let loading: Promise<void> | null = null;
 
-/** Загрузить и дождаться плагин; понятная ошибка, если он не установлен */
-export const loadCryptoPro = (): Promise<Plugin> => {
+/**
+ * Загрузить и дождаться плагин; понятная ошибка, если он не установлен.
+ * Важно: window.cadesplugin сам является промисом (его значение — undefined), а методы
+ * CreateObjectAsync и константы висят на самом объекте. Поэтому промис плагина нельзя
+ * «резолвить» наружу — он развернётся в undefined. Ждём готовности и берём window.cadesplugin.
+ */
+const waitPlugin = (): Promise<void> => {
   if (loading) return loading;
-  loading = new Promise<Plugin>((resolve, reject) => {
+  loading = new Promise<void>((resolve, reject) => {
     const ready = () => {
       const plugin = window.cadesplugin;
       if (!plugin) {
         reject(new Error('Плагин КриптоПро не найден'));
         return;
       }
-      // В современных браузерах cadesplugin — промис, который выполняется, когда расширение готово
       Promise.race([
-        Promise.resolve(plugin).then(() => plugin),
+        Promise.resolve(plugin),
         new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000)),
       ])
-        .then(() => resolve(plugin))
+        .then(() => resolve())
         .catch(() => reject(new Error(
           'Не удалось подключиться к плагину КриптоПро. Проверьте, что установлены КриптоПро CSP, ' +
           '«КриптоПро ЭЦП Browser plug-in» и расширение для браузера, и разрешите сайту доступ к плагину.'
@@ -73,6 +77,14 @@ export const loadCryptoPro = (): Promise<Plugin> => {
     throw e;
   });
   return loading;
+};
+
+export const loadCryptoPro = async (): Promise<Plugin> => {
+  await waitPlugin();
+  const plugin = window.cadesplugin;
+  if (!plugin || typeof plugin.CreateObjectAsync !== 'function')
+    throw new Error('Плагин КриптоПро загружен не полностью — обновите страницу (Ctrl+F5) и проверьте, что расширение включено');
+  return plugin;
 };
 
 const field = (subject: string, ...keys: string[]) => {
