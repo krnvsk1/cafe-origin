@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Kumashaurma.API.Authorization;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Extensions;
@@ -21,14 +20,74 @@ namespace Kumashaurma.API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly EgaisService _egais;
         private readonly UtmClient _utm;
-        private readonly EgaisOptions _options;
+        private readonly EgaisSettingsProvider _settings;
 
-        public EgaisController(ApplicationDbContext context, EgaisService egais, UtmClient utm, IOptions<EgaisOptions> options)
+        public EgaisController(ApplicationDbContext context, EgaisService egais, UtmClient utm, EgaisSettingsProvider settings)
         {
             _context = context;
             _egais = egais;
             _utm = utm;
-            _options = options.Value;
+            _settings = settings;
+        }
+
+        private EgaisOptions _options => _settings.Current;
+
+        public class SettingsRequest
+        {
+            public bool Enabled { get; set; }
+            public string UtmUrl { get; set; } = "http://localhost:8080";
+            public string? FsrarId { get; set; }
+            public int AutoSyncMinutes { get; set; } = 10;
+        }
+
+        public class TestRequest
+        {
+            public string UtmUrl { get; set; } = string.Empty;
+        }
+
+        // GET: api/egais/settings
+        [HttpGet("settings")]
+        [HasPermission(Permissions.Settings)]
+        public IActionResult GetSettings() => Ok(new
+        {
+            _options.Enabled,
+            _options.UtmUrl,
+            _options.FsrarId,
+            _options.AutoSyncMinutes,
+            savedInAdmin = _settings.FromDatabase,
+            updatedAt = _settings.UpdatedAt
+        });
+
+        // PUT: api/egais/settings — сохранить; действует сразу
+        [HttpPut("settings")]
+        [HasPermission(Permissions.Settings)]
+        public async Task<IActionResult> SaveSettings([FromBody] SettingsRequest request)
+        {
+            var options = new EgaisOptions
+            {
+                Enabled = request.Enabled,
+                UtmUrl = (request.UtmUrl ?? "").Trim().TrimEnd('/'),
+                FsrarId = (request.FsrarId ?? "").Trim(),
+                AutoSyncMinutes = request.AutoSyncMinutes
+            };
+            var error = EgaisSettingsProvider.Validate(options);
+            if (error != null) return BadRequest(new { message = error });
+
+            await _settings.SaveAsync(options, User.GetUserId());
+            return GetSettings();
+        }
+
+        // POST: api/egais/settings/test — проверить связь с УТМ по введённому адресу (без сохранения)
+        [HttpPost("settings/test")]
+        [HasPermission(Permissions.Settings)]
+        public async Task<IActionResult> Test([FromBody] TestRequest request)
+        {
+            var probe = new EgaisOptions { UtmUrl = request.UtmUrl ?? "" };
+            var error = EgaisSettingsProvider.Validate(probe);
+            if (error != null) return BadRequest(new { message = error });
+
+            var (ok, message) = await _utm.PingAsync(probe.UtmUrl, HttpContext.RequestAborted);
+            return Ok(new { ok, message = ok ? "УТМ отвечает" : message });
         }
 
         public class MappingRequest
@@ -60,7 +119,7 @@ namespace Kumashaurma.API.Controllers
         [HttpGet("status")]
         public async Task<IActionResult> Status()
         {
-            var reachable = _options.Enabled && await _utm.PingAsync(HttpContext.RequestAborted);
+            var reachable = _options.Enabled && (await _utm.PingAsync(null, HttpContext.RequestAborted)).Ok;
             var counts = await _context.EgaisDocuments.AsNoTracking()
                 .GroupBy(d => d.Status)
                 .Select(g => new { g.Key, Count = g.Count() })
@@ -69,6 +128,7 @@ namespace Kumashaurma.API.Controllers
             return Ok(new
             {
                 enabled = _options.Enabled,
+                configured = _options.Enabled && !string.IsNullOrWhiteSpace(_options.FsrarId),
                 utmUrl = _options.UtmUrl,
                 fsrarId = string.IsNullOrWhiteSpace(_options.FsrarId) ? null : _options.FsrarId,
                 reachable,
@@ -86,7 +146,7 @@ namespace Kumashaurma.API.Controllers
         [HasPermission(Permissions.InventoryManage)]
         public async Task<IActionResult> Sync()
         {
-            if (!_options.Enabled) return BadRequest(new { message = "ЕГАИС не подключён — укажите настройки Egais в appsettings" });
+            if (!_options.Enabled) return BadRequest(new { message = "ЕГАИС выключен — включите его в настройках" });
             try
             {
                 var r = await _egais.SyncAsync(HttpContext.RequestAborted);

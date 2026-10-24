@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Kumashaurma.API.Data;
 using Kumashaurma.API.Models;
 
@@ -16,18 +15,20 @@ namespace Kumashaurma.API.Services.Egais
         private readonly ApplicationDbContext _context;
         private readonly UtmClient _utm;
         private readonly IInventoryService _inventory;
-        private readonly EgaisOptions _options;
+        private readonly EgaisSettingsProvider _settings;
         private readonly ILogger<EgaisService> _logger;
 
         public EgaisService(ApplicationDbContext context, UtmClient utm, IInventoryService inventory,
-            IOptions<EgaisOptions> options, ILogger<EgaisService> logger)
+            EgaisSettingsProvider settings, ILogger<EgaisService> logger)
         {
             _context = context;
             _utm = utm;
             _inventory = inventory;
-            _options = options.Value;
+            _settings = settings;
             _logger = logger;
         }
+
+        private EgaisOptions _options => _settings.Current;
 
         public static DateTime? LastSyncAt { get; private set; }
         public static string? LastSyncError { get; private set; }
@@ -373,27 +374,34 @@ namespace Kumashaurma.API.Services.Egais
         public EgaisException(string message) : base(message) { }
     }
 
-    /// <summary>Фоновая проверка входящих в УТМ</summary>
+    /// <summary>Фоновая проверка входящих в УТМ (настройки читаются каждый раз — их можно менять в админке)</summary>
     public class EgaisSyncWorker : BackgroundService
     {
         private readonly IServiceScopeFactory _scopes;
-        private readonly EgaisOptions _options;
+        private readonly EgaisSettingsProvider _settings;
         private readonly ILogger<EgaisSyncWorker> _logger;
 
-        public EgaisSyncWorker(IServiceScopeFactory scopes, IOptions<EgaisOptions> options, ILogger<EgaisSyncWorker> logger)
+        public EgaisSyncWorker(IServiceScopeFactory scopes, EgaisSettingsProvider settings, ILogger<EgaisSyncWorker> logger)
         {
             _scopes = scopes;
-            _options = options.Value;
+            _settings = settings;
             _logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            if (!_options.Enabled || _options.AutoSyncMinutes <= 0) return;
+            try { await _settings.LoadAsync(); }
+            catch (Exception ex) { _logger.LogWarning("ЕГАИС: не удалось прочитать настройки — {Message}", ex.Message); }
 
-            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+            var lastRun = DateTime.MinValue;
             while (!stoppingToken.IsCancellationRequested)
             {
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                var o = _settings.Current;
+                if (!o.Enabled || o.AutoSyncMinutes <= 0 || DateTime.UtcNow - lastRun < TimeSpan.FromMinutes(o.AutoSyncMinutes))
+                    continue;
+
+                lastRun = DateTime.UtcNow;
                 try
                 {
                     using var scope = _scopes.CreateScope();
@@ -405,7 +413,6 @@ namespace Kumashaurma.API.Services.Egais
                 {
                     _logger.LogWarning("ЕГАИС: синхронизация не удалась — {Message}", ex.Message);
                 }
-                await Task.Delay(TimeSpan.FromMinutes(_options.AutoSyncMinutes), stoppingToken);
             }
         }
     }

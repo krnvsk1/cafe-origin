@@ -192,8 +192,9 @@ builder.Services.AddHttpClient<YooKassaClient>(client => client.Timeout = TimeSp
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddHostedService<PaymentTimeoutService>();
 
-// ЕГАИС через УТМ (выключено, пока не задано Egais:Enabled = true)
+// ЕГАИС через УТМ: настраивается в админке (Склад → ЕГАИС), appsettings Egais — значения по умолчанию
 builder.Services.Configure<Kumashaurma.API.Services.Egais.EgaisOptions>(builder.Configuration.GetSection(Kumashaurma.API.Services.Egais.EgaisOptions.SectionName));
+builder.Services.AddSingleton<Kumashaurma.API.Services.Egais.EgaisSettingsProvider>();
 builder.Services.AddHttpClient<Kumashaurma.API.Services.Egais.UtmClient>(client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddScoped<Kumashaurma.API.Services.Egais.EgaisService>();
 builder.Services.AddHostedService<Kumashaurma.API.Services.Egais.EgaisSyncWorker>();

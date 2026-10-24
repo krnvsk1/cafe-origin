@@ -1,7 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Xml.Linq;
-using Microsoft.Extensions.Options;
 
 namespace Kumashaurma.API.Services.Egais
 {
@@ -30,15 +29,16 @@ namespace Kumashaurma.API.Services.Egais
     public class UtmClient
     {
         private readonly HttpClient _http;
-        private readonly EgaisOptions _options;
+        private readonly EgaisSettingsProvider _settings;
 
-        public UtmClient(HttpClient http, IOptions<EgaisOptions> options)
+        public UtmClient(HttpClient http, EgaisSettingsProvider settings)
         {
             _http = http;
-            _options = options.Value;
+            _settings = settings;
         }
 
-        private Uri Base => new(_options.UtmUrl.TrimEnd('/') + "/");
+        private Uri Base => BaseOf(_settings.Current.UtmUrl);
+        private static Uri BaseOf(string url) => new(url.Trim().TrimEnd('/') + "/");
 
         /// <summary>
         /// УТМ возвращает ссылки вида http://localhost:8080/opt/out/WayBill_v4/12 — берём путь
@@ -110,16 +110,25 @@ namespace Kumashaurma.API.Services.Egais
             }
         }
 
-        public async Task<bool> PingAsync(CancellationToken ct = default)
+        /// <summary>Отвечает ли УТМ (по сохранённому или переданному адресу)</summary>
+        public async Task<(bool Ok, string? Error)> PingAsync(string? url = null, CancellationToken ct = default)
         {
             try
             {
-                using var res = await _http.GetAsync(new Uri(Base, "opt/out?limit=1"), ct);
-                return res.IsSuccessStatusCode;
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(8));
+                using var res = await _http.GetAsync(new Uri(url != null ? BaseOf(url) : Base, "opt/out?limit=1"), cts.Token);
+                if (!res.IsSuccessStatusCode) return (false, $"УТМ ответил кодом {(int)res.StatusCode}");
+                var body = await res.Content.ReadAsStringAsync(cts.Token);
+                return body.Contains("<", StringComparison.Ordinal) ? (true, null) : (false, "По адресу отвечает не УТМ");
             }
-            catch
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                return false;
+                return (false, "УТМ не ответил за 8 секунд");
+            }
+            catch (Exception ex) when (ex is HttpRequestException or UriFormatException)
+            {
+                return (false, $"Нет связи: {ex.Message}");
             }
         }
     }

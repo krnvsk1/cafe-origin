@@ -53,6 +53,9 @@ namespace Kumashaurma.API.Data
         public DbSet<TechCard> TechCards { get; set; } = null!;
         public DbSet<TechCardLine> TechCardLines { get; set; } = null!;
 
+        // Настройки из админки
+        public DbSet<AppSetting> AppSettings { get; set; } = null!;
+
         // ЕГАИС
         public DbSet<EgaisDocument> EgaisDocuments { get; set; } = null!;
         public DbSet<EgaisDocumentLine> EgaisDocumentLines { get; set; } = null!;
