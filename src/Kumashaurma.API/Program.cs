@@ -70,6 +70,12 @@ builder.Services.AddSwaggerGen(options =>
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Host=localhost;Port=5433;Database=kumashaurma_dev;Username=devuser;Password=dev123";
 
+// Печатаем, к какой базе подключаемся (без пароля) — чтобы не перепутать локальный Postgres и Docker
+{
+    var csb = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+    Console.WriteLine($"🗄  База данных: {csb.Host}:{csb.Port}/{csb.Database} (пользователь {csb.Username})");
+}
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString)
         // Не роняем старт приложения, если снапшот модели чуть разошёлся с кодом —
