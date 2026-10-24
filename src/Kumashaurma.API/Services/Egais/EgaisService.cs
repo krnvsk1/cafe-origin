@@ -4,13 +4,15 @@ using Kumashaurma.API.Models;
 
 namespace Kumashaurma.API.Services.Egais
 {
-    public record SyncResult(int WayBills, int RegInfos, int Tickets, int Skipped, List<string> Errors);
+    public record SyncResult(int WayBills, int RegInfos, int Tickets, int Skipped, List<string> Errors, int ResendRequested = 0);
 
     public record ActLine(int LineId, decimal? RealQuantity);
 
     public class EgaisService
     {
         private static readonly SemaphoreSlim SyncLock = new(1, 1);
+        // Документы, уже прочитанные из УТМ (когда не удаляем их — чтобы не скачивать заново)
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> Seen = new();
 
         private readonly ApplicationDbContext _context;
         private readonly UtmClient _utm;
@@ -44,7 +46,7 @@ namespace Kumashaurma.API.Services.Egais
             try
             {
                 var refs = await _utm.ListIncomingAsync(ct);
-                int wayBills = 0, regInfos = 0, tickets = 0, skipped = 0;
+                int wayBills = 0, regInfos = 0, tickets = 0, skipped = 0, resend = 0;
                 var errors = new List<string>();
 
                 // Сначала накладные, потом справки к ним, потом квитанции
@@ -54,8 +56,17 @@ namespace Kumashaurma.API.Services.Egais
 
                 foreach (var r in refs.OrderBy(r => Order(r.Type)))
                 {
+                    if (Seen.ContainsKey(r.Url)) continue;
                     try
                     {
+                        if (r.Type.Equals("ReplyNATTN", StringComparison.OrdinalIgnoreCase))
+                        {
+                            resend += await HandleNoAnswerAsync(r, ct);
+                            Seen[r.Url] = 1;
+                            if (_options.DeleteProcessed) await _utm.DeleteAsync(r.Url, ct);
+                            continue;
+                        }
+
                         var handled = await HandleAsync(r, ct);
                         switch (handled)
                         {
@@ -64,8 +75,12 @@ namespace Kumashaurma.API.Services.Egais
                             case "ticket": tickets++; break;
                             default: skipped++; break;
                         }
-                        // Удаляем из УТМ только то, что забрали к себе
-                        if (handled != null) await _utm.DeleteAsync(r.Url, ct);
+                        if (handled != null)
+                        {
+                            Seen[r.Url] = 1;
+                            // Удаляем из УТМ только то, что забрали к себе, и только если это разрешено
+                            if (_options.DeleteProcessed) await _utm.DeleteAsync(r.Url, ct);
+                        }
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
@@ -76,7 +91,7 @@ namespace Kumashaurma.API.Services.Egais
 
                 LastSyncAt = DateTime.UtcNow;
                 LastSyncError = errors.Count > 0 ? string.Join("; ", errors.Take(3)) : null;
-                return new SyncResult(wayBills, regInfos, tickets, skipped, errors);
+                return new SyncResult(wayBills, regInfos, tickets, skipped, errors, resend);
             }
             catch (HttpRequestException ex)
             {
@@ -87,6 +102,34 @@ namespace Kumashaurma.API.Services.Egais
             {
                 SyncLock.Release();
             }
+        }
+
+        /// <summary>
+        /// Попросить ЕГАИС прислать список накладных, по которым ещё нет акта (ответ ReplyNATTN придёт во входящие).
+        /// Нужно, если накладные из очереди УТМ уже забрала другая программа (например, iiko).
+        /// </summary>
+        public async Task RequestUnacceptedAsync(CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(_options.FsrarId)) throw new EgaisException("Не указан ФСРАР ID заведения");
+            var xml = EgaisXml.BuildQuery(_options.FsrarId, "QueryNATTN", "КОД", _options.FsrarId);
+            var (ok, response) = await _utm.SendAsync("QueryNATTN", xml, ct);
+            if (!ok) throw new EgaisException($"УТМ не принял запрос: {UtmClient.ExtractError(response)}");
+        }
+
+        /// <summary>По списку неподтверждённых накладных запрашиваем повторную отправку тех, которых у нас нет</summary>
+        private async Task<int> HandleNoAnswerAsync(UtmDocumentRef r, CancellationToken ct)
+        {
+            var list = EgaisXml.ParseNoAnswer(EgaisXml.Load(await _utm.GetAsync(r.Url, ct)));
+            var known = await _context.EgaisDocuments.AsNoTracking()
+                .Where(d => d.WbRegId != null).Select(d => d.WbRegId!).ToListAsync(ct);
+            var requested = 0;
+            foreach (var ttn in list.Where(t => !known.Contains(t.WbRegId)))
+            {
+                var xml = EgaisXml.BuildQuery(_options.FsrarId, "QueryResendDoc", "WBREGID", ttn.WbRegId);
+                var (ok, _) = await _utm.SendAsync("QueryResendDoc", xml, ct);
+                if (ok) requested++;
+            }
+            return requested;
         }
 
         private async Task<string?> HandleAsync(UtmDocumentRef r, CancellationToken ct)
@@ -233,17 +276,17 @@ namespace Kumashaurma.API.Services.Egais
         /// </summary>
         public async Task<EgaisDocument> SendActAsync(int documentId, ActDecision decision, string? note, IReadOnlyCollection<ActLine> lines, int? userId)
         {
-            if (string.IsNullOrWhiteSpace(_options.FsrarId))
-                throw new EgaisException("Не указан ФСРАР ID заведения (настройка Egais:FsrarId)");
+            if (_options.SendActs && string.IsNullOrWhiteSpace(_options.FsrarId))
+                throw new EgaisException("Не указан ФСРАР ID заведения — укажите его в настройках ЕГАИС");
 
             var doc = await _context.EgaisDocuments.Include(d => d.Lines).ThenInclude(l => l.StockItem)
                 .FirstOrDefaultAsync(d => d.Id == documentId) ?? throw new EgaisException("Накладная не найдена");
 
-            if (doc.Status is not (EgaisStatuses.Ready or EgaisStatuses.Error))
+            if (doc.Status is not (EgaisStatuses.Ready or EgaisStatuses.Error) && !(doc.Status == EgaisStatuses.AwaitingRegId && !_options.SendActs))
                 throw new EgaisException(doc.Status == EgaisStatuses.AwaitingRegId
                     ? "ЕГАИС ещё не прислал регистрационный номер накладной — нажмите «Проверить входящие» чуть позже"
                     : "По этой накладной акт уже отправлен");
-            if (string.IsNullOrEmpty(doc.WbRegId)) throw new EgaisException("Нет регистрационного номера накладной");
+            if (string.IsNullOrEmpty(doc.WbRegId) && _options.SendActs) throw new EgaisException("Нет регистрационного номера накладной");
 
             foreach (var l in lines)
             {
@@ -274,6 +317,25 @@ namespace Kumashaurma.API.Services.Egais
             }
 
             var actNumber = $"A{doc.Id}-{DateTime.UtcNow:HHmmss}";
+            if (!_options.SendActs)
+            {
+                // Акты отправляет другая программа (iiko) — здесь только приход на склад
+                doc.ActNumber = null;
+                doc.ActDecision = decision.ToString();
+                doc.ActNote = string.IsNullOrWhiteSpace(note) ? null : Trunc(note.Trim(), 500);
+                doc.Status = decision switch
+                {
+                    ActDecision.Rejected => EgaisStatuses.Rejected,
+                    ActDecision.Differences => EgaisStatuses.Differences,
+                    _ => EgaisStatuses.Accepted
+                };
+                doc.ResultComment = "Акт в ЕГАИС не отправлялся — его отправляет iiko (режим «только приход на склад»)";
+                doc.ResultAt = DateTime.UtcNow;
+                await CreateReceiptAsync(doc, receiptLines, userId);
+                await _context.SaveChangesAsync();
+                return doc;
+            }
+
             var xml = EgaisXml.BuildWayBillAct(_options.FsrarId, decision, actNumber, DateTime.UtcNow.AddHours(3), doc.WbRegId!, note,
                 decision == ActDecision.Differences
                     ? doc.Lines.Select(l => new ActPosition(l.Identity, l.InformF2RegId, l.RealQuantity ?? 0))
@@ -291,6 +353,15 @@ namespace Kumashaurma.API.Services.Egais
             doc.ResultComment = null;
 
             // Приход на склад сразу — если ЕГАИС потом вернёт ошибку, приход можно отменить
+            await CreateReceiptAsync(doc, receiptLines, userId);
+
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("🍺 ЕГАИС: акт {Act} ({Decision}) по ТТН {RegId}", actNumber, decision, doc.WbRegId);
+            return doc;
+        }
+
+        private async Task CreateReceiptAsync(EgaisDocument doc, List<(StockItem Item, decimal Quantity, decimal Sum)> receiptLines, int? userId)
+        {
             if (receiptLines.Count > 0 && doc.StockDocumentId == null)
             {
                 var supplierId = await EnsureSupplierAsync(doc);
@@ -322,9 +393,6 @@ namespace Kumashaurma.API.Services.Egais
                 doc.StockDocumentId = receipt.Id;
             }
 
-            await _context.SaveChangesAsync();
-            _logger.LogInformation("🍺 ЕГАИС: акт {Act} ({Decision}) по ТТН {RegId}", actNumber, decision, doc.WbRegId);
-            return doc;
         }
 
         /// <summary>

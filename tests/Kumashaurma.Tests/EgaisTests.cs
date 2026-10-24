@@ -182,5 +182,31 @@ namespace Kumashaurma.Tests
             // Выключенный ЕГАИС можно сохранить без ФСРАР ID
             Assert.Null(EgaisSettingsProvider.Validate(new EgaisOptions { Enabled = false, UtmUrl = "http://localhost:8080" }));
         }
+    
+        [Fact]
+        public void ParsesNoAnswerAndBuildsQueries()
+        {
+            var reply = EgaisXml.Load(@"<?xml version=""1.0"" encoding=""UTF-8""?>
+<ns:Documents Version=""1.0"" xmlns:ns=""http://fsrar.ru/WEGAIS/WB_DOC_SINGLE_01"" xmlns:ttn=""http://fsrar.ru/WEGAIS/ReplyNoAnswerTTN"">
+  <ns:Owner><ns:FSRAR_ID>030000000001</ns:FSRAR_ID></ns:Owner>
+  <ns:Document><ns:ReplyNoAnswerTTN>
+    <ttn:Consignee>030000000001</ttn:Consignee>
+    <ttn:ttnlist>
+      <ttn:NoAnswer><ttn:WbRegID>TTN-0000000001</ttn:WbRegID><ttn:ttnNumber>ПН-1</ttn:ttnNumber><ttn:ttnDate>2026-10-20</ttn:ttnDate><ttn:Shipper>010000000002</ttn:Shipper></ttn:NoAnswer>
+      <ttn:NoAnswer><ttn:WbRegID>TTN-0000000002</ttn:WbRegID></ttn:NoAnswer>
+    </ttn:ttnlist>
+  </ns:ReplyNoAnswerTTN></ns:Document>
+</ns:Documents>");
+            var list = EgaisXml.ParseNoAnswer(reply);
+            Assert.Equal(2, list.Count);
+            Assert.Equal("TTN-0000000001", list[0].WbRegId);
+            Assert.Equal("ПН-1", list[0].Number);
+
+            var query = XDocument.Parse(EgaisXml.BuildQuery("030000000001", "QueryResendDoc", "WBREGID", "TTN-0000000002"));
+            XNamespace ns = EgaisXml.NsDocuments, qp = EgaisXml.NsQueryParameters;
+            var param = query.Root!.Element(ns + "Document")!.Element(ns + "QueryResendDoc")!.Element(qp + "Parameters")!.Element(qp + "Parameter")!;
+            Assert.Equal("WBREGID", param.Element(qp + "Name")!.Value);
+            Assert.Equal("TTN-0000000002", param.Element(qp + "Value")!.Value);
+        }
     }
 }

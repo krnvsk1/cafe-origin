@@ -20,6 +20,8 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
   const [utmUrl, setUtmUrl] = React.useState('http://localhost:8080');
   const [fsrarId, setFsrarId] = React.useState('');
   const [minutes, setMinutes] = React.useState('10');
+  const [sendActs, setSendActs] = React.useState(true);
+  const [deleteProcessed, setDeleteProcessed] = React.useState(false);
   const [error, setError] = React.useState('');
   const [test, setTest] = React.useState<{ ok: boolean; message: string } | null>(null);
   const [testing, setTesting] = React.useState(false);
@@ -31,6 +33,8 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
     setUtmUrl(settings.utmUrl || 'http://localhost:8080');
     setFsrarId(settings.fsrarId ?? '');
     setMinutes(String(settings.autoSyncMinutes ?? 10));
+    setSendActs(settings.sendActs ?? true);
+    setDeleteProcessed(settings.deleteProcessed ?? false);
     setError('');
     setTest(null);
   }, [open, settings]);
@@ -59,6 +63,8 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
         utmUrl: utmUrl.trim(),
         fsrarId: fsrarId.trim(),
         autoSyncMinutes: Math.max(0, parseInt(minutes, 10) || 0),
+        sendActs,
+        deleteProcessed,
       });
       onClose();
     } catch (e) {
@@ -125,6 +131,20 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
               }}
               sx={{ maxWidth: 280 }}
             />
+
+            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '14px', p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <Typography sx={{ fontWeight: 700 }}>Если с этим УТМ работает iiko или другая программа</Typography>
+              <FormControlLabel
+                control={<Switch checked={sendActs} onChange={e => setSendActs(e.target.checked)} />}
+                label={<Box><Typography sx={{ fontWeight: 600 }}>Отправлять акты приёмки из сервиса</Typography><Typography variant="body2" color="text.secondary">Выключите, если накладные подтверждает iiko — тогда здесь товар только оприходуется на склад</Typography></Box>}
+                sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
+              />
+              <FormControlLabel
+                control={<Switch checked={deleteProcessed} onChange={e => setDeleteProcessed(e.target.checked)} />}
+                label={<Box><Typography sx={{ fontWeight: 600 }}>Удалять прочитанные документы из УТМ</Typography><Typography variant="body2" color="text.secondary">Включайте, только если с УТМ работает один этот сервис — иначе iiko не увидит накладные</Typography></Box>}
+                sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
+              />
+            </Box>
 
             <Box sx={{ bgcolor: t.surfaceMuted, borderRadius: '14px', p: 2 }}>
               <Typography sx={{ fontWeight: 700, mb: 0.75 }}>Если УТМ ещё не установлен</Typography>

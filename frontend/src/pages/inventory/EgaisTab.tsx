@@ -10,6 +10,7 @@ import {
 } from '@mui/icons-material';
 import {
   useEgaisState, useEgaisDocuments, useEgaisDocument, useEgaisSync, useEgaisMapping, useEgaisAct, EGAIS_STATUS,
+  requestUnaccepted,
   type EgaisLine,
 } from '../../api/egais';
 import { useStockItems, apiError, fmtMoney, fmtDate, fmtDateTime, fmtQty, UNIT_LABELS, type StockItem } from '../../api/inventory';
@@ -35,6 +36,8 @@ const EgaisDocumentDialog: React.FC<{ id: number | null; onClose: () => void }> 
   const can = useCan();
   const canManage = can(P.InventoryManage);
   const { data: doc, isLoading } = useEgaisDocument(id);
+  const { data: egais } = useEgaisState();
+  const sendActs = egais?.sendActs ?? true;
   const { data: items = [] } = useStockItems({ kind: 'raw' });
   const mapping = useEgaisMapping();
   const act = useEgaisAct();
@@ -53,7 +56,8 @@ const EgaisDocumentDialog: React.FC<{ id: number | null; onClose: () => void }> 
 
   React.useEffect(() => { if (!id) { setMode('accept'); setNote(''); } }, [id]);
 
-  const editable = !!doc && (doc.status === 'ready' || doc.status === 'error') && canManage;
+  const editable = !!doc && canManage
+    && (doc.status === 'ready' || doc.status === 'error' || (!sendActs && doc.status === 'awaiting_regid'));
 
   const mapLine = async (lineId: number, stockItemId: number | null) => {
     if (!doc) return;
@@ -110,7 +114,10 @@ const EgaisDocumentDialog: React.FC<{ id: number | null; onClose: () => void }> 
         ) : (
           <>
             {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
-            {doc.status === 'awaiting_regid' && (
+            {!sendActs && editable && (
+              <Alert severity="info">Акты отправляет iiko — здесь товар только оприходуется на склад. Подтвердите накладную в iiko тем же решением.</Alert>
+            )}
+            {doc.status === 'awaiting_regid' && sendActs && (
               <Alert severity="info">ЕГАИС ещё не прислал регистрационный номер накладной. Обычно это несколько минут — нажмите «Проверить входящие» позже.</Alert>
             )}
             {doc.status === 'act_sent' && (
@@ -208,7 +215,7 @@ const EgaisDocumentDialog: React.FC<{ id: number | null; onClose: () => void }> 
                   <ToggleButton value="reject">Отказать</ToggleButton>
                 </ToggleButtonGroup>
                 <Typography variant="body2" color="text.secondary">
-                  {mode === 'accept' && 'В ЕГАИС уйдёт акт подтверждения, товар оприходуется на склад.'}
+                  {mode === 'accept' && (sendActs ? 'В ЕГАИС уйдёт акт подтверждения, товар оприходуется на склад.' : 'Товар оприходуется на склад.')}
                   {mode === 'differences' && 'Укажите фактически принятое количество — в ЕГАИС уйдёт акт расхождений, поставщик должен его подтвердить.'}
                   {mode === 'reject' && 'Накладная будет полностью отклонена, на склад ничего не поступит.'}
                 </Typography>
@@ -240,7 +247,9 @@ const EgaisDocumentDialog: React.FC<{ id: number | null; onClose: () => void }> 
             disabled={busy || (mode !== 'reject' && (unmapped > 0 || !!conversionProblem)) || (mode === 'reject' && !note.trim())}
             startIcon={act.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}
           >
-            {mode === 'accept' ? 'Принять и отправить акт' : mode === 'differences' ? 'Отправить акт расхождений' : 'Отказать'}
+            {!sendActs
+              ? (mode === 'reject' ? 'Отметить отказ' : 'Оприходовать')
+              : mode === 'accept' ? 'Принять и отправить акт' : mode === 'differences' ? 'Отправить акт расхождений' : 'Отказать'}
           </Button>
         )}
       </DialogActions>
@@ -269,6 +278,20 @@ const EgaisTab: React.FC = () => {
   const [openId, setOpenId] = React.useState<number | null>(null);
   const [message, setMessage] = React.useState<{ ok: boolean; text: string } | null>(null);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [requesting, setRequesting] = React.useState(false);
+
+  const runRequest = async () => {
+    setRequesting(true);
+    setMessage(null);
+    try {
+      const r = await requestUnaccepted();
+      setMessage({ ok: true, text: r.message });
+    } catch (e) {
+      setMessage({ ok: false, text: apiError(e) });
+    } finally {
+      setRequesting(false);
+    }
+  };
   const canSettings = can(P.Settings);
 
   const runSync = async () => {
@@ -279,6 +302,7 @@ const EgaisTab: React.FC = () => {
         r.wayBills && `накладных: ${r.wayBills}`,
         r.regInfos && `регистраций: ${r.regInfos}`,
         r.tickets && `квитанций: ${r.tickets}`,
+        r.resendRequested && `запрошено повторно: ${r.resendRequested}`,
       ].filter(Boolean);
       setMessage({
         ok: r.errors.length === 0,
@@ -318,6 +342,12 @@ const EgaisTab: React.FC = () => {
               sx={state?.enabled ? { bgcolor: t.surfaceMuted } : undefined}
             >
               {state?.enabled ? 'Настройки' : 'Подключить ЕГАИС'}
+            </Button>
+          )}
+          {state?.enabled && can(P.InventoryManage) && (
+            <Button onClick={runRequest} disabled={requesting} sx={{ bgcolor: t.surfaceMuted }}
+              startIcon={requesting ? <CircularProgress size={16} /> : undefined}>
+              Запросить из ЕГАИС
             </Button>
           )}
           {state?.enabled && can(P.InventoryManage) && (

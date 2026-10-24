@@ -40,6 +40,9 @@ namespace Kumashaurma.API.Services.Egais
 
     public enum ActDecision { Accepted, Rejected, Differences }
 
+    /// <summary>Неподтверждённая накладная из ответа ЕГАИС на запрос QueryNATTN</summary>
+    public record NoAnswerTtn(string WbRegId, string? Number, DateTime? Date, string? ShipperFsrarId);
+
     public record ActPosition(string Identity, string? InformF2RegId, decimal RealQuantity);
 
     /// <summary>
@@ -142,6 +145,41 @@ namespace Kumashaurma.API.Services.Egais
                 WbDate: Date(ChildText(header, "WBDate")),
                 ShipperFsrarId: Text(Child(header, "Shipper"), "ClientRegId"),
                 F2RegIdByPosition: map);
+        }
+
+        /// <summary>Ответ на QueryNATTN — список накладных, по которым ещё не отправлен акт</summary>
+        public static List<NoAnswerTtn> ParseNoAnswer(XDocument doc) =>
+            Desc(doc, "NoAnswer")
+                .Select(n => new NoAnswerTtn(
+                    ChildText(n, "WbRegID") ?? ChildText(n, "WBRegId") ?? "",
+                    ChildText(n, "ttnNumber"),
+                    Date(ChildText(n, "ttnDate")),
+                    ChildText(n, "Shipper")))
+                .Where(n => n.WbRegId.Length > 0)
+                .ToList();
+
+        public const string NsQueryParameters = "http://fsrar.ru/WEGAIS/QueryParameters";
+
+        /// <summary>Запрос с параметрами: QueryNATTN (КОД = ФСРАР ID) или QueryResendDoc (WBREGID = номер ТТН)</summary>
+        public static string BuildQuery(string fsrarId, string queryName, string paramName, string paramValue)
+        {
+            XNamespace ns = NsDocuments, qp = NsQueryParameters;
+            var doc = new XDocument(new XDeclaration("1.0", "UTF-8", null),
+                new XElement(ns + "Documents",
+                    new XAttribute("Version", "1.0"),
+                    new XAttribute(XNamespace.Xmlns + "ns", ns),
+                    new XAttribute(XNamespace.Xmlns + "qp", qp),
+                    new XElement(ns + "Owner", new XElement(ns + "FSRAR_ID", fsrarId)),
+                    new XElement(ns + "Document",
+                        new XElement(ns + queryName,
+                            new XElement(qp + "Parameters",
+                                new XElement(qp + "Parameter",
+                                    new XElement(qp + "Name", paramName),
+                                    new XElement(qp + "Value", paramValue)))))));
+            var sb = new StringBuilder();
+            using (var writer = new Utf8StringWriter(sb))
+                doc.Save(writer, SaveOptions.None);
+            return sb.ToString();
         }
 
         public static TicketData ParseTicket(XDocument doc)

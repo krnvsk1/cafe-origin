@@ -19,6 +19,17 @@ namespace Kumashaurma.API.Services.Egais
 
         /// <summary>Автоматически проверять входящие каждые N минут (0 — только вручную)</summary>
         public int AutoSyncMinutes { get; set; } = 10;
+
+        /// <summary>
+        /// Удалять обработанные документы из УТМ. Выключено по умолчанию: если с тем же УТМ работает iiko
+        /// или другая программа, она тоже должна увидеть накладные.
+        /// </summary>
+        public bool DeleteProcessed { get; set; }
+
+        /// <summary>
+        /// Отправлять акты приёмки в ЕГАИС. Выключите, если акты отправляет iiko — тогда сервис только оприходует товар на склад.
+        /// </summary>
+        public bool SendActs { get; set; } = true;
     }
 
     public record UtmDocumentRef(string Url, string Type, string? ReplyId);

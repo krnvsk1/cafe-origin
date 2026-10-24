@@ -11,6 +11,8 @@ export interface EgaisState {
   fsrarId: string | null;
   reachable: boolean;
   autoSyncMinutes: number;
+  sendActs: boolean;
+  deleteProcessed: boolean;
   lastSyncAt: string | null;
   lastSyncError: string | null;
   toProcess: number;
@@ -106,7 +108,7 @@ export const useEgaisDocument = (id: number | null) =>
 
 export const useEgaisSync = () => {
   const qc = useQueryClient();
-  return useMutation<{ wayBills: number; regInfos: number; tickets: number; skipped: number; errors: string[] }, Error, void>({
+  return useMutation<{ wayBills: number; regInfos: number; tickets: number; skipped: number; errors: string[]; resendRequested: number }, Error, void>({
     mutationFn: () => apiClient.post('/api/egais/sync').then(r => r.data),
     onSettled: () => qc.invalidateQueries({ queryKey: ['egais'] }),
   });
@@ -142,6 +144,8 @@ export interface EgaisSettings {
   utmUrl: string;
   fsrarId: string;
   autoSyncMinutes: number;
+  deleteProcessed: boolean;
+  sendActs: boolean;
   savedInAdmin?: boolean;
   updatedAt?: string | null;
 }
@@ -163,3 +167,6 @@ export const useSaveEgaisSettings = () => {
 
 export const testUtmConnection = (utmUrl: string) =>
   apiClient.post<{ ok: boolean; message: string }>('/api/egais/settings/test', { utmUrl }).then(r => r.data);
+
+export const requestUnaccepted = () =>
+  apiClient.post<{ message: string }>('/api/egais/request-unaccepted').then(r => r.data);

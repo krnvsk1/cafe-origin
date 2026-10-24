@@ -38,6 +38,8 @@ namespace Kumashaurma.API.Controllers
             public string UtmUrl { get; set; } = "http://localhost:8080";
             public string? FsrarId { get; set; }
             public int AutoSyncMinutes { get; set; } = 10;
+            public bool DeleteProcessed { get; set; }
+            public bool SendActs { get; set; } = true;
         }
 
         public class TestRequest
@@ -54,6 +56,8 @@ namespace Kumashaurma.API.Controllers
             _options.UtmUrl,
             _options.FsrarId,
             _options.AutoSyncMinutes,
+            _options.DeleteProcessed,
+            _options.SendActs,
             savedInAdmin = _settings.FromDatabase,
             updatedAt = _settings.UpdatedAt
         });
@@ -68,7 +72,9 @@ namespace Kumashaurma.API.Controllers
                 Enabled = request.Enabled,
                 UtmUrl = (request.UtmUrl ?? "").Trim().TrimEnd('/'),
                 FsrarId = (request.FsrarId ?? "").Trim(),
-                AutoSyncMinutes = request.AutoSyncMinutes
+                AutoSyncMinutes = request.AutoSyncMinutes,
+                DeleteProcessed = request.DeleteProcessed,
+                SendActs = request.SendActs
             };
             var error = EgaisSettingsProvider.Validate(options);
             if (error != null) return BadRequest(new { message = error });
@@ -133,6 +139,8 @@ namespace Kumashaurma.API.Controllers
                 fsrarId = string.IsNullOrWhiteSpace(_options.FsrarId) ? null : _options.FsrarId,
                 reachable,
                 autoSyncMinutes = _options.AutoSyncMinutes,
+                sendActs = _options.SendActs,
+                deleteProcessed = _options.DeleteProcessed,
                 lastSyncAt = EgaisService.LastSyncAt,
                 lastSyncError = EgaisService.LastSyncError,
                 toProcess = counts.GetValueOrDefault(EgaisStatuses.Ready) + counts.GetValueOrDefault(EgaisStatuses.Error),
@@ -150,11 +158,32 @@ namespace Kumashaurma.API.Controllers
             try
             {
                 var r = await _egais.SyncAsync(HttpContext.RequestAborted);
-                return Ok(new { wayBills = r.WayBills, regInfos = r.RegInfos, tickets = r.Tickets, skipped = r.Skipped, errors = r.Errors });
+                return Ok(new { wayBills = r.WayBills, regInfos = r.RegInfos, tickets = r.Tickets, skipped = r.Skipped, errors = r.Errors, resendRequested = r.ResendRequested });
             }
             catch (EgaisException ex)
             {
                 return StatusCode(502, new { message = ex.Message });
+            }
+        }
+
+        // POST: api/egais/request-unaccepted — запросить из ЕГАИС накладные без акта (если их забрала из УТМ другая программа)
+        [HttpPost("request-unaccepted")]
+        [HasPermission(Permissions.InventoryManage)]
+        public async Task<IActionResult> RequestUnaccepted()
+        {
+            if (!_options.Enabled) return BadRequest(new { message = "ЕГАИС выключен — включите его в настройках" });
+            try
+            {
+                await _egais.RequestUnacceptedAsync(HttpContext.RequestAborted);
+                return Ok(new { message = "Запрос отправлен. ЕГАИС пришлёт список за несколько минут — затем нажмите «Проверить входящие», и сервис сам запросит недостающие накладные." });
+            }
+            catch (EgaisException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (HttpRequestException)
+            {
+                return StatusCode(502, new { message = $"УТМ недоступен ({_options.UtmUrl})" });
             }
         }
 
