@@ -79,7 +79,11 @@ const waitPlugin = (): Promise<void> => {
   return loading;
 };
 
-export const loadCryptoPro = async (): Promise<Plugin> => {
+/**
+ * Готовый плагин в обёртке { plugin }. Сам объект плагина возвращать из async-функции нельзя:
+ * он «thenable», и await развернёт его в undefined.
+ */
+export const loadCryptoPro = async (): Promise<{ plugin: Plugin }> => {
   await waitPlugin();
   const plugin = window.cadesplugin;
   if (!plugin || typeof plugin.CreateObjectAsync !== 'function')
@@ -101,7 +105,7 @@ export const loadCryptoPro = async (): Promise<Plugin> => {
       `Подробности: ${(e as { message?: string })?.message ?? e}`
     );
   }
-  return plugin;
+  return { plugin };
 };
 
 const field = (subject: string, ...keys: string[]) => {
@@ -124,7 +128,7 @@ const openStore = async (plugin: Plugin) => {
 
 /** Сертификаты пользователя с закрытым ключом */
 export const listCertificates = async (): Promise<Certificate[]> => {
-  const plugin = await loadCryptoPro();
+  const { plugin } = await loadCryptoPro();
   const store = await openStore(plugin);
   try {
     const certs = await store.Certificates;
@@ -176,7 +180,7 @@ const utf8ToBase64 = (text: string) => {
  * content — данные в base64.
  */
 export const signBase64 = async (thumbprint: string, contentBase64: string, detached: boolean): Promise<string> => {
-  const plugin = await loadCryptoPro();
+  const { plugin } = await loadCryptoPro();
   const cert = await findCertificate(plugin, thumbprint);
   const signer = await plugin.CreateObjectAsync('CAdESCOM.CPSigner');
   await signer.propset_Certificate(cert);
