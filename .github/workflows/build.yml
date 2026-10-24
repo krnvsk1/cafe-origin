@@ -56,6 +56,42 @@ jobs:
           gh api repos/${{ github.repository }}/check-runs -f name="backend-report" -f head_sha="${{ github.sha }}" \
             -f status=completed -f conclusion=neutral -f "output[title]=Backend report" -F "output[summary]=@report.md"
 
+  migrations:
+    # Все миграции должны применяться к пустой базе
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: devuser
+          POSTGRES_PASSWORD: dev123
+          POSTGRES_DB: kumashaurma_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U devuser -d kumashaurma_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Apply migrations to empty database
+        env:
+          ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=kumashaurma_ci;Username=devuser;Password=dev123
+        run: |
+          dotnet tool install --global dotnet-ef --version 9.0.*
+          cd src/Kumashaurma.API
+          dotnet ef database update 2>&1 | tee ../../migrate.txt; exit ${PIPESTATUS[0]}
+      - name: Publish report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo '## dotnet ef database update'; grep -vE "^\s*$" migrate.txt | grep -iE "fail|error|exception|42P|Applying|Done|No migrations" | tail -80; } > report.md
+          gh api repos/${{ github.repository }}/check-runs -f name="migrations-report" -f head_sha="${{ github.sha }}" \
+            -f status=completed -f conclusion=neutral -f "output[title]=Migrations report" -F "output[summary]=@report.md"
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

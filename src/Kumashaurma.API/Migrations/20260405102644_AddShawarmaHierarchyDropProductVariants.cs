@@ -12,8 +12,9 @@ namespace Kumashaurma.API.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropTable(
-                name: "product_variants");
+            // Таблицу создавала миграция, которой больше нет в репозитории,
+            // поэтому в новых базах её может не быть — удаляем только если есть
+            migrationBuilder.Sql(@"DROP TABLE IF EXISTS product_variants;");
 
             migrationBuilder.AddColumn<int>(
                 name: "parent_id",
