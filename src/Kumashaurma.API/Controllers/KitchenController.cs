@@ -34,6 +34,8 @@ namespace Kumashaurma.API.Controllers
             var orders = await _context.Orders
                 .AsNoTracking()
                 .Where(o => active.Contains(o.Status) && o.CreatedAt >= since)
+                // Онлайн-заказы — только оплаченные
+                .Where(o => o.PaymentMethod != "online" || o.PaymentStatus == "paid")
                 .Include(o => o.OrderItems)
                     .ThenInclude(i => i.SelectedAddons)
                 .OrderBy(o => o.ScheduledFor ?? o.CreatedAt)
@@ -53,6 +55,8 @@ namespace Kumashaurma.API.Controllers
                     o.Total,
                     o.CreatedAt,
                     o.ScheduledFor,
+                    o.PaymentMethod,
+                    o.PaymentStatus,
                     // Заказ ко времени, до которого ещё далеко — показывается в колонке «Позже»
                     IsLater = scheduledUtc.HasValue && scheduledUtc.Value > nowUtc.AddMinutes(ScheduledLeadMinutes) && o.Status == OrderStatuses.New,
                     Items = o.OrderItems.Select(i => new

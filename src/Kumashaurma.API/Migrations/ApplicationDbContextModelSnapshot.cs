@@ -295,6 +295,27 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("text")
                         .HasColumnName("notes");
 
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<string>("PaymentId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("payment_id");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_method");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_status");
+
                     b.Property<string>("Phone")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -332,6 +353,8 @@ namespace Kumashaurma.API.Migrations
                     b.HasIndex("CourierId");
 
                     b.HasIndex("CreatedAt");
+
+                    b.HasIndex("PaymentId");
 
                     b.HasIndex("PromoCodeId");
 

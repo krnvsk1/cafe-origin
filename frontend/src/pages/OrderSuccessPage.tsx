@@ -22,6 +22,7 @@ import { formatScheduled } from '../utils/schedule';
 import { getOrderToken } from '../utils/orderTokens';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
 import OrderProgress from '../components/OrderProgress';
+import OrderPaymentBlock from '../components/OrderPaymentBlock';
 
 // Animated checkmark circle using @keyframes
 const checkmarkKeyframes = `
@@ -221,6 +222,8 @@ const OrderSuccessPage: React.FC = () => {
         </Box>
 
         <OrderProgress status={order.status} deliveryType={order.deliveryType} />
+
+        <OrderPaymentBlock order={order} />
 
         <Divider sx={{ mb: 2 }} />
 

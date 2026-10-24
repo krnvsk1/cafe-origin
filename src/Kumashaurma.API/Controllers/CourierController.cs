@@ -51,6 +51,7 @@ namespace Kumashaurma.API.Controllers
                 .AsNoTracking()
                 .Include(o => o.OrderItems)
                 .Where(o => o.DeliveryType == "Доставка" && o.CreatedAt >= since)
+                .Where(o => o.PaymentMethod != "online" || o.PaymentStatus == "paid")
                 .Where(o =>
                     (o.CourierId == null && (o.Status == OrderStatuses.Preparing || o.Status == OrderStatuses.Ready))
                     || (o.CourierId == userId.Value && (o.Status == OrderStatuses.Preparing || o.Status == OrderStatuses.Ready || o.Status == OrderStatuses.OnTheWay)))
@@ -69,6 +70,9 @@ namespace Kumashaurma.API.Controllers
                 o.CreatedAt,
                 o.ScheduledFor,
                 o.PickedUpAt,
+                o.PaymentMethod,
+                // Сколько получить с клиента при доставке
+                AmountToCollect = o.PaymentMethod == "online" ? 0 : o.Total,
                 ItemsCount = o.OrderItems.Sum(i => i.Quantity),
                 Items = o.OrderItems.Select(i => $"{i.Name} × {i.Quantity}")
             };

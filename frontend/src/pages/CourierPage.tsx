@@ -26,7 +26,9 @@ const CourierOrderCard: React.FC<{
       <Chip size="small" label={order.status} color={order.status === 'В пути' ? 'secondary' : order.status === 'Готов' ? 'success' : 'default'} />
       {order.scheduledFor && <Chip size="small" color="warning" icon={<ScheduleIcon />} label={formatScheduled(order.scheduledFor)} />}
       <Box sx={{ flex: 1 }} />
-      <Typography fontWeight={700}>{order.total} ₽</Typography>
+      {order.amountToCollect > 0
+        ? <Typography fontWeight={700}>Получить {order.amountToCollect} ₽ {order.paymentMethod === 'card' ? '(карта)' : '(наличные)'}</Typography>
+        : <Chip size="small" color="success" label="Оплачен" />}
     </Box>
 
     <Typography fontWeight={600}>{order.address}</Typography>

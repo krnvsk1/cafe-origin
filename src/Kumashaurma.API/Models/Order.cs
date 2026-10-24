@@ -68,6 +68,29 @@ namespace Kumashaurma.API.Models
         [Column("scheduled_for")]
         public DateTime? ScheduledFor { get; set; }
 
+        // Оплата: cash — наличными, card — картой при получении, online — онлайн через ЮKassa
+        [MaxLength(20)]
+        [Column("payment_method")]
+        public string PaymentMethod { get; set; } = "cash";
+
+        // unpaid | pending | paid | canceled | refunded
+        [MaxLength(20)]
+        [Column("payment_status")]
+        public string PaymentStatus { get; set; } = "unpaid";
+
+        // ID платежа в ЮKassa
+        [MaxLength(64)]
+        [Column("payment_id")]
+        [JsonIgnore]
+        public string? PaymentId { get; set; }
+
+        [Column("paid_at")]
+        public DateTime? PaidAt { get; set; }
+
+        // Онлайн-заказ виден кухне/курьерам только после оплаты
+        [NotMapped]
+        public bool IsVisibleToStaff => PaymentMethod != "online" || PaymentStatus == "paid";
+
         // Курьер, взявший заказ
         [Column("courier_id")]
         public int? CourierId { get; set; }

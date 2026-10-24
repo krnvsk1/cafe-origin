@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Kumashaurma.API.Options;
+using Kumashaurma.API.Services;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -12,10 +13,12 @@ namespace Kumashaurma.API.Controllers
     public class SettingsController : ControllerBase
     {
         private readonly RestaurantOptions _restaurant;
+        private readonly IPaymentService _payments;
 
-        public SettingsController(IOptions<RestaurantOptions> restaurant)
+        public SettingsController(IOptions<RestaurantOptions> restaurant, IPaymentService payments)
         {
             _restaurant = restaurant.Value;
+            _payments = payments;
         }
 
         [HttpGet]
@@ -30,6 +33,7 @@ namespace Kumashaurma.API.Controllers
                 _restaurant.MinLeadMinutes,
                 _restaurant.MaxDaysAhead,
                 IsOpenNow = _restaurant.IsWithinWorkingHours(nowUtc),
+                OnlinePaymentEnabled = _payments.OnlineEnabled,
                 ServerTimeUtc = nowUtc
             });
         }

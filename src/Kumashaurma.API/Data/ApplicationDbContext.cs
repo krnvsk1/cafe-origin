@@ -188,6 +188,7 @@ namespace Kumashaurma.API.Data
             // Order -> Courier configuration
             modelBuilder.Entity<Order>(entity =>
             {
+                entity.HasIndex(e => e.PaymentId);
                 entity.HasIndex(e => e.CourierId);
                 entity.HasOne(e => e.Courier)
                     .WithMany()

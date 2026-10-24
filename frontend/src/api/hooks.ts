@@ -155,12 +155,12 @@ export const useOrder = (id: number) => {
 
 export const useCreateOrder = () => {
   const queryClient = useQueryClient();
-  return useMutation<Order, Error, CreateOrderDto>({
-    // Бэкенд отвечает { order, pointsEarned } — достаём сам заказ
+  return useMutation<Order & { confirmationUrl?: string | null }, Error, CreateOrderDto>({
+    // Бэкенд отвечает { order, pointsEarned, accessToken, confirmationUrl } — достаём сам заказ
     mutationFn: (data) => apiClient.post('/api/orders', data).then(res => {
       const order: Order = res.data?.order ?? res.data;
       saveOrderToken(order.id, res.data?.accessToken);
-      return order;
+      return { ...order, confirmationUrl: res.data?.confirmationUrl ?? null };
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
@@ -473,5 +473,30 @@ export const useRestaurantSettings = () => {
     queryKey: ['restaurant-settings'],
     queryFn: () => apiClient.get('/api/settings').then(res => res.data),
     staleTime: 5 * 60 * 1000,
+  });
+};
+
+// ==================== PAYMENTS (ЮKassa) ====================
+
+export const usePaymentStatus = (orderId: number, enabled: boolean) => {
+  return useQuery<{ id: number; paymentMethod: string; paymentStatus: string; status: string }>({
+    queryKey: ['payment-status', orderId],
+    queryFn: () => apiClient
+      .get(`/api/payments/orders/${orderId}/status`, { params: { token: getOrderToken(orderId) ?? undefined } })
+      .then(res => res.data),
+    enabled: enabled && !!orderId,
+    // Пока платёж в обработке — проверяем каждые 3 секунды
+    refetchInterval: (query) => (query.state.data?.paymentStatus === 'pending' ? 3000 : false),
+  });
+};
+
+export const useStartPayment = () => {
+  return useMutation<{ confirmationUrl: string }, Error, number>({
+    mutationFn: (orderId) => apiClient
+      .post(`/api/payments/orders/${orderId}/pay`, null, { params: { token: getOrderToken(orderId) ?? undefined } })
+      .then(res => res.data),
+    onSuccess: (data) => {
+      window.location.href = data.confirmationUrl;
+    },
   });
 };

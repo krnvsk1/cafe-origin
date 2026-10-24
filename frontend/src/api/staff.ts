@@ -49,6 +49,8 @@ export interface CourierOrder {
   createdAt: string;
   scheduledFor: string | null;
   pickedUpAt: string | null;
+  paymentMethod: string;
+  amountToCollect: number;
   itemsCount: number;
   items: string[];
 }

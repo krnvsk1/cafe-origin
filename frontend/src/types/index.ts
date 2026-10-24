@@ -61,6 +61,10 @@ export interface Shawarma {
   
   export type OrderStatus = 'Новый' | 'Готовится' | 'Готов' | 'В пути' | 'Доставлен' | 'Выполнен' | 'Отменён';
 
+  // Оплата: cash — наличными, card — картой при получении, online — онлайн (ЮKassa)
+  export type PaymentMethod = 'cash' | 'card' | 'online';
+  export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'canceled' | 'refunded';
+
   // Событие по заказу из потока /api/events
   export interface OrderEvent {
     type: 'created' | 'status' | 'updated' | 'deleted';
@@ -94,6 +98,9 @@ export interface Shawarma {
     createdAt: string;          // ISO date
     completedAt: string | null; // Может быть null
     scheduledFor?: string | null; // Заказ ко времени (ISO, UTC); null — как можно скорее
+    paymentMethod?: PaymentMethod;
+    paymentStatus?: PaymentStatus;
+    paidAt?: string | null;
     orderItems?: OrderItem[];   // Связь с элементами заказа (может отсутствовать при обновлении статуса)
     deliveryType?: string;
     discountAmount?: number;
@@ -110,6 +117,7 @@ export interface Shawarma {
     promoCodeId?: number | null;
     pointsDiscountAmount?: number;
     scheduledFor?: string | null;
+    paymentMethod?: PaymentMethod;
     items: {
       shawarmaId: number;
       quantity: number;
@@ -328,5 +336,6 @@ export interface Shawarma {
     minLeadMinutes: number;
     maxDaysAhead: number;
     isOpenNow: boolean;
+    onlinePaymentEnabled: boolean;
     serverTimeUtc: string;
   }

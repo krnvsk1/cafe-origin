@@ -167,6 +167,12 @@ builder.Services.AddHttpClient<TelegramApi>(client => client.Timeout = TimeSpan.
 builder.Services.AddSingleton<TelegramAuth>();
 builder.Services.AddHostedService<TelegramNotifier>();
 
+// Онлайн-оплата ЮKassa (выключено, если не заданы YooKassa:ShopId и YooKassa:SecretKey)
+builder.Services.Configure<YooKassaOptions>(builder.Configuration.GetSection(YooKassaOptions.SectionName));
+builder.Services.AddHttpClient<YooKassaClient>(client => client.Timeout = TimeSpan.FromSeconds(20));
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddHostedService<PaymentTimeoutService>();
+
 // CORS
 builder.Services.AddCors(options =>
 {

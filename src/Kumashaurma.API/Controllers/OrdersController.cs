@@ -19,14 +19,17 @@ namespace Kumashaurma.API.Controllers
         private readonly RestaurantOptions _restaurant;
         private readonly IOrderStatusService _statusService;
         private readonly IOrderEventBus _events;
+        private readonly IPaymentService _payments;
 
         public OrdersController(
             ApplicationDbContext context,
             ILogger<OrdersController> logger,
             IOptions<RestaurantOptions> restaurant,
             IOrderStatusService statusService,
-            IOrderEventBus events)
+            IOrderEventBus events,
+            IPaymentService payments)
         {
+            _payments = payments;
             _context = context;
             _logger = logger;
             _restaurant = restaurant.Value;
@@ -230,6 +233,13 @@ namespace Kumashaurma.API.Controllers
                     }
                 }
 
+                // Способ оплаты
+                var paymentMethod = string.IsNullOrWhiteSpace(request.PaymentMethod) ? "cash" : request.PaymentMethod.Trim().ToLowerInvariant();
+                if (paymentMethod is not ("cash" or "card" or "online"))
+                    return BadRequest(new { Message = "Неизвестный способ оплаты" });
+                if (paymentMethod == "online" && !_payments.OnlineEnabled)
+                    return BadRequest(new { Message = "Онлайн-оплата сейчас недоступна" });
+
                 // Заказ ко времени
                 DateTime? scheduledFor = null;
                 if (request.ScheduledFor.HasValue)
@@ -326,6 +336,8 @@ namespace Kumashaurma.API.Controllers
                     CreatedAt = DateTime.UtcNow,
                     CompletedAt = null,
                     ScheduledFor = scheduledFor,
+                    PaymentMethod = paymentMethod,
+                    PaymentStatus = "unpaid",
                     AccessToken = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant()
                 };
 
@@ -448,14 +460,27 @@ namespace Kumashaurma.API.Controllers
                 // Рассчитываем баллы, которые будут начислены за заказ (1 балл за 100 рублей)
                 var pointsEarned = (int)(Math.Floor(newOrder.Total / 100));
 
-                _events.Publish(new OrderEvent("created", newOrder.Id, newOrder.UserId, newOrder.Status, null, DateTime.UtcNow));
+                // Онлайн-заказ уходит на кухню только после оплаты (событие публикует PaymentService)
+                string? confirmationUrl = null;
+                if (paymentMethod == "online")
+                {
+                    confirmationUrl = await _payments.StartAsync(newOrder);
+                    if (confirmationUrl == null)
+                        _logger.LogWarning("Не удалось создать платёж для заказа #{OrderId}", newOrder.Id);
+                }
+                else
+                {
+                    _events.Publish(new OrderEvent("created", newOrder.Id, newOrder.UserId, newOrder.Status, null, DateTime.UtcNow));
+                }
 
                 return CreatedAtAction(nameof(GetById), new { id = newOrder.Id }, new
                 {
                     Order = createdOrder,
                     PointsEarned = pointsEarned,
                     // Токен для отслеживания заказа без входа (сохраняется на устройстве клиента)
-                    AccessToken = newOrder.AccessToken
+                    AccessToken = newOrder.AccessToken,
+                    // Ссылка на оплату (для онлайн-оплаты); null — оплатить можно позже со страницы заказа
+                    ConfirmationUrl = confirmationUrl
                 });
             }
             catch (DbUpdateException ex)
@@ -480,6 +505,8 @@ namespace Kumashaurma.API.Controllers
             public string DeliveryType { get; set; } = "Доставка";
             public int? PromoCodeId { get; set; }
             public decimal? PointsDiscountAmount { get; set; }
+            /// <summary>cash | card | online</summary>
+            public string? PaymentMethod { get; set; }
             /// <summary>Желаемое время (UTC, ISO 8601). null — как можно скорее</summary>
             public DateTime? ScheduledFor { get; set; }
             public List<CreateOrderItemRequest> Items { get; set; } = new();

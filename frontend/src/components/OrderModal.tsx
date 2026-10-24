@@ -33,7 +33,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useCreateOrder, useRestaurantSettings } from '../api/hooks';
 import { buildScheduleDays } from '../utils/schedule';
-import type { CreateOrderDto, PromoCodeValidation } from '../types';
+import type { CreateOrderDto, PromoCodeValidation, PaymentMethod } from '../types';
 import { useCartStore } from '../store/cartStore';
 import type { DeliveryType } from '../store/orderFlowStore';
 import { resolveMediaUrl } from '../utils/media';
@@ -92,6 +92,11 @@ const OrderModal: React.FC<OrderModalProps> = ({
     [settings, open]
   );
   const isClosedNow = settings ? !settings.isOpenNow : false;
+
+  // Оплата
+  const onlineEnabled = !!settings?.onlinePaymentEnabled;
+  const [paymentMethod, setPaymentMethod] = React.useState<PaymentMethod | null>(null);
+  const effectivePayment: PaymentMethod = paymentMethod ?? (onlineEnabled ? 'online' : 'cash');
   const effectiveTimeMode = isClosedNow ? 'scheduled' : timeMode;
   const currentDay = scheduleDays.find(d => d.key === scheduledDay) ?? scheduleDays[0];
 
@@ -154,6 +159,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
       promoCodeId: promoInfo?.promoCodeId ?? null,
       pointsDiscountAmount: pointsDiscount > 0 ? pointsDiscount : undefined,
       scheduledFor: effectiveTimeMode === 'scheduled' ? scheduledSlot : null,
+      paymentMethod: effectivePayment,
       items: cartItems.map(item => ({
         shawarmaId: item.selectedChild?.id ?? item.id,
         quantity: item.quantity,
@@ -179,6 +185,11 @@ const OrderModal: React.FC<OrderModalProps> = ({
       onPhoneChange('');
       onAddressChange('');
       onClose();
+      if (result.confirmationUrl) {
+        // Переходим на страницу оплаты ЮKassa; после оплаты вернёмся на страницу заказа
+        window.location.href = result.confirmationUrl;
+        return;
+      }
       navigate(`/order/${result.id}/success`);
     } catch (error: any) {
       showSnackbar(error?.response?.data?.message || error.message || 'Ошибка при создании заказа', 'error');
@@ -335,6 +346,27 @@ const OrderModal: React.FC<OrderModalProps> = ({
                   </TextField>
                 </Box>
               )
+            )}
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Оплата</Typography>
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              size="small"
+              value={effectivePayment}
+              onChange={(_, v) => v && setPaymentMethod(v)}
+              disabled={createOrder.isPending}
+            >
+              {onlineEnabled && <ToggleButton value="online">Онлайн (карта, СБП)</ToggleButton>}
+              <ToggleButton value="card">Картой при получении</ToggleButton>
+              <ToggleButton value="cash">Наличными</ToggleButton>
+            </ToggleButtonGroup>
+            {effectivePayment === 'online' && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                После оформления откроется защищённая страница оплаты ЮKassa
+              </Typography>
             )}
           </Box>
 
@@ -522,7 +554,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
               fontSize: isMobile ? '1rem' : '1.1rem',
             }}
           >
-            {createOrder.isPending ? 'Создание...' : 'Оформить заказ'}
+            {createOrder.isPending ? 'Создание...' : effectivePayment === 'online' ? 'Оформить и оплатить' : 'Оформить заказ'}
           </Button>
         </DialogActions>
       </Dialog>

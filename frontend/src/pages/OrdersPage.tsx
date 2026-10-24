@@ -215,6 +215,11 @@ const OrderCard: React.FC<{
                 <Typography variant="body2" color="text.secondary">
                   Создан: <strong>{formatDate(order.createdAt)}</strong>
                 </Typography>
+                {order.paymentMethod === 'online' && (
+                  <Typography variant="body2" color={order.paymentStatus === 'paid' ? 'success.main' : 'warning.main'}>
+                    Онлайн-оплата: <strong>{order.paymentStatus === 'paid' ? 'оплачен' : order.paymentStatus === 'refunded' ? 'возврат' : 'не оплачен'}</strong>
+                  </Typography>
+                )}
                 {order.scheduledFor && (
                   <Typography variant="body2" color="warning.main">
                     Ко времени: <strong>{formatScheduled(order.scheduledFor)}</strong>
