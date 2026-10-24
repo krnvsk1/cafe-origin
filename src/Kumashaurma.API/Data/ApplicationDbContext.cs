@@ -50,6 +50,8 @@ namespace Kumashaurma.API.Data
             {
                 entity.ToTable("users");
                 entity.Property(u => u.Id).HasColumnName("Id");
+                entity.HasIndex(u => u.TelegramUserId).IsUnique();
+                entity.Property(u => u.TelegramNotifications).HasDefaultValue(true);
             });
             modelBuilder.Entity<IdentityRole<int>>(entity => entity.ToTable("roles"));
             modelBuilder.Entity<IdentityUserRole<int>>(entity => entity.ToTable("user_roles"));

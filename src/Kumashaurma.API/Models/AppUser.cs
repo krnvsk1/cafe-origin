@@ -30,6 +30,14 @@ namespace Kumashaurma.API.Models
         [Column("points_balance")]
         public int PointsBalance { get; set; } = 0;
 
+        // Привязанный Telegram (ID пользователя Telegram = ID личного чата с ботом)
+        [Column("telegram_user_id")]
+        public long? TelegramUserId { get; set; }
+
+        // Присылать уведомления о статусе заказов в Telegram
+        [Column("telegram_notifications")]
+        public bool TelegramNotifications { get; set; } = true;
+
         // Navigation properties
         [JsonIgnore]
         public ICollection<UserAddress> Addresses { get; set; } = new List<UserAddress>();

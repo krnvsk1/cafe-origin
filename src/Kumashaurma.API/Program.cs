@@ -161,6 +161,12 @@ builder.Services.AddScoped<IVerificationService, VerificationService>();
 builder.Services.AddSingleton<IOrderEventBus, OrderEventBus>();
 builder.Services.AddScoped<IOrderStatusService, OrderStatusService>();
 
+// Telegram: бот, уведомления, вход из мини-приложения (выключено, если не задан Telegram:BotToken)
+builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
+builder.Services.AddHttpClient<TelegramApi>(client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddSingleton<TelegramAuth>();
+builder.Services.AddHostedService<TelegramNotifier>();
+
 // CORS
 builder.Services.AddCors(options =>
 {

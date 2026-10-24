@@ -19,6 +19,8 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import TelegramConnectDialog from './TelegramConnectDialog';
+import { Telegram as TelegramIcon } from '@mui/icons-material';
 
 interface ProfileMenuProps {
   onLoginClick: () => void;
@@ -28,6 +30,8 @@ export default function ProfileMenu({ onLoginClick }: ProfileMenuProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const { user, isAuthenticated, logout, hasRole } = useAuthStore();
   const navigate = useNavigate();
+
+  const [telegramOpen, setTelegramOpen] = useState(false);
 
   const handleOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -169,6 +173,13 @@ export default function ProfileMenu({ onLoginClick }: ProfileMenuProps) {
           <ListItemText>Мои баллы</ListItemText>
         </MenuItem>
 
+        <MenuItem onClick={() => { handleClose(); setTelegramOpen(true); }} sx={{ borderRadius: 1, mx: 0.5 }}>
+          <ListItemIcon>
+            <TelegramIcon fontSize="small" sx={{ color: '#229ED9' }} />
+          </ListItemIcon>
+          <ListItemText>Telegram-уведомления</ListItemText>
+        </MenuItem>
+
         {isAdmin && (
           <MenuItem onClick={handleAdminDashboard} sx={{ borderRadius: 1, mx: 0.5 }}>
             <ListItemIcon>
@@ -187,6 +198,7 @@ export default function ProfileMenu({ onLoginClick }: ProfileMenuProps) {
           <ListItemText>Выйти</ListItemText>
         </MenuItem>
       </Menu>
+      <TelegramConnectDialog open={telegramOpen} onClose={() => setTelegramOpen(false)} />
     </>
   );
 }
