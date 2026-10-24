@@ -59,6 +59,11 @@ namespace Kumashaurma.API.Models
 
         [Column("is_promo")]
         public bool IsPromo { get; set; } = false;
+
+        // Метка на карточке: hit | new | promo | lean (null — без метки)
+        [MaxLength(20)]
+        [Column("badge")]
+        public string? Badge { get; set; }
         
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         [Column("created_at")]

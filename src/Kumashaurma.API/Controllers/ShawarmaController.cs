@@ -62,6 +62,20 @@ namespace Kumashaurma.API.Controllers
             return Ok(shawarma);
         }
 
+        // GET: api/shawarma/sections — разделы меню (поле Category у карточек)
+        [HttpGet("sections")]
+        public async Task<ActionResult<IEnumerable<string>>> GetSections()
+        {
+            var sections = await _context.Shawarmas
+                .Where(s => s.ParentId == null && s.Category != "")
+                .GroupBy(s => s.Category)
+                .Select(g => new { Name = g.Key, Order = g.Min(x => x.SortOrder) })
+                .OrderBy(x => x.Order)
+                .Select(x => x.Name)
+                .ToListAsync();
+            return Ok(sections);
+        }
+
         // GET: api/shawarma/categories
         [HttpGet("categories")]
         public async Task<ActionResult<IEnumerable<string>>> GetCategories()
@@ -80,8 +94,9 @@ namespace Kumashaurma.API.Controllers
         [Authorize(Roles = "admin,manager")]
         public async Task<ActionResult<Shawarma>> Create([FromBody] CreateShawarmaDto dto)
         {
-            if (await _context.Shawarmas.AnyAsync(s => s.Name == dto.Name))
-                return BadRequest(new { Message = "Шаурма с таким названием уже существует" });
+            // Название уникально в пределах родителя: у разных карточек могут быть варианты «Большая»
+            if (await _context.Shawarmas.AnyAsync(s => s.Name == dto.Name && s.ParentId == dto.ParentId))
+                return BadRequest(new { Message = "Позиция с таким названием уже есть" });
 
             var shawarma = new Shawarma
             {
@@ -93,7 +108,9 @@ namespace Kumashaurma.API.Controllers
                 IsAvailable = dto.IsAvailable,
                 IsPromo = dto.IsPromo,
                 ParentId = dto.ParentId,
-                SortOrder = dto.SortOrder
+                SortOrder = dto.SortOrder,
+                Category = dto.Category?.Trim() ?? string.Empty,
+                Badge = string.IsNullOrWhiteSpace(dto.Badge) ? null : dto.Badge.Trim()
             };
 
             _context.Shawarmas.Add(shawarma);
@@ -111,9 +128,10 @@ namespace Kumashaurma.API.Controllers
             if (shawarma == null)
                 return NotFound(new { Message = $"Шаурма с ID {id} не найдена" });
 
+            var parentId = dto.ParentId ?? shawarma.ParentId;
             if (dto.Name != null && dto.Name != shawarma.Name &&
-                await _context.Shawarmas.AnyAsync(s => s.Name == dto.Name))
-                return BadRequest(new { Message = "Шаурма с таким названием уже существует" });
+                await _context.Shawarmas.AnyAsync(s => s.Name == dto.Name && s.ParentId == parentId && s.Id != id))
+                return BadRequest(new { Message = "Позиция с таким названием уже есть" });
 
             if (dto.Name != null) shawarma.Name = dto.Name;
             if (dto.Price.HasValue) shawarma.Price = dto.Price.Value;
@@ -124,6 +142,8 @@ namespace Kumashaurma.API.Controllers
             if (dto.IsPromo.HasValue) shawarma.IsPromo = dto.IsPromo.Value;
             if (dto.ParentId.HasValue) shawarma.ParentId = dto.ParentId;
             if (dto.SortOrder.HasValue) shawarma.SortOrder = dto.SortOrder.Value;
+            if (dto.Category != null) shawarma.Category = dto.Category.Trim();
+            if (dto.Badge != null) shawarma.Badge = string.IsNullOrWhiteSpace(dto.Badge) ? null : dto.Badge.Trim();
 
             shawarma.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -179,6 +199,8 @@ namespace Kumashaurma.API.Controllers
         public bool IsPromo { get; set; }
         public int? ParentId { get; set; }
         public int SortOrder { get; set; }
+        public string? Category { get; set; }
+        public string? Badge { get; set; }
     }
 
     public class UpdateShawarmaDto
@@ -192,6 +214,8 @@ namespace Kumashaurma.API.Controllers
         public bool? IsPromo { get; set; }
         public int? ParentId { get; set; }
         public int? SortOrder { get; set; }
+        public string? Category { get; set; }
+        public string? Badge { get; set; }
     }
 
     public class ReorderItem

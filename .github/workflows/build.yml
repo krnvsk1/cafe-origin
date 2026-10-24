@@ -22,7 +22,9 @@ jobs:
       - name: Build
         run: dotnet build Kumashaurma.sln --no-restore -c Release 2>&1 | tee build.txt; exit ${PIPESTATUS[0]}
       - name: Test
-        run: dotnet test Kumashaurma.sln --no-build -c Release
+        env:
+          KUMASHAURMA_LIVE_TEST: '1'
+        run: dotnet test Kumashaurma.sln --no-build -c Release --logger "console;verbosity=detailed" 2>&1 | tee test.txt; exit ${PIPESTATUS[0]}
       - name: Check EF model snapshot
         id: ef
         continue-on-error: true
@@ -52,7 +54,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           { echo '## dotnet build (warnings/errors)'; grep -E "warning|error" build.txt | grep -v "^ *$" | sort -u | tail -150 || true;
-            echo; echo '## EF has-pending-model-changes'; tail -60 ef.txt 2>/dev/null || true; } > report.md
+            echo; echo '## EF has-pending-model-changes'; tail -60 ef.txt 2>/dev/null || true;
+            echo; echo '## Tests'; grep -E "Passed|Failed|Assert|Error Message|: [0-9]+ —|Total tests" test.txt 2>/dev/null | head -80 || true; } > report.md
           gh api repos/${{ github.repository }}/check-runs -f name="backend-report" -f head_sha="${{ github.sha }}" \
             -f status=completed -f conclusion=neutral -f "output[title]=Backend report" -F "output[summary]=@report.md"
 

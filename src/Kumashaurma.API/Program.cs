@@ -174,6 +174,13 @@ builder.Services.AddHttpClient<YooKassaClient>(client => client.Timeout = TimeSp
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddHostedService<PaymentTimeoutService>();
 
+// Импорт меню с kumashaurma.ru
+builder.Services.AddHttpClient<MenuImportService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(60);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; KumashaurmaMenuImport/1.0)");
+});
+
 // CORS
 builder.Services.AddCors(options =>
 {
