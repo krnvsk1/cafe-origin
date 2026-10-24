@@ -18,6 +18,10 @@ namespace Kumashaurma.API.Services.Chz
         public string Inn { get; set; } = string.Empty;
         /// <summary>Товарные группы, с которыми работает заведение</summary>
         public List<string> ProductGroups { get; set; } = new() { "milk", "water", "beer" };
+        /// <summary>Место осуществления деятельности (МОД): код ФИАС адреса заведения (GUID, как в профиле ЛК ЧЗ)</summary>
+        public string? FiasId { get; set; }
+        /// <summary>КПП места деятельности — только для организаций (у ИП нет)</summary>
+        public string? Kpp { get; set; }
     }
 
     /// <summary>Настройки Честного знака из админки (app_settings, ключ chz)</summary>

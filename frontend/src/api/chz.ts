@@ -8,6 +8,8 @@ export interface ChzState {
   sandbox: boolean;
   inn: string;
   productGroups: string[];
+  fiasId: string | null;
+  kpp: string | null;
   signedIn: boolean;
   expiresAt: string | null;
   actions: { key: string; title: string }[];
@@ -58,7 +60,7 @@ export const fetchChzDocument = (id: number) => apiClient.get<ChzDocumentDetail>
 
 export const useSaveChzSettings = () => {
   const qc = useQueryClient();
-  return useMutation<ChzState, Error, { enabled: boolean; sandbox: boolean; inn: string; productGroups: string[] }>({
+  return useMutation<ChzState, Error, { enabled: boolean; sandbox: boolean; inn: string; productGroups: string[]; fiasId: string | null; kpp: string | null }>({
     mutationFn: (data) => apiClient.put('/api/chz/settings', data).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['chz'] }),
   });

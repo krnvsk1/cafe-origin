@@ -43,6 +43,17 @@ namespace Kumashaurma.Tests
             Assert.Equal("OTHER", root.GetProperty("document_type").GetString());
             Assert.Equal("010460700947123321aB3dEf", root.GetProperty("products")[0].GetProperty("cis").GetString());
             Assert.Contains("Акт", root.GetProperty("primary_document_custom_name").GetString());
+            Assert.False(root.TryGetProperty("fias_id", out _));
+        }
+
+        [Fact]
+        public void ReceiptDocumentHasPlaceOfActivity()
+        {
+            var b64 = ChzService.BuildReceiptDocument("615015820463", "PRODUCTION_USE", new DateTime(2026, 10, 25), "KS-000002",
+                new[] { "010464012254545221500lrN5S" }, "0c5b2444-70a0-4932-980c-b4dc0d3f02b5", null);
+            using var doc = JsonDocument.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(b64)));
+            Assert.Equal("0c5b2444-70a0-4932-980c-b4dc0d3f02b5", doc.RootElement.GetProperty("fias_id").GetString());
+            Assert.False(doc.RootElement.TryGetProperty("kpp", out _));
         }
 
         [Fact]

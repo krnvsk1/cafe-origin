@@ -118,16 +118,17 @@ namespace Kumashaurma.API.Services.Chz
             await _context.SaveChangesAsync();
 
             doc.DocumentNumber = $"KS-{doc.Id:D6}";
-            doc.ProductDocument = BuildReceiptDocument(o.Inn!, action, actionDate, doc.DocumentNumber, codes);
+            doc.ProductDocument = BuildReceiptDocument(o.Inn!, action, actionDate, doc.DocumentNumber, codes, o.FiasId, o.Kpp);
             await _context.SaveChangesAsync();
             return doc;
         }
 
         /// <summary>JSON документа LK_RECEIPT в base64 (подписывается откреплённой подписью)</summary>
-        public static string BuildReceiptDocument(string inn, string action, DateTime date, string number, IEnumerable<string> codes)
+        public static string BuildReceiptDocument(string inn, string action, DateTime date, string number, IEnumerable<string> codes,
+            string? fiasId = null, string? kpp = null)
         {
             var day = date.ToString("yyyy-MM-dd");
-            var json = JsonSerializer.Serialize(new Dictionary<string, object>
+            var body = new Dictionary<string, object>
             {
                 ["inn"] = inn,
                 ["action"] = action,
@@ -139,7 +140,11 @@ namespace Kumashaurma.API.Services.Chz
                     ? "Акт использования для производственных целей"
                     : "Акт вывода из оборота",
                 ["products"] = codes.Select(c => new Dictionary<string, string> { ["cis"] = c }).ToList()
-            }, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+            };
+            // МОД — место деятельности, где выводим товар (обязательно для пива, воды и др.)
+            if (!string.IsNullOrWhiteSpace(fiasId)) body["fias_id"] = fiasId.Trim();
+            if (!string.IsNullOrWhiteSpace(kpp)) body["kpp"] = kpp.Trim();
+            var json = JsonSerializer.Serialize(body, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
             return Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
         }
 

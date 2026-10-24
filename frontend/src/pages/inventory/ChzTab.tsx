@@ -31,13 +31,15 @@ const ChzSettings: React.FC<{ state: ChzState; onDone: () => void }> = ({ state,
   const [enabled, setEnabled] = React.useState(state.enabled || !state.inn);
   const [inn, setInn] = React.useState(state.inn);
   const [sandbox, setSandbox] = React.useState(state.sandbox);
+  const [fiasId, setFiasId] = React.useState(state.fiasId ?? '');
+  const [kpp, setKpp] = React.useState(state.kpp ?? '');
   const [groups, setGroups] = React.useState<string[]>(state.productGroups.length ? state.productGroups : ['milk', 'water', 'beer']);
   const [error, setError] = React.useState('');
 
   const submit = async () => {
     setError('');
     try {
-      await save.mutateAsync({ enabled, inn: inn.trim(), sandbox, productGroups: groups });
+      await save.mutateAsync({ enabled, inn: inn.trim(), sandbox, productGroups: groups, fiasId: fiasId.trim() || null, kpp: kpp.trim() || null });
       onDone();
     } catch (e) {
       setError(apiError(e));
@@ -56,6 +58,22 @@ const ChzSettings: React.FC<{ state: ChzState; onDone: () => void }> = ({ state,
         slotProps={{ htmlInput: { inputMode: 'numeric' } }}
         sx={{ maxWidth: 320 }}
       />
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: '1fr 200px' }, gap: 1.5 }}>
+        <TextField
+          label="Код ФИАС места деятельности (МОД)"
+          value={fiasId}
+          onChange={e => setFiasId(e.target.value.trim())}
+          placeholder="0c5b2444-70a0-4932-980c-b4dc0d3f02b5"
+          helperText="Обязателен для пива и воды. ЛК Честного знака → Профиль → Места осуществления деятельности"
+        />
+        <TextField
+          label="КПП"
+          value={kpp}
+          onChange={e => setKpp(e.target.value.replace(/\D/g, '').slice(0, 9))}
+          helperText={inn.length === 12 ? 'У ИП нет — оставьте пустым' : 'Для организации'}
+          slotProps={{ htmlInput: { inputMode: 'numeric' } }}
+        />
+      </Box>
       <Box>
         <Typography sx={{ fontWeight: 600, mb: 1 }}>Товарные группы</Typography>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -526,6 +544,12 @@ const ChzTab: React.FC = () => {
             </Button>
           )}
         </Box>
+        {configured && !state.fiasId && !settingsOpen && (
+          <Alert severity="warning" sx={{ mb: 1.5 }}>
+            Не указан код ФИАС места деятельности — без него Честный знак отклоняет вывод пива и воды («МОД не найден»).
+            {can(P.Settings) ? ' Откройте «Настройки».' : ' Попросите администратора заполнить его.'}
+          </Alert>
+        )}
         <Collapse in={!configured || settingsOpen}>
           <Box sx={{ pt: 2 }}>
             {can(P.Settings)

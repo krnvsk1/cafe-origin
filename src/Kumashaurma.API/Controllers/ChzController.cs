@@ -32,6 +32,8 @@ namespace Kumashaurma.API.Controllers
             public bool Sandbox { get; set; }
             public string Inn { get; set; } = string.Empty;
             public List<string> ProductGroups { get; set; } = new();
+            public string? FiasId { get; set; }
+            public string? Kpp { get; set; }
         }
 
         public class SignInRequest
@@ -68,6 +70,8 @@ namespace Kumashaurma.API.Controllers
                 o.Sandbox,
                 o.Inn,
                 o.ProductGroups,
+                o.FiasId,
+                o.Kpp,
                 signedIn,
                 expiresAt = expires,
                 actions = ChzService.Actions.Select(a => new { key = a.Key, title = a.Value }),
@@ -86,9 +90,16 @@ namespace Kumashaurma.API.Controllers
             var groups = r.ProductGroups.Where(ChzService.Groups.ContainsKey).Distinct().ToList();
             if (r.Enabled && groups.Count == 0) return BadRequest(new { message = "Выберите хотя бы одну товарную группу" });
 
+            var fias = string.IsNullOrWhiteSpace(r.FiasId) ? null : r.FiasId.Trim().ToLowerInvariant();
+            if (fias != null && !Guid.TryParse(fias, out _))
+                return BadRequest(new { message = "Код ФИАС — это GUID вида 0c5b2444-70a0-4932-980c-b4dc0d3f02b5" });
+            var kpp = string.IsNullOrWhiteSpace(r.Kpp) ? null : r.Kpp.Trim();
+            if (kpp != null && !System.Text.RegularExpressions.Regex.IsMatch(kpp, @"^\d{9}$"))
+                return BadRequest(new { message = "КПП — 9 цифр" });
+
             var old = await _settings.GetAsync();
             if (old.Inn != inn || old.Sandbox != r.Sandbox) _chz.SignOut(old);
-            await _settings.SaveAsync(new ChzOptions { Enabled = r.Enabled, Sandbox = r.Sandbox, Inn = inn, ProductGroups = groups }, User.GetUserId());
+            await _settings.SaveAsync(new ChzOptions { Enabled = r.Enabled, Sandbox = r.Sandbox, Inn = inn, ProductGroups = groups, FiasId = fias, Kpp = kpp }, User.GetUserId());
             return await Status();
         }
 
