@@ -320,6 +320,188 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("delivery_zones");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.EgaisDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActDecision")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("act_decision");
+
+                    b.Property<string>("ActNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("act_note");
+
+                    b.Property<string>("ActNumber")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("act_number");
+
+                    b.Property<DateTime?>("ActSentAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("act_sent_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("Date")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("date");
+
+                    b.Property<string>("DocType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("doc_type");
+
+                    b.Property<string>("Identity")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("identity");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("number");
+
+                    b.Property<string>("RawXml")
+                        .HasColumnType("text")
+                        .HasColumnName("raw_xml");
+
+                    b.Property<DateTime?>("ResultAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("result_at");
+
+                    b.Property<string>("ResultComment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("result_comment");
+
+                    b.Property<string>("ShipperFsrarId")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("shipper_fsrar_id");
+
+                    b.Property<string>("ShipperInn")
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("shipper_inn");
+
+                    b.Property<string>("ShipperName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("shipper_name");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int?>("StockDocumentId")
+                        .HasColumnType("integer")
+                        .HasColumnName("stock_document_id");
+
+                    b.Property<string>("WbRegId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("wb_reg_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("WbRegId");
+
+                    b.HasIndex("ShipperFsrarId", "Number", "Date");
+
+                    b.ToTable("egais_documents");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.EgaisDocumentLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AlcCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("alc_code");
+
+                    b.Property<decimal?>("AlcVolume")
+                        .HasColumnType("decimal(6,3)")
+                        .HasColumnName("alc_volume");
+
+                    b.Property<decimal?>("Capacity")
+                        .HasColumnType("decimal(10,4)")
+                        .HasColumnName("capacity");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("integer")
+                        .HasColumnName("document_id");
+
+                    b.Property<string>("Identity")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("identity");
+
+                    b.Property<string>("InformF2RegId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("inform_f2_reg_id");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(14,4)")
+                        .HasColumnName("price");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("product_name");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(14,4)")
+                        .HasColumnName("quantity");
+
+                    b.Property<decimal?>("RealQuantity")
+                        .HasColumnType("decimal(14,4)")
+                        .HasColumnName("real_quantity");
+
+                    b.Property<int?>("StockItemId")
+                        .HasColumnType("integer")
+                        .HasColumnName("stock_item_id");
+
+                    b.Property<string>("UnitType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("unit_type");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("StockItemId");
+
+                    b.ToTable("egais_document_lines");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.Order", b =>
                 {
                     b.Property<int>("Id")
@@ -790,6 +972,12 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
+                    b.Property<string>("OrderTypes")
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("order_types");
+
                     b.Property<int?>("ParentId")
                         .HasColumnType("integer")
                         .HasColumnName("parent_id")
@@ -1094,6 +1282,11 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<string>("EgaisAlcCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("egais_alc_code");
+
                     b.Property<bool>("IsArchived")
                         .HasColumnType("boolean")
                         .HasColumnName("is_archived");
@@ -1129,6 +1322,8 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("unit");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EgaisAlcCode");
 
                     b.HasIndex("Name");
 
@@ -1625,6 +1820,24 @@ namespace Kumashaurma.API.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.EgaisDocumentLine", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.EgaisDocument", "Document")
+                        .WithMany("Lines")
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Kumashaurma.API.Models.StockItem", "StockItem")
+                        .WithMany()
+                        .HasForeignKey("StockItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Document");
+
+                    b.Navigation("StockItem");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.Order", b =>
                 {
                     b.HasOne("Kumashaurma.API.Models.AppUser", "Courier")
@@ -1955,6 +2168,11 @@ namespace Kumashaurma.API.Migrations
                     b.Navigation("Addresses");
 
                     b.Navigation("Orders");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.EgaisDocument", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("Kumashaurma.API.Models.Order", b =>
