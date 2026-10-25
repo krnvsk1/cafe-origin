@@ -183,9 +183,10 @@ namespace Kumashaurma.API.Services.Iiko
                     }
                     var isSemi = p.Type is "PREPARED" or "DISH" && s.Charts.ContainsKey(p.Id);
                     var item = isSemi ? await Semi(p, path) : Item(p, semi: false);
-                    var (_, factor) = UnitOf(p.Unit);
+                    var (unit, factor) = UnitOf(p.Unit);
+                    // Для штучных ингредиентов iiko пишет нетто в килограммах (1 шт → 0,089 кг) — потерь тут нет
                     var output = i.AmountOut > 0 ? i.AmountOut : i.AmountMiddle > 0 ? i.AmountMiddle : i.AmountIn;
-                    var loss = Math.Clamp(Math.Round((1 - output / i.AmountIn) * 100, 2), 0, 99);
+                    var loss = unit == StockUnits.Piece ? 0 : Math.Clamp(Math.Round((1 - output / i.AmountIn) * 100, 2), 0, 99);
                     result.Add((item, Math.Round(i.AmountIn * factor, 4), loss));
                 }
                 return result;

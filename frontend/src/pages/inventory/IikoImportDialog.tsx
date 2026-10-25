@@ -102,7 +102,7 @@ const IikoImportDialog: React.FC<Props> = ({ open, onClose }) => {
         ) : !preview ? (
           <>
             <Typography color="text.secondary">
-              Сервис зайдёт на сервер iiko под пользователем iikoOffice и заберёт действующие техкарты блюд и заготовок.
+              Сервис зайдёт на сервер iiko и заберёт действующие техкарты блюд и заготовок.
               В iiko ничего не меняется.
             </Typography>
             <TextField
@@ -118,7 +118,8 @@ const IikoImportDialog: React.FC<Props> = ({ open, onClose }) => {
                 onKeyDown={e => { if (e.key === 'Enter' && url && login) void load(); }} />
             </Box>
             <Typography variant="body2" color="text.secondary">
-              Пароль не сохраняется. На время загрузки сервис займёт одно подключение к iiko, как ещё один iikoOffice.
+              Те же логин и пароль, что для веб-страницы iiko ({'<адрес>'}/resto). Пароль не сохраняется. Используются выгрузки
+              goods.csv и assemblyCharts.csv — лицензия REST API не нужна.
             </Typography>
           </>
         ) : (

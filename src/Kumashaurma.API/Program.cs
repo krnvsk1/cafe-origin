@@ -205,7 +205,7 @@ builder.Services.AddHttpClient<Kumashaurma.API.Services.Chz.ChzClient>(client =>
 builder.Services.AddScoped<Kumashaurma.API.Services.Chz.ChzService>();
 
 // Импорт техкарт из iiko (iikoServer в локальной сети)
-builder.Services.AddHttpClient<Kumashaurma.API.Services.Iiko.IikoClient>(client => client.Timeout = TimeSpan.FromSeconds(120));
+builder.Services.AddSingleton<Kumashaurma.API.Services.Iiko.IikoClient>();
 builder.Services.AddScoped<Kumashaurma.API.Services.Iiko.IikoImportService>();
 
 // Электронные накладные из СБИС (Saby): настраивается в админке (Склад → Накладные СБИС)

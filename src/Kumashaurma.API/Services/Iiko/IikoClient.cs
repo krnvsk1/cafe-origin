@@ -1,8 +1,6 @@
 using System.Globalization;
 using System.Net;
-using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 
 namespace Kumashaurma.API.Services.Iiko
 {
@@ -54,14 +52,11 @@ namespace Kumashaurma.API.Services.Iiko
     }
 
     /// <summary>
-    /// API iikoServer (/resto/api): вход по логину и SHA1 пароля → ключ сессии (занимает лицензию — обязательно выходим),
-    /// номенклатура, единицы измерения, технологические карты.
+    /// Выгрузки iikoServer: вход как на веб-страницу iiko (/resto, форма j_spring_security_check — лицензия REST API не нужна),
+    /// затем CSV номенклатуры (goods.csv) и техкарт (assemblyCharts.csv) из /resto/service/export/csv/.
     /// </summary>
     public class IikoClient
     {
-        private readonly HttpClient _http;
-        public IikoClient(HttpClient http) => _http = http;
-
         /// <summary>«192.168.1.10:8080» / «http://…:8080/resto/» → «http://…:8080/resto»</summary>
         public static string NormalizeBaseUrl(string url)
         {
@@ -75,77 +70,35 @@ namespace Kumashaurma.API.Services.Iiko
             return u;
         }
 
-        public static string Sha1(string password) =>
-            Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(password ?? ""))).ToLowerInvariant();
-
-        /// <summary>Скачать номенклатуру и действующие техкарты (с выходом из сессии в конце)</summary>
+        /// <summary>Скачать номенклатуру и действующие техкарты</summary>
         public async Task<IikoSnapshot> FetchAsync(string url, string login, string password, CancellationToken ct = default)
         {
-            var baseUrl = NormalizeBaseUrl(url);
-            var key = await LoginAsync(baseUrl, login, password, ct);
-            try
-            {
-                var snapshot = new IikoSnapshot();
-
-                var units = new Dictionary<string, string>();
-                try
-                {
-                    var unitsJson = await GetAsync(baseUrl, "/api/v2/entities/list?rootType=MeasureUnit&includeDeleted=false", key, ct);
-                    units = ParseUnits(unitsJson);
-                }
-                catch (IikoException) { /* не критично — единицы угадаем по названию */ }
-
-                var productsJson = await GetAsync(baseUrl, "/api/v2/entities/products/list?includeDeleted=false", key, ct);
-                foreach (var p in ParseProducts(productsJson))
-                {
-                    if (p.MainUnitId != null && units.TryGetValue(p.MainUnitId, out var unit)) p.Unit = unit;
-                    snapshot.Products[p.Id] = p;
-                }
-
-                var today = DateTime.Today;
-                var chartsJson = await GetAsync(baseUrl,
-                    $"/api/v2/assemblyCharts/getAll?dateFrom={today:yyyy-MM-dd}&dateTo={today.AddDays(1):yyyy-MM-dd}&includeDeletedProducts=false&includePreparedCharts=false",
-                    key, ct);
-                snapshot.Charts = ActiveCharts(ParseCharts(chartsJson), today);
-                return snapshot;
-            }
-            finally
-            {
-                try { await GetRawAsync($"{baseUrl}/api/logout?key={Uri.EscapeDataString(key)}", CancellationToken.None); } catch { /* ignore */ }
-            }
-        }
-
-        public async Task<string> LoginAsync(string baseUrl, string login, string password, CancellationToken ct)
-        {
             if (string.IsNullOrWhiteSpace(login)) throw new IikoException("Укажите логин iiko");
-            var (status, body) = await GetRawAsync($"{baseUrl}/api/auth?login={Uri.EscapeDataString(login.Trim())}&pass={Sha1(password)}", ct);
-            if (status == HttpStatusCode.OK && body.Trim().Length is > 10 and < 200 && !body.TrimStart().StartsWith('<'))
-                return body.Trim();
-            // Сначала лицензия: iiko отвечает 401/403 и тогда, когда пароль верный, но нет лицензии на API
-            if (body.Contains("REST_API", StringComparison.OrdinalIgnoreCase) || body.Contains("(2000)"))
-                throw new IikoException("Логин и пароль подошли, но в лицензии iiko нет модуля REST API (код 2000) — " +
-                                        $"его подключает дилер iiko. Без него забрать техкарты по API нельзя ({Short(body)})");
-            if (body.Contains("licen", StringComparison.OrdinalIgnoreCase) || body.Contains("лиценз", StringComparison.OrdinalIgnoreCase))
-                throw new IikoException($"iiko: нет свободной лицензии на подключение — закройте лишний iikoOffice и повторите ({Short(body)})");
-            if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden || body.Contains("password", StringComparison.OrdinalIgnoreCase))
-                throw new IikoException($"iiko не пустил: неверный логин или пароль ({Short(body)})");
-            throw new IikoException($"iiko ответил {(int)status}: {Short(body)}");
-        }
+            var baseUrl = NormalizeBaseUrl(url);
 
-        private async Task<string> GetAsync(string baseUrl, string path, string key, CancellationToken ct)
-        {
-            var sep = path.Contains('?') ? '&' : '?';
-            var (status, body) = await GetRawAsync($"{baseUrl}{path}{sep}key={Uri.EscapeDataString(key)}", ct);
-            if (status != HttpStatusCode.OK) throw new IikoException($"iiko ответил {(int)status} на {path.Split('?')[0]}: {Short(body)}");
-            return body;
-        }
-
-        private async Task<(HttpStatusCode Status, string Body)> GetRawAsync(string url, CancellationToken ct)
-        {
+            // Своя «сессия браузера» с cookie на каждый импорт
+            using var handler = new HttpClientHandler { CookieContainer = new CookieContainer(), AllowAutoRedirect = true };
+            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(120) };
             try
             {
-                using var res = await _http.GetAsync(url, ct);
-                return (res.StatusCode, await res.Content.ReadAsStringAsync(ct));
+                using (var loginRes = await http.PostAsync($"{baseUrl}/j_spring_security_check", new FormUrlEncodedContent(new Dictionary<string, string>
+                       {
+                           ["j_username"] = login.Trim(),
+                           ["j_password"] = password ?? ""
+                       }), ct))
+                {
+                    var final = loginRes.RequestMessage?.RequestUri?.ToString() ?? "";
+                    if (final.Contains("error", StringComparison.OrdinalIgnoreCase))
+                        throw new IikoException("iiko не пустил: неверный логин или пароль");
+                }
+
+                var goods = await CsvAsync(http, $"{baseUrl}/service/export/csv/goods.csv", "номенклатура", ct);
+                var charts = await CsvAsync(http, $"{baseUrl}/service/export/csv/assemblyCharts.csv", "техкарты", ct);
+
+                var snapshot = new IikoSnapshot();
+                foreach (var p in ParseGoodsCsv(goods)) snapshot.Products[p.Id] = p;
+                snapshot.Charts = ActiveCharts(ParseChartsCsv(charts), DateTime.Today);
+                return snapshot;
             }
             catch (HttpRequestException ex)
             {
@@ -155,115 +108,127 @@ namespace Kumashaurma.API.Services.Iiko
             {
                 throw new IikoException("Сервер iiko не ответил вовремя");
             }
-        }
-
-        private static string Short(string s)
-        {
-            s = s.Trim().Replace('\n', ' ').Replace('\r', ' ');
-            return s.Length > 300 ? s[..300] + "…" : s;
-        }
-
-        // ---------- Разбор ответов ----------
-
-        private static JsonElement Root(string json, string what)
-        {
-            try { return JsonDocument.Parse(json).RootElement.Clone(); }
-            catch (JsonException) { throw new IikoException($"iiko вернул не JSON ({what}): {Short(json)}"); }
-        }
-
-        private static string? Str(JsonElement e, string name) =>
-            e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v)
-                ? v.ValueKind switch { JsonValueKind.String => v.GetString(), JsonValueKind.Number => v.GetRawText(), _ => null }
-                : null;
-
-        private static decimal Dec(JsonElement e, string name) =>
-            e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v)
-                ? v.ValueKind == JsonValueKind.Number ? v.GetDecimal()
-                  : v.ValueKind == JsonValueKind.String && decimal.TryParse(v.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : 0
-                : 0;
-
-        private static bool Bool(JsonElement e, string name) =>
-            e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;
-
-        public static Dictionary<string, string> ParseUnits(string json)
-        {
-            var root = Root(json, "единицы");
-            var result = new Dictionary<string, string>();
-            if (root.ValueKind != JsonValueKind.Array) return result;
-            foreach (var u in root.EnumerateArray())
+            finally
             {
-                var id = Str(u, "id");
-                var name = Str(u, "name") ?? Str(u, "code");
-                if (id != null && name != null) result[id] = name;
+                try { using var _ = await http.GetAsync($"{baseUrl}/j_spring_security_logout", CancellationToken.None); } catch { /* ignore */ }
             }
-            return result;
         }
 
-        public static List<IikoProduct> ParseProducts(string json)
+        private static async Task<string> CsvAsync(HttpClient http, string url, string what, CancellationToken ct)
         {
-            var root = Root(json, "номенклатура");
-            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("products", out var inner)) root = inner;
-            if (root.ValueKind != JsonValueKind.Array) throw new IikoException("iiko вернул номенклатуру в неожиданном формате");
-            var list = new List<IikoProduct>();
-            foreach (var p in root.EnumerateArray())
+            using var res = await http.GetAsync(url, ct);
+            var text = await res.Content.ReadAsStringAsync(ct);
+            var type = res.Content.Headers.ContentType?.MediaType ?? "";
+            if (res.StatusCode != HttpStatusCode.OK)
+                throw new IikoException($"iiko не отдал {what}: HTTP {(int)res.StatusCode}");
+            if (type.Contains("html", StringComparison.OrdinalIgnoreCase) || text.TrimStart().StartsWith('<'))
+                throw new IikoException("iiko не пустил: неверный логин или пароль (вместо выгрузки — страница входа)");
+            return text;
+        }
+
+        // ---------- Разбор CSV (разделитель «;», первая строка — заголовки) ----------
+
+        public static List<Dictionary<string, string>> ParseCsv(string text)
+        {
+            var lines = text.TrimStart('\uFEFF').Split('\n');
+            var rows = new List<Dictionary<string, string>>();
+            if (lines.Length == 0) return rows;
+            var header = SplitLine(lines[0].TrimEnd('\r')).Select(h => h.Trim().ToUpperInvariant()).ToList();
+            foreach (var raw in lines.Skip(1))
             {
-                if (Bool(p, "deleted")) continue;
-                var id = Str(p, "id");
-                var name = Str(p, "name");
-                if (id == null || string.IsNullOrWhiteSpace(name)) continue;
-                list.Add(new IikoProduct
-                {
-                    Id = id,
-                    Name = name.Trim(),
-                    Type = (Str(p, "type") ?? Str(p, "productType") ?? "").ToUpperInvariant(),
-                    Num = Str(p, "num"),
-                    MainUnitId = Str(p, "mainUnit") ?? Str(p, "measureUnit"),
-                });
+                var line = raw.TrimEnd('\r');
+                if (line.Trim().Length == 0) continue;
+                var cells = SplitLine(line);
+                var row = new Dictionary<string, string>();
+                for (var i = 0; i < header.Count && i < cells.Count; i++)
+                    if (header[i].Length > 0) row[header[i]] = cells[i];
+                rows.Add(row);
             }
-            return list;
+            return rows;
         }
 
-        public static List<IikoChart> ParseCharts(string json)
+        /// <summary>Строка CSV с «;»: кавычки учитываем, только если поле начинается с кавычки</summary>
+        private static List<string> SplitLine(string line)
         {
-            var root = Root(json, "техкарты");
-            var arrays = new List<JsonElement>();
-            if (root.ValueKind == JsonValueKind.Array) arrays.Add(root);
-            else
-                foreach (var name in new[] { "assemblyCharts", "preparedCharts" })
-                    if (root.TryGetProperty(name, out var a) && a.ValueKind == JsonValueKind.Array) arrays.Add(a);
-            if (arrays.Count == 0) throw new IikoException("iiko вернул техкарты в неожиданном формате");
-
-            var list = new List<IikoChart>();
-            foreach (var arr in arrays)
-                foreach (var c in arr.EnumerateArray())
+            var cells = new List<string>();
+            var i = 0;
+            while (i <= line.Length)
+            {
+                if (i < line.Length && line[i] == '"')
                 {
-                    var productId = Str(c, "assembledProductId") ?? Str(c, "productId");
-                    if (productId == null) continue;
-                    var chart = new IikoChart
+                    var sb = new StringBuilder();
+                    i++;
+                    while (i < line.Length)
                     {
-                        AssembledProductId = productId,
-                        DateFrom = Date(Str(c, "dateFrom")),
-                        DateTo = Date(Str(c, "dateTo")),
-                        AssembledAmount = Dec(c, "assembledAmount") is > 0 and var a ? a : 1,
-                        Technology = Str(c, "technologyDescription"),
-                    };
-                    if (c.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
-                        foreach (var i in items.EnumerateArray())
-                        {
-                            var pid = Str(i, "productId");
-                            if (pid == null) continue;
-                            chart.Items.Add(new IikoChartItem
-                            {
-                                ProductId = pid,
-                                AmountIn = Dec(i, "amountIn"),
-                                AmountMiddle = Dec(i, "amountMiddle"),
-                                AmountOut = Dec(i, "amountOut"),
-                                SortWeight = Dec(i, "sortWeight"),
-                            });
-                        }
-                    list.Add(chart);
+                        if (line[i] == '"' && i + 1 < line.Length && line[i + 1] == '"') { sb.Append('"'); i += 2; }
+                        else if (line[i] == '"') { i++; break; }
+                        else sb.Append(line[i++]);
+                    }
+                    cells.Add(sb.ToString());
+                    while (i < line.Length && line[i] != ';') i++;
+                    i++;
                 }
-            return list;
+                else
+                {
+                    var end = line.IndexOf(';', i);
+                    if (end < 0) end = line.Length;
+                    cells.Add(line[i..end]);
+                    i = end + 1;
+                }
+            }
+            return cells;
+        }
+
+        private static decimal Dec(string? s) =>
+            decimal.TryParse((s ?? "").Trim().Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : 0;
+
+        public static List<IikoProduct> ParseGoodsCsv(string text)
+        {
+            var rows = ParseCsv(text);
+            if (rows.Count > 0 && !rows[0].ContainsKey("NUM"))
+                throw new IikoException("goods.csv: нет колонки NUM — формат выгрузки iiko отличается от ожидаемого");
+            return rows
+                .Where(r => !string.IsNullOrWhiteSpace(r.GetValueOrDefault("NUM")) && !string.IsNullOrWhiteSpace(r.GetValueOrDefault("NAME")))
+                .Select(r => new IikoProduct
+                {
+                    Id = r["NUM"].Trim(),
+                    Num = r["NUM"].Trim(),
+                    Name = r["NAME"].Trim(),
+                    Type = (r.GetValueOrDefault("TYPE") ?? "").Trim().ToUpperInvariant(),
+                    Unit = r.GetValueOrDefault("MEASURE_UNIT")?.Trim(),
+                })
+                .ToList();
+        }
+
+        public static List<IikoChart> ParseChartsCsv(string text)
+        {
+            var rows = ParseCsv(text);
+            if (rows.Count > 0 && !rows[0].ContainsKey("PRODUCT_CODE"))
+                throw new IikoException("assemblyCharts.csv: нет колонки PRODUCT_CODE — формат выгрузки iiko отличается от ожидаемого");
+            // Одна карта = блюдо + дата начала действия
+            return rows
+                .Where(r => !string.IsNullOrWhiteSpace(r.GetValueOrDefault("PRODUCT_CODE")) && !string.IsNullOrWhiteSpace(r.GetValueOrDefault("ITEM_CODE")))
+                .GroupBy(r => (Product: r["PRODUCT_CODE"].Trim(), From: r.GetValueOrDefault("DATE_FROM")?.Trim() ?? ""))
+                .Select(g =>
+                {
+                    var first = g.First();
+                    return new IikoChart
+                    {
+                        AssembledProductId = g.Key.Product,
+                        DateFrom = DateTime.TryParseExact(g.Key.From, "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null,
+                        AssembledAmount = Dec(first.GetValueOrDefault("AMOUNT")) is > 0 and var a ? a : 1,
+                        Technology = g.Select(r => r.GetValueOrDefault("TECHNOLOGY")?.Trim()).FirstOrDefault(t => !string.IsNullOrEmpty(t)),
+                        Items = g.Select((r, i) => new IikoChartItem
+                        {
+                            ProductId = r["ITEM_CODE"].Trim(),
+                            AmountIn = Dec(r.GetValueOrDefault("ITEM_GROSS_WEIGHT")),
+                            AmountMiddle = Dec(r.GetValueOrDefault("ITEM_NET_WEIGHT")),
+                            AmountOut = Dec(r.GetValueOrDefault("ITEM_OUT_WEIGHT")),
+                            SortWeight = i
+                        }).ToList()
+                    };
+                })
+                .ToList();
         }
 
         /// <summary>По каждому продукту — карта, действующая на дату (самая поздняя из подходящих)</summary>
@@ -272,8 +237,5 @@ namespace Kumashaurma.API.Services.Iiko
                 .Where(c => (c.DateFrom == null || c.DateFrom.Value.Date <= today) && (c.DateTo == null || c.DateTo.Value.Date > today))
                 .GroupBy(c => c.AssembledProductId)
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.DateFrom ?? DateTime.MinValue).First());
-
-        private static DateTime? Date(string? s) =>
-            DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
     }
 }

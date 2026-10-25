@@ -12,28 +12,35 @@ namespace Kumashaurma.Tests
         public void NormalizesBaseUrl(string input, string expected) => Assert.Equal(expected, IikoClient.NormalizeBaseUrl(input));
 
         [Fact]
-        public void HashesPasswordWithSha1() =>
-            Assert.Equal("da39a3ee5e6b4b0d3255bfef95601890afd80709", IikoClient.Sha1(""));
-
-        [Fact]
-        public void ParsesProductsAndCharts()
+        public void ParsesIikoCsvExports()
         {
-            var products = IikoClient.ParseProducts(@"[
-              {""id"":""d1"",""name"":""Шаурма классическая"",""type"":""DISH"",""mainUnit"":""u-portion"",""deleted"":false},
-              {""id"":""g1"",""name"":""Лаваш"",""type"":""GOODS"",""mainUnit"":""u-pcs""},
-              {""id"":""x"",""name"":""Удалённый"",""type"":""GOODS"",""deleted"":true}]");
-            Assert.Equal(2, products.Count);
-            Assert.Equal("DISH", products[0].Type);
+            var goods = IikoClient.ParseGoodsCsv(
+                "TYPE;NUM;PARENT_CODE;NAME;MEASURE_UNIT;UNIT_WEIGHT;PRICE;\n" +
+                "DISH;02415;0251;Хачапури \"Нарта\" 33 см;порц;0,800;650,00;\n" +
+                "GOODS;00686;0010;Лаваш;шт;0,000;0,00;\r\n" +
+                "PREPARED;02548;0060;П/Ф СОУС ГОРЧИЧНЫЙ;кг;1,000;0,00;\n");
+            Assert.Equal(3, goods.Count);
+            Assert.Equal("02415", goods[0].Id);
+            Assert.Equal("Хачапури \"Нарта\" 33 см", goods[0].Name);
+            Assert.Equal("шт", goods[1].Unit);
+            Assert.Equal("PREPARED", goods[2].Type);
 
-            var charts = IikoClient.ParseCharts(@"{""assemblyCharts"":[
-              {""assembledProductId"":""d1"",""dateFrom"":""2024-01-01"",""dateTo"":null,""assembledAmount"":1,
-               ""items"":[{""productId"":""g1"",""amountIn"":1,""amountMiddle"":1,""amountOut"":1,""sortWeight"":0}]},
-              {""assembledProductId"":""d1"",""dateFrom"":""2020-01-01"",""dateTo"":""2024-01-01"",""assembledAmount"":1,""items"":[]}
-            ],""preparedCharts"":[]}");
-            Assert.Equal(2, charts.Count);
+            var charts = IikoClient.ParseChartsCsv(
+                "PRODUCT_CODE;ITEM_CODE;ITEM_GROSS_WEIGHT;ITEM_NET_WEIGHT;ITEM_OUT_WEIGHT;TECHNOLOGY;AMOUNT;DATE_FROM;WRITEOFF_TYPE;\n" +
+                "02415;00686;1.000000000;0.089000000;0.089000000;;1.000000000;16.05.2026;1;\n" +
+                "02415;02548;0.050000000;0.050000000;0.045000000;Смешать;1.000000000;16.05.2026;1;\n" +
+                "02415;00686;2.000000000;0.178000000;0.178000000;;1.000000000;16.05.2024;1;\n" +
+                "02548;00025;8.000000000;8.000000000;7.500000000;;7.500000000;16.03.2024;1;\n");
             var active = IikoClient.ActiveCharts(charts, new DateTime(2026, 10, 25));
-            Assert.Single(active);
-            Assert.Single(active["d1"].Items);
+            Assert.Equal(2, active.Count);
+            Assert.Equal(2, active["02415"].Items.Count);
+            Assert.Equal("Смешать", active["02415"].Technology);
+            Assert.Equal(0.045m, active["02415"].Items[1].AmountOut);
+            Assert.Equal(7.5m, active["02548"].AssembledAmount);
+
+            // Раньше 16.05.2026 действовала старая версия карты
+            var old = IikoClient.ActiveCharts(charts, new DateTime(2025, 1, 1));
+            Assert.Equal(2m, Assert.Single(old["02415"].Items).AmountIn);
         }
 
         [Theory]
