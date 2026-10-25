@@ -7,7 +7,7 @@ import {
 import {
   Search as SearchIcon, Add as AddIcon, Remove as RemoveIcon, DeleteOutline as DeleteIcon,
   ReceiptLongOutlined as ReceiptIcon, CheckCircleRounded as CheckIcon, PersonOutline as PersonIcon,
-  ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, KeyboardArrowDown as ArrowDownIcon,
 } from '@mui/icons-material';
 import { useShawarmas } from '../api/hooks';
 import {
@@ -145,6 +145,38 @@ const PosMenu: React.FC<{ onPick: (card: Shawarma) => void }> = ({ onPick }) => 
 
 // ============ Чек ============
 
+// Строка чека считается скрытой, если ниже видимой области осталось больше этого
+const HIDDEN_LINE_EPSILON_PX = 4;
+// Кнопка «ещё N поз.» прокручивает чек на такую долю его высоты
+const SCROLL_PAGE_SHARE = 0.8;
+
+/** Сколько строк в прокручиваемом блоке скрыто ниже видимой области (пересчёт при прокрутке, изменении размера и строк) */
+const useHiddenBelow = (deps: unknown) => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [hidden, setHidden] = React.useState(0);
+
+  const update = React.useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const visibleBottom = el.scrollTop + el.clientHeight + HIDDEN_LINE_EPSILON_PX;
+    const rows = Array.from(el.children) as HTMLElement[];
+    setHidden(rows.filter(row => row.offsetTop + row.offsetHeight > visibleBottom).length);
+  }, []);
+
+  React.useEffect(() => {
+    update();
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [update, deps]);
+
+  const scrollDown = () => ref.current?.scrollBy({ top: ref.current.clientHeight * SCROLL_PAGE_SHARE, behavior: 'smooth' });
+
+  return { ref, hidden, update, scrollDown };
+};
+
 const Ticket: React.FC<{
   lines: TicketLine[];
   onChange: (lines: TicketLine[]) => void;
@@ -163,6 +195,8 @@ const Ticket: React.FC<{
   const [comment, setComment] = React.useState('');
   const [toKitchen, setToKitchen] = React.useState(true);
   const [error, setError] = React.useState('');
+
+  const more = useHiddenBelow(lines);
 
   const total = lines.reduce((s, l) => s + lineTotal(l), 0);
   const received = parseFloat(cash.replace(',', '.')) || 0;
@@ -232,7 +266,9 @@ const Ticket: React.FC<{
         )}
       </Box>
 
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 2, minHeight: 80 }}>
+      <Box sx={{ flex: 1, minHeight: 80, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+      {/* position: relative — чтобы offsetTop строк считался от начала списка */}
+      <Box ref={more.ref} onScroll={more.update} sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: 2, position: 'relative' }}>
         {lines.length === 0 ? (
           <Box sx={{ textAlign: 'center', color: 'text.secondary', py: 5 }}>
             <ReceiptIcon sx={{ fontSize: 40, mb: 1 }} />
@@ -265,6 +301,38 @@ const Ticket: React.FC<{
             </Box>
           </Box>
         ))}
+      </Box>
+      {/* Позиции ниже края чека: стрелка, чтобы кассир не пропустил их */}
+      {more.hidden > 0 && (
+        <Box
+          sx={{
+            position: 'absolute', left: 0, right: 0, bottom: 0, pt: 4, pb: 1,
+            display: 'flex', justifyContent: 'center', pointerEvents: 'none',
+            background: `linear-gradient(to bottom, transparent, ${theme.palette.background.paper} 65%)`,
+          }}
+        >
+          <Button
+            size="small"
+            onClick={more.scrollDown}
+            startIcon={<ArrowDownIcon />}
+            aria-label={`Ниже ещё ${more.hidden} поз. — прокрутить чек`}
+            sx={{
+              pointerEvents: 'auto',
+              borderRadius: 999,
+              px: 1.75,
+              fontWeight: 700,
+              bgcolor: 'text.primary',
+              color: 'background.paper',
+              boxShadow: '0 4px 14px rgba(33,32,31,0.25)',
+              '&:hover': { bgcolor: 'text.primary', opacity: 0.9 },
+              '& .MuiButton-startIcon': { animation: 'pos-more-bounce 1.2s ease-in-out infinite' },
+              '@keyframes pos-more-bounce': { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(3px)' } },
+            }}
+          >
+            ещё {more.hidden} поз.
+          </Button>
+        </Box>
+      )}
       </Box>
 
       {/* Оформление */}
