@@ -61,6 +61,21 @@ namespace Kumashaurma.API.Models
         [Column("without_vat")]
         public bool WithoutVat { get; set; }
 
+        /// <summary>Срок оплаты из самого УПД (явная дата или дата + отсрочка поставщика из доп. сведений)</summary>
+        [Column("upd_due_date")]
+        public DateTime? UpdDueDate { get; set; }
+
+        /// <summary>Условия оплаты разобраны из XML (для накладных, загруженных раньше, — досчитываются)</summary>
+        [Column("terms_parsed")]
+        public bool TermsParsed { get; set; }
+
+        /// <summary>Когда отметили оплату в «Финансах»</summary>
+        [Column("paid_at")]
+        public DateTime? PaidAt { get; set; }
+
+        [Column("paid_by_user_id")]
+        public int? PaidByUserId { get; set; }
+
         [Column("lines_count")]
         public int LinesCount { get; set; }
 

@@ -124,7 +124,7 @@ namespace Kumashaurma.API.Controllers
         [HttpGet("documents")]
         public async Task<IActionResult> Documents([FromQuery] string? status, [FromQuery] int take = 100)
         {
-            await BackfillVatAsync();
+            await _edo.BackfillAsync();
             var q = _context.EdoDocuments.AsNoTracking();
             if (!string.IsNullOrEmpty(status)) q = q.Where(d => d.Status == status);
             var docs = await q.OrderByDescending(d => d.Date).ThenByDescending(d => d.Id)
@@ -138,31 +138,6 @@ namespace Kumashaurma.API.Controllers
             return Ok(docs);
         }
 
-        // Накладные, загруженные до появления колонки НДС, досчитываем из XML один раз
-        private const int VatBackfillBatch = 200;
-
-        private async Task BackfillVatAsync()
-        {
-            var rows = await _context.EdoDocuments
-                .Where(d => d.VatTotal == null && d.Xml != null)
-                .Take(VatBackfillBatch)
-                .ToListAsync();
-            if (rows.Count == 0) return;
-            foreach (var row in rows)
-            {
-                try
-                {
-                    var upd = UpdParser.Parse(row.Xml!);
-                    row.VatTotal = upd.VatTotal;
-                    row.WithoutVat = upd.WithoutVat;
-                }
-                catch (UpdParseException)
-                {
-                    row.VatTotal = 0; // файл не разбирается — не пытаемся снова на каждом запросе
-                }
-            }
-            await _context.SaveChangesAsync();
-        }
 
         // GET: api/edo/documents/{id} — накладная со строками и подставленными позициями склада
         [HttpGet("documents/{id:int}")]

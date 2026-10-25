@@ -29,6 +29,7 @@ import {
   PointOfSaleOutlined as PosIcon,
   AppsRounded as AppsIcon,
   RestaurantMenuOutlined as ProductsIcon,
+  AccountBalanceWalletOutlined as FinanceIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
@@ -67,6 +68,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 import RolesPage from './pages/RolesPage';
 import PosPage from './pages/PosPage';
+import FinancePage from './pages/finance/FinancePage';
 import { P, useCan } from './auth/permissions';
 import { apiClient } from './api/client';
 import { useIsFullscreen } from './hooks/useFullscreen';
@@ -201,6 +203,7 @@ function App() {
     { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', perms: [P.PromoCodes], group: 'Продажи и маркетинг', hint: 'Скидки и акции' },
     { text: 'Отзывы', icon: <ReviewsIcon />, path: '/admin/reviews', perms: [P.Reviews], group: 'Продажи и маркетинг', hint: 'Оценки и ответы гостям' },
     { text: 'Зоны доставки', icon: <MapIcon />, path: '/admin/zones', perms: [P.Zones], group: 'Продажи и маркетинг', hint: 'Где возим и за сколько' },
+    { text: 'Платежи поставщикам', icon: <FinanceIcon />, path: '/admin/finance', perms: [P.Finance], group: 'Финансы', hint: 'Что и когда оплатить по накладным СБИС' },
     { text: 'Склад', icon: <InventoryIcon />, path: '/admin/inventory', perms: [P.InventoryView, P.TechCards, P.Chz], group: 'Склад', hint: 'Остатки, накладные, ЕГАИС, Честный знак' },
     { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', perms: [P.UsersView, P.UsersRoles], group: 'Команда', hint: 'Гости и сотрудники' },
     { text: 'Роли и доступы', icon: <RolesIcon />, path: '/admin/roles', perms: [P.Roles], group: 'Команда', hint: 'Что доступно каждой роли' },
@@ -396,6 +399,7 @@ function App() {
                 {can(P.Reviews) && <Route path="/admin/reviews" element={<AdminReviewsPage />} />}
                 {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory" element={<InventoryPage />} />}
                 {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory/:tab" element={<InventoryPage />} />}
+                {can(P.Finance) && <Route path="/admin/finance" element={<FinancePage />} />}
                 {can(P.UsersView, P.UsersRoles) && <Route path="/admin/users" element={<UsersPage />} />}
                 {can(P.Roles) && <Route path="/admin/roles" element={<RolesPage />} />}
 
