@@ -33,6 +33,7 @@ import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { tokens } from '../theme';
 import { useCan, P } from '../auth/permissions';
+import heroShawarma from '../assets/hero-shawarma.jpg';
 
 // Сетка карточек: 2 колонки на телефоне, 3 на планшете и ноутбуке, 4 на широком экране
 const gridSx = {
@@ -64,22 +65,29 @@ const RestaurantHero: React.FC = () => {
         mb: { xs: 2, md: 3 },
       }}
     >
-      {/* Крупный силуэт шаурмы справа — главный графический акцент страницы */}
-      <Typography
+      {/* Фото фирменной шаурмы справа — главный графический акцент страницы (раньше был эмодзи, похожий на буррито) */}
+      <Box
+        component="img"
+        src={heroShawarma}
+        alt=""
         aria-hidden
         sx={{
           position: 'absolute',
-          right: { xs: -24, md: 32 },
-          bottom: { xs: -36, md: -48 },
-          fontSize: { xs: 150, md: 240 },
-          lineHeight: 1,
-          transform: 'rotate(-18deg)',
+          right: { xs: -18, sm: 24, md: 48 },
+          top: { xs: 'auto', sm: '50%' },
+          bottom: { xs: -18, sm: 'auto' },
+          // С наклоном карточка должна целиком помещаться по высоте обложки
+          width: { xs: 128, sm: 180, md: 220 },
+          aspectRatio: '1 / 1',
+          objectFit: 'cover',
+          borderRadius: { xs: '22px', md: '32px' },
+          border: { xs: '4px solid #fff', md: '6px solid #fff' },
+          boxShadow: '0 18px 40px rgba(33, 32, 31, 0.28)',
+          transform: { xs: 'rotate(8deg)', sm: 'translateY(-50%) rotate(6deg)' },
           userSelect: 'none',
           pointerEvents: 'none',
         }}
-      >
-        🌯
-      </Typography>
+      />
 
       <Typography
         component="h1"
