@@ -17,6 +17,7 @@ import { listCertificates, signBase64, signText, type Certificate } from '../../
 import { useCan, P } from '../../auth/permissions';
 import { tokens } from '../../theme';
 import { Panel, ListRow, EmptyState } from './ui';
+import { CHZ_PREFILL_KEY } from '../../api/edo';
 
 const CERT_KEY = 'chz-certificate';
 const readCert = (): string | null => { try { return localStorage.getItem(CERT_KEY); } catch { return null; } };
@@ -490,6 +491,21 @@ const ChzTab: React.FC = () => {
   const scanRef = React.useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => { writeCert(thumbprint); }, [thumbprint]);
+
+  // Коды из накладной СБИС («Вывести КМ из оборота»)
+  React.useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(CHZ_PREFILL_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(CHZ_PREFILL_KEY);
+      const p = JSON.parse(raw) as { codes?: string[]; comment?: string };
+      if (p.codes?.length) {
+        setCodes(Array.from(new Set(p.codes)));
+        if (p.comment) setComment(p.comment);
+        setMessage({ ok: true, text: `Из накладной добавлено кодов: ${p.codes.length}. Проверьте товарную группу и причину, затем подпишите.` });
+      }
+    } catch { /* ignore */ }
+  }, []);
   React.useEffect(() => {
     if (state && !group) setGroup(state.productGroups[0] ?? 'milk');
   }, [state, group]);

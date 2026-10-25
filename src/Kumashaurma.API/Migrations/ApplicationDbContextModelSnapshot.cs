@@ -442,6 +442,157 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("delivery_zones");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.EdoDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CodesCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("codes_count");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("Date")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("date");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("error");
+
+                    b.Property<string>("FileName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("file_name");
+
+                    b.Property<DateTime?>("ImportedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("imported_at");
+
+                    b.Property<int?>("ImportedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("imported_by_user_id");
+
+                    b.Property<int>("LinesCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("lines_count");
+
+                    b.Property<string>("Number")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("number");
+
+                    b.Property<DateTime?>("ReceivedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<string>("SbisId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sbis_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int?>("StockDocumentId")
+                        .HasColumnType("integer")
+                        .HasColumnName("stock_document_id");
+
+                    b.Property<string>("SupplierInn")
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("supplier_inn");
+
+                    b.Property<string>("SupplierKpp")
+                        .HasMaxLength(9)
+                        .HasColumnType("character varying(9)")
+                        .HasColumnName("supplier_kpp");
+
+                    b.Property<string>("SupplierName")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("supplier_name");
+
+                    b.Property<decimal>("Total")
+                        .HasColumnType("decimal(14,2)")
+                        .HasColumnName("total");
+
+                    b.Property<string>("Xml")
+                        .HasColumnType("text")
+                        .HasColumnName("xml");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date");
+
+                    b.HasIndex("SbisId")
+                        .IsUnique();
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("edo_documents");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.EdoItemMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Factor")
+                        .HasColumnType("decimal(14,6)")
+                        .HasColumnName("factor");
+
+                    b.Property<string>("ItemKey")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("item_key");
+
+                    b.Property<string>("ItemName")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("item_name");
+
+                    b.Property<int>("StockItemId")
+                        .HasColumnType("integer")
+                        .HasColumnName("stock_item_id");
+
+                    b.Property<string>("SupplierInn")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("supplier_inn");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StockItemId");
+
+                    b.HasIndex("SupplierInn", "ItemKey")
+                        .IsUnique();
+
+                    b.ToTable("edo_item_mappings");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.EgaisDocument", b =>
                 {
                     b.Property<int>("Id")
@@ -1940,6 +2091,17 @@ namespace Kumashaurma.API.Migrations
                         .IsRequired();
 
                     b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.EdoItemMapping", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.StockItem", "StockItem")
+                        .WithMany()
+                        .HasForeignKey("StockItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StockItem");
                 });
 
             modelBuilder.Entity("Kumashaurma.API.Models.EgaisDocumentLine", b =>
