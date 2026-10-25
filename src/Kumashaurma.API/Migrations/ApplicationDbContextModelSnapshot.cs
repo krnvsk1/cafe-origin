@@ -490,6 +490,14 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("number");
 
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<int?>("PaidByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("paid_by_user_id");
+
                     b.Property<DateTime?>("ReceivedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("received_at");
@@ -525,9 +533,17 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("character varying(300)")
                         .HasColumnName("supplier_name");
 
+                    b.Property<bool>("TermsParsed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("terms_parsed");
+
                     b.Property<decimal>("Total")
                         .HasColumnType("decimal(14,2)")
                         .HasColumnName("total");
+
+                    b.Property<DateTime?>("UpdDueDate")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("upd_due_date");
 
                     b.Property<decimal?>("VatTotal")
                         .HasColumnType("decimal(14,2)")
@@ -1683,10 +1699,30 @@ namespace Kumashaurma.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("BankAccount")
+                        .HasMaxLength(34)
+                        .HasColumnType("character varying(34)")
+                        .HasColumnName("bank_account");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("bank_name");
+
+                    b.Property<string>("Bik")
+                        .HasMaxLength(9)
+                        .HasColumnType("character varying(9)")
+                        .HasColumnName("bik");
+
                     b.Property<string>("ContactPerson")
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)")
                         .HasColumnName("contact_person");
+
+                    b.Property<string>("CorrAccount")
+                        .HasMaxLength(34)
+                        .HasColumnType("character varying(34)")
+                        .HasColumnName("corr_account");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1713,6 +1749,10 @@ namespace Kumashaurma.API.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("notes");
+
+                    b.Property<int?>("PaymentDelayDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("payment_delay_days");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(30)

@@ -47,7 +47,26 @@ namespace Kumashaurma.API.Services.Edo
         public decimal VatTotal { get; set; }
         /// <summary>Накладная целиком без НДС (продавец не плательщик НДС)</summary>
         public bool WithoutVat { get; set; }
+        /// <summary>Банковские реквизиты продавца (есть не во всех УПД)</summary>
+        public UpdBank? SellerBank { get; set; }
+        /// <summary>Основание передачи товара: договор, заказ, накладная</summary>
+        public UpdBasis? Basis { get; set; }
+        /// <summary>Отсрочка платежа в днях — из доп. сведений поставщика («Отсрочка: 14 дн.»)</summary>
+        public int? PaymentDelayDays { get; set; }
+        /// <summary>Срок оплаты, если поставщик указал его датой</summary>
+        public DateTime? ExplicitDueDate { get; set; }
         public List<UpdLine> Lines { get; set; } = new();
+
+        /// <summary>Срок оплаты: явная дата поставщика, иначе дата накладной + отсрочка; null — срок не указан</summary>
+        public DateTime? DueDate =>
+            ExplicitDueDate ?? (Date.HasValue && PaymentDelayDays.HasValue ? Date.Value.AddDays(PaymentDelayDays.Value) : null);
+    }
+
+    public record UpdBank(string? Account, string? Bik, string? CorrAccount, string? BankName);
+
+    public record UpdBasis(string? Name, string? Number, DateTime? Date)
+    {
+        public bool IsContract => Name != null && Name.Contains("договор", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>НДС по одной ставке: сумма с НДС и сам налог</summary>
@@ -99,7 +118,11 @@ namespace Kumashaurma.API.Services.Edo
             };
 
             var seller = Child(info, "СвПрод");
-            if (seller != null) (result.SellerInn, result.SellerKpp, result.SellerName) = Party(seller);
+            if (seller != null)
+            {
+                (result.SellerInn, result.SellerKpp, result.SellerName) = Party(seller);
+                result.SellerBank = Bank(seller);
+            }
             var buyer = Child(info, "СвПокуп");
             if (buyer != null) result.BuyerInn = Party(buyer).Inn;
 
@@ -149,10 +172,64 @@ namespace Kumashaurma.API.Services.Edo
             result.Total = totals != null ? Dec(Attr(totals, "СтТовУчНалВсего")) : 0;
             if (result.Total == 0) result.Total = result.Lines.Sum(l => l.Sum);
 
+            ParsePaymentTerms(document, info, result);
+
             var (vatTotal, totalWithoutVat) = ParseVat(totals != null ? Child(totals, "СумНалВсего") : null, null);
             result.VatTotal = vatTotal > 0 ? vatTotal : result.Lines.Sum(l => l.Vat);
             result.WithoutVat = result.VatTotal == 0 && (totalWithoutVat || (result.Lines.Count > 0 && result.Lines.All(l => l.WithoutVat)));
             return result;
+        }
+
+        // Максимум отсрочки, который считаем правдоподобным: всё больше — скорее опечатка или не дни
+        private const int MaxPaymentDelayDays = 365;
+
+        /// <summary>
+        /// Условия оплаты. В формате ФНС для них нет отдельного поля, поэтому поставщики пишут их в доп. сведения:
+        /// по строкам (ИнфПолФХЖ2 «Отсрочка» = «14 дн.») или по документу (ИнфПолФХЖ1). Основание — СвПродПер/СвПер/ОснПер.
+        /// </summary>
+        private static void ParsePaymentTerms(XElement document, XElement info, UpdDocument result)
+        {
+            var basis = document.Descendants().FirstOrDefault(e => e.Name.LocalName == "ОснПер");
+            if (basis != null)
+                result.Basis = new UpdBasis(Attr(basis, "РеквНаимДок"), Attr(basis, "РеквНомерДок"), ParseDate(Attr(basis, "РеквДатаДок")));
+
+            var notes = info.Descendants().Where(e => e.Name.LocalName == "ТекстИнф")
+                .Concat(document.Descendants().Where(e => e.Name.LocalName == "ИнфПолФХЖ2"))
+                .Select(e => (Key: (Attr(e, "Идентиф") ?? "").ToLowerInvariant(), Value: Attr(e, "Значен") ?? ""));
+
+            foreach (var (key, value) in notes)
+            {
+                if (key.Contains("отсрочк"))
+                {
+                    var days = LeadingNumber(value);
+                    if (days is > 0 and <= MaxPaymentDelayDays && days > (result.PaymentDelayDays ?? 0))
+                        result.PaymentDelayDays = days;
+                }
+                else if ((key.Contains("срок") || key.Contains("дата")) && key.Contains("оплат"))
+                {
+                    result.ExplicitDueDate ??= ParseDate(value.Trim());
+                }
+            }
+        }
+
+        /// <summary>«14 дн.» → 14</summary>
+        private static int? LeadingNumber(string value)
+        {
+            var digits = new string(value.SkipWhile(c => !char.IsDigit(c)).TakeWhile(char.IsDigit).ToArray());
+            return int.TryParse(digits, out var n) ? n : null;
+        }
+
+        private static UpdBank? Bank(XElement party)
+        {
+            var bank = Child(party, "БанкРекв");
+            if (bank == null) return null;
+            var info = Child(bank, "СвБанк");
+            var result = new UpdBank(
+                Attr(bank, "НомерСчета"),
+                info != null ? Attr(info, "БИК") : null,
+                info != null ? Attr(info, "КорСчет") : null,
+                info != null ? Attr(info, "НаимБанк") : null);
+            return result.Account == null && result.Bik == null ? null : result;
         }
 
         /// <summary>
@@ -197,12 +274,16 @@ namespace Kumashaurma.API.Services.Edo
             return "в т.ч. НДС " + string.Join(", ", groups.Select(g => $"{g.Rate} — {Money(g.Vat)}"));
         }
 
-        /// <summary>Готовое назначение платежа для платёжки по накладной</summary>
+        /// <summary>Готовое назначение платежа для платёжки по накладной (с договором, если он указан основанием)</summary>
         public static string PaymentPurpose(UpdDocument doc)
         {
             var number = string.IsNullOrWhiteSpace(doc.Number) ? "" : $" № {doc.Number}";
             var date = doc.Date.HasValue ? $" от {doc.Date.Value:dd.MM.yyyy}" : "";
-            return $"Оплата по УПД{number}{date}. Сумма {Money(doc.Total)}, {VatPhrase(doc)}";
+            var contract = "";
+            if (doc.Basis is { IsContract: true } b && !string.IsNullOrWhiteSpace(b.Number))
+                // Некоторые поставщики пишут номер уже со знаком «№» — не удваиваем
+                contract = $" по договору № {b.Number.Trim().TrimStart('№').Trim()}" + (b.Date.HasValue ? $" от {b.Date.Value:dd.MM.yyyy}" : "");
+            return $"Оплата по УПД{number}{date}{contract}. Сумма {Money(doc.Total)}, {VatPhrase(doc)}";
         }
 
         /// <summary>«20%», «10%», «20/120», «без НДС»; пустая ставка — ""</summary>

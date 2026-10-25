@@ -114,7 +114,9 @@ namespace Kumashaurma.API.Services.Edo
             {
                 var bytes = await _sbis.DownloadAsync(o, pair.Attachment.FileUrl!, ct);
                 row.Xml = UpdParser.DecodeFile(bytes);
-                Fill(row, UpdParser.Parse(row.Xml));
+                var upd = UpdParser.Parse(row.Xml);
+                Fill(row, upd);
+                await RememberSupplierRequisitesAsync(upd, row.SupplierInn, row.SupplierName);
             }
             catch (Exception ex) when (ex is SbisException or UpdParseException or System.Xml.XmlException)
             {
@@ -136,6 +138,8 @@ namespace Kumashaurma.API.Services.Edo
             row.Total = upd.Total;
             row.VatTotal = upd.VatTotal;
             row.WithoutVat = upd.WithoutVat;
+            row.UpdDueDate = upd.DueDate;
+            row.TermsParsed = true;
             row.LinesCount = upd.Lines.Count;
             row.CodesCount = upd.Lines.Sum(l => l.Codes.Count);
         }
@@ -240,24 +244,76 @@ namespace Kumashaurma.API.Services.Edo
             return receipt;
         }
 
-        private async Task<int?> EnsureSupplierAsync(EdoDocument doc)
+        private async Task<int?> EnsureSupplierAsync(EdoDocument doc) =>
+            (await FindOrCreateSupplierAsync(doc.SupplierInn, doc.SupplierName))?.Id;
+
+        /// <summary>Поставщик по ИНН (или по названию, если ИНН нет); создаётся, если его ещё нет</summary>
+        public async Task<Supplier?> FindOrCreateSupplierAsync(string? inn, string? name)
         {
-            if (string.IsNullOrWhiteSpace(doc.SupplierName) && string.IsNullOrWhiteSpace(doc.SupplierInn)) return null;
-            var supplier = !string.IsNullOrWhiteSpace(doc.SupplierInn)
-                ? await _context.Suppliers.FirstOrDefaultAsync(s => s.Inn == doc.SupplierInn)
-                : await _context.Suppliers.FirstOrDefaultAsync(s => s.Name == doc.SupplierName);
-            if (supplier != null) return supplier.Id;
+            if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(inn)) return null;
+            var supplier = !string.IsNullOrWhiteSpace(inn)
+                ? await _context.Suppliers.FirstOrDefaultAsync(s => s.Inn == inn)
+                : await _context.Suppliers.FirstOrDefaultAsync(s => s.Name == name);
+            if (supplier != null) return supplier;
 
             supplier = new Supplier
             {
-                Name = Trunc(doc.SupplierName ?? $"ИНН {doc.SupplierInn}", 200)!,
-                Inn = doc.SupplierInn,
+                Name = Trunc(name ?? $"ИНН {inn}", 200)!,
+                Inn = inn,
                 Notes = "Добавлен из СБИС",
                 CreatedAt = DateTime.UtcNow
             };
             _context.Suppliers.Add(supplier);
             await _context.SaveChangesAsync();
-            return supplier.Id;
+            return supplier;
+        }
+
+        /// <summary>
+        /// Банковские реквизиты из УПД запоминаем у поставщика: они есть не в каждой накладной,
+        /// а для платёжки нужны всегда. Заполняем только пустые — то, что ввели вручную, не перетираем.
+        /// </summary>
+        private async Task RememberSupplierRequisitesAsync(UpdDocument upd, string? inn, string? name)
+        {
+            if (upd.SellerBank == null || string.IsNullOrWhiteSpace(inn)) return;
+            var supplier = await FindOrCreateSupplierAsync(inn, name ?? upd.SellerName);
+            if (supplier == null || !string.IsNullOrWhiteSpace(supplier.BankAccount)) return;
+            supplier.BankAccount = Trunc(upd.SellerBank.Account, 34);
+            supplier.Bik = Trunc(upd.SellerBank.Bik, 9);
+            supplier.CorrAccount = Trunc(upd.SellerBank.CorrAccount, 34);
+            supplier.BankName = Trunc(upd.SellerBank.BankName, 300);
+            await _context.SaveChangesAsync();
+        }
+
+        // Сколько старых накладных досчитывать за один заход
+        private const int BackfillBatch = 200;
+
+        /// <summary>
+        /// Накладные, загруженные до появления НДС и условий оплаты: досчитываем из сохранённого XML
+        /// и запоминаем реквизиты поставщиков.
+        /// </summary>
+        public async Task BackfillAsync()
+        {
+            var rows = await _context.EdoDocuments
+                .Where(d => (d.VatTotal == null || !d.TermsParsed) && d.Xml != null)
+                .Take(BackfillBatch)
+                .ToListAsync();
+            foreach (var row in rows)
+            {
+                try
+                {
+                    var upd = UpdParser.Parse(row.Xml!);
+                    row.VatTotal = upd.VatTotal;
+                    row.WithoutVat = upd.WithoutVat;
+                    row.UpdDueDate = upd.DueDate;
+                    await RememberSupplierRequisitesAsync(upd, row.SupplierInn, row.SupplierName);
+                }
+                catch (UpdParseException)
+                {
+                    row.VatTotal ??= 0; // файл не разбирается — не пытаемся снова на каждом запросе
+                }
+                row.TermsParsed = true;
+            }
+            if (rows.Count > 0) await _context.SaveChangesAsync();
         }
 
         private static DateTime? ParseDate(string? s) =>

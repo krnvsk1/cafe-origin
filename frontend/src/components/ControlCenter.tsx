@@ -15,7 +15,7 @@ export interface ControlLink {
 }
 
 // Порядок групп в окне; разделы без группы из списка попадут в конец
-const GROUP_ORDER = ['Смена', 'Меню', 'Продажи и маркетинг', 'Склад', 'Команда'];
+const GROUP_ORDER = ['Смена', 'Меню', 'Продажи и маркетинг', 'Финансы', 'Склад', 'Команда'];
 
 const Tile: React.FC<{ link: ControlLink; active: boolean; onOpen: () => void }> = ({ link, active, onOpen }) => {
   const theme = useTheme();

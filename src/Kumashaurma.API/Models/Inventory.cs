@@ -130,6 +130,27 @@ namespace Kumashaurma.API.Models
         [Column("notes")]
         public string? Notes { get; set; }
 
+        /// <summary>Отсрочка платежа по договору, дней — для срока оплаты накладных (задаётся в «Финансах»)</summary>
+        [Column("payment_delay_days")]
+        public int? PaymentDelayDays { get; set; }
+
+        /// <summary>Расчётный счёт — запоминается из УПД поставщика</summary>
+        [MaxLength(34)]
+        [Column("bank_account")]
+        public string? BankAccount { get; set; }
+
+        [MaxLength(9)]
+        [Column("bik")]
+        public string? Bik { get; set; }
+
+        [MaxLength(34)]
+        [Column("corr_account")]
+        public string? CorrAccount { get; set; }
+
+        [MaxLength(300)]
+        [Column("bank_name")]
+        public string? BankName { get; set; }
+
         [Column("is_archived")]
         public bool IsArchived { get; set; }
 
