@@ -529,6 +529,14 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("decimal(14,2)")
                         .HasColumnName("total");
 
+                    b.Property<decimal?>("VatTotal")
+                        .HasColumnType("decimal(14,2)")
+                        .HasColumnName("vat_total");
+
+                    b.Property<bool>("WithoutVat")
+                        .HasColumnType("boolean")
+                        .HasColumnName("without_vat");
+
                     b.Property<string>("Xml")
                         .HasColumnType("text")
                         .HasColumnName("xml");

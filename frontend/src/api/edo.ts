@@ -23,6 +23,9 @@ export interface EdoDocumentRow {
   supplierInn: string | null;
   supplierName: string | null;
   total: number;
+  /** Сумма НДС; null — ещё не посчитана */
+  vatTotal: number | null;
+  withoutVat: boolean;
   linesCount: number;
   codesCount: number;
   status: EdoStatus;
@@ -42,6 +45,8 @@ export interface EdoLine {
   quantity: number;
   price: number;
   vatRate: string | null;
+  vat: number;
+  withoutVat: boolean;
   sum: number;
   codes: string[];
   stockItemId: number | null;
@@ -52,9 +57,21 @@ export interface EdoLine {
   remembered: boolean;
 }
 
+/** НДС по накладной — для платёжки */
+export interface EdoVat {
+  total: number;
+  withoutVat: boolean;
+  byRate: { rate: string; sum: number; vat: number }[];
+  /** «в т.ч. НДС 20% — 200,00 руб.» / «НДС не облагается» */
+  phrase: string;
+  /** Готовое назначение платежа */
+  paymentPurpose: string;
+}
+
 export interface EdoDocumentDetail extends EdoDocumentRow {
   supplierKpp: string | null;
   fileName: string | null;
+  vat: EdoVat | null;
   lines: EdoLine[] | null;
 }
 

@@ -6,6 +6,7 @@ import {
 import {
   Close as CloseIcon, SettingsOutlined as SettingsIcon, Sync as SyncIcon, ChevronRight as ChevronRightIcon,
   Add as AddIcon, ReceiptLongOutlined as DocIcon, QrCode2 as CodesIcon, AutoAwesome as RememberedIcon,
+  ContentCopy as CopyIcon, Check as CopiedIcon,
 } from '@mui/icons-material';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -134,6 +135,42 @@ const EdoSettingsDialog: React.FC<{ open: boolean; state: EdoState; onClose: () 
 
 interface LineChoice { stockItemId: number | null; factor: string; skip: boolean }
 
+/** «НДС 20% — 200 ₽, 10% — 96 ₽» / «Без НДС» — под итогом накладной */
+const vatSummary = (vat: EdoVat): string => {
+  if (vat.withoutVat) return 'Без НДС';
+  if (vat.total === 0) return 'НДС в накладной не указан';
+  if (vat.byRate.length <= 1) return `в т.ч. НДС${vat.byRate[0]?.rate ? ` ${vat.byRate[0].rate}` : ''}: ${fmtMoney(vat.total)}`;
+  return `в т.ч. НДС ${fmtMoney(vat.total)}: ${vat.byRate.map(g => `${g.rate} — ${fmtMoney(g.vat)}`).join(', ')}`;
+};
+
+// Сколько показывать «Скопировано» после нажатия
+const COPIED_HINT_MS = 2000;
+
+/** Назначение платежа для платёжки — с кнопкой копирования */
+const PaymentPurpose: React.FC<{ text: string }> = ({ text }) => {
+  const [copied, setCopied] = React.useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), COPIED_HINT_MS);
+    } catch {
+      setCopied(false); // буфер обмена недоступен — текст можно выделить вручную
+    }
+  };
+  return (
+    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '14px', px: 2, py: 1.25, display: 'flex', gap: 1.5, alignItems: 'center' }}>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="caption" color="text.secondary">Назначение платежа</Typography>
+        <Typography sx={{ userSelect: 'all', lineHeight: 1.4 }}>{text}</Typography>
+      </Box>
+      <Button size="small" onClick={copy} startIcon={copied ? <CopiedIcon /> : <CopyIcon />} sx={{ flexShrink: 0 }}>
+        {copied ? 'Скопировано' : 'Скопировать'}
+      </Button>
+    </Box>
+  );
+};
+
 const EdoDocumentDialog: React.FC<{ id: number | null; onClose: () => void; onOpenReceipt: (id: number) => void }> = ({ id, onClose, onOpenReceipt }) => {
   const theme = useTheme();
   const t = tokens[theme.palette.mode];
@@ -260,7 +297,11 @@ const EdoDocumentDialog: React.FC<{ id: number | null; onClose: () => void; onOp
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography sx={{ fontWeight: 600 }}>{l.no}. {l.name}</Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {[l.code && `арт. ${l.code}`, l.gtin && `GTIN ${l.gtin}`, l.vatRate && `НДС ${l.vatRate}`].filter(Boolean).join(' · ')}
+                          {[
+                            l.code && `арт. ${l.code}`,
+                            l.gtin && `GTIN ${l.gtin}`,
+                            l.withoutVat ? 'без НДС' : l.vatRate && `НДС ${l.vatRate}${l.vat > 0 ? ` — ${fmtMoney(l.vat)}` : ''}`,
+                          ].filter(Boolean).join(' · ')}
                           {l.codes.length > 0 && <Chip size="small" icon={<CodesIcon />} label={`${l.codes.length} КМ`} sx={{ ml: 1, height: 20 }} />}
                         </Typography>
                       </Box>
@@ -336,11 +377,15 @@ const EdoDocumentDialog: React.FC<{ id: number | null; onClose: () => void; onOp
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: t.surfaceMuted, borderRadius: '14px', px: 2, py: 1.5, flexWrap: 'wrap', gap: 1 }}>
-              <Typography sx={{ fontWeight: 700 }}>Итого с НДС: {fmtMoney(doc.total)}</Typography>
+              <Box>
+                <Typography sx={{ fontWeight: 700 }}>Итого с НДС: {fmtMoney(doc.total)}</Typography>
+                {doc.vat && <Typography variant="body2" color="text.secondary">{vatSummary(doc.vat)}</Typography>}
+              </Box>
               {allCodes.length > 0 && can(P.Chz) && (
                 <Button size="small" startIcon={<CodesIcon />} onClick={toChz}>Вывести {allCodes.length} КМ из оборота</Button>
               )}
             </Box>
+            {doc.vat && <PaymentPurpose text={doc.vat.paymentPurpose} />}
             {error && <Alert severity="error">{error}</Alert>}
           </>
         )}
@@ -475,7 +520,14 @@ const EdoTab: React.FC<{ onOpenReceipt: (id: number) => void }> = ({ onOpenRecei
                     № {d.number ?? '—'} от {fmtDate(d.date)} · {d.linesCount} поз.{d.codesCount ? ` · ${d.codesCount} КМ` : ''}{d.error ? ` · ${d.error}` : ''}
                   </Typography>
                 </Box>
-                <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtMoney(d.total)}</Typography>
+                <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                  <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtMoney(d.total)}</Typography>
+                  {(d.withoutVat || d.vatTotal !== null) && (
+                    <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                      {d.withoutVat ? 'без НДС' : `НДС ${fmtMoney(d.vatTotal ?? 0)}`}
+                    </Typography>
+                  )}
+                </Box>
                 <ChevronRightIcon sx={{ color: 'text.secondary', display: { xs: 'none', sm: 'block' } }} />
               </ListRow>
             );

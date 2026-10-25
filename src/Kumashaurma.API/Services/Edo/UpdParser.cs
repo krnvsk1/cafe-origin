@@ -18,6 +18,10 @@ namespace Kumashaurma.API.Services.Edo
         public decimal Price { get; set; }
         public decimal SumWithoutVat { get; set; }
         public string? VatRate { get; set; }
+        /// <summary>Сумма НДС по строке (0 — без НДС или не указана)</summary>
+        public decimal Vat { get; set; }
+        /// <summary>Строка помечена «без НДС»</summary>
+        public bool WithoutVat { get; set; }
         public decimal Sum { get; set; }
         /// <summary>Коды маркировки (КИЗ / упаковки) из накладной</summary>
         public List<string> Codes { get; set; } = new();
@@ -39,8 +43,15 @@ namespace Kumashaurma.API.Services.Edo
         public string? SellerName { get; set; }
         public string? BuyerInn { get; set; }
         public decimal Total { get; set; }
+        /// <summary>Сумма НДС по накладной (из итогов УПД, иначе сумма по строкам)</summary>
+        public decimal VatTotal { get; set; }
+        /// <summary>Накладная целиком без НДС (продавец не плательщик НДС)</summary>
+        public bool WithoutVat { get; set; }
         public List<UpdLine> Lines { get; set; } = new();
     }
+
+    /// <summary>НДС по одной ставке: сумма с НДС и сам налог</summary>
+    public record UpdVatGroup(string Rate, decimal Sum, decimal Vat);
 
     public class UpdParseException : Exception
     {
@@ -114,6 +125,10 @@ namespace Kumashaurma.API.Services.Edo
                 };
                 if (line.Sum == 0) line.Sum = line.SumWithoutVat;
                 if (line.Sum == 0 && line.Price > 0) line.Sum = Math.Round(line.Price * line.Quantity, 2);
+                (line.Vat, line.WithoutVat) = ParseVat(Child(row, "СумНал"), line.VatRate);
+                // Сумма налога не указана, но есть суммы с НДС и без — налог как разница
+                if (line.Vat == 0 && !line.WithoutVat && line.SumWithoutVat > 0 && line.Sum > line.SumWithoutVat)
+                    line.Vat = line.Sum - line.SumWithoutVat;
 
                 if (extra != null)
                     foreach (var ids in Children(extra, "НомСредИдентТов"))
@@ -133,8 +148,65 @@ namespace Kumashaurma.API.Services.Edo
             var totals = Child(table, "ВсегоОпл");
             result.Total = totals != null ? Dec(Attr(totals, "СтТовУчНалВсего")) : 0;
             if (result.Total == 0) result.Total = result.Lines.Sum(l => l.Sum);
+
+            var (vatTotal, totalWithoutVat) = ParseVat(totals != null ? Child(totals, "СумНалВсего") : null, null);
+            result.VatTotal = vatTotal > 0 ? vatTotal : result.Lines.Sum(l => l.Vat);
+            result.WithoutVat = result.VatTotal == 0 && (totalWithoutVat || (result.Lines.Count > 0 && result.Lines.All(l => l.WithoutVat)));
             return result;
         }
+
+        /// <summary>
+        /// Блок «СумНал»: внутри либо СумНал (сумма), либо БезНДС («без НДС»), либо ДефНДС («-», не указано).
+        /// </summary>
+        private static (decimal Vat, bool WithoutVat) ParseVat(XElement? holder, string? rate)
+        {
+            if (holder != null)
+            {
+                var amount = Child(holder, "СумНал");
+                if (amount != null) return (Dec(amount.Value), false);
+                if (Child(holder, "БезНДС") != null) return (0, true);
+            }
+            return (0, rate != null && rate.Contains("без", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>НДС по ставкам (только строки, где налог есть)</summary>
+        public static List<UpdVatGroup> VatByRate(UpdDocument doc) =>
+            doc.Lines
+                .Where(l => l.Vat > 0)
+                .GroupBy(l => NormalizeRate(l.VatRate))
+                .Select(g => new UpdVatGroup(g.Key, g.Sum(l => l.Sum), g.Sum(l => l.Vat)))
+                .OrderByDescending(g => g.Vat)
+                .ToList();
+
+        private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
+
+        // Разделитель тысяч в ru-RU — неразрывный (или узкий неразрывный) пробел; в платёжке нужен обычный
+        private static string Money(decimal value) => value.ToString("N2", Ru).Replace('\u00A0', ' ').Replace('\u202F', ' ') + " руб.";
+
+        /// <summary>«в т.ч. НДС 20% — 1 234,56 руб.» / «НДС не облагается» — как пишут в назначении платежа</summary>
+        public static string VatPhrase(UpdDocument doc)
+        {
+            if (doc.WithoutVat) return "НДС не облагается";
+            if (doc.VatTotal == 0) return "НДС не указан";
+            var groups = VatByRate(doc);
+            if (groups.Count <= 1)
+            {
+                var rate = groups.FirstOrDefault()?.Rate;
+                return string.IsNullOrEmpty(rate) ? $"в т.ч. НДС {Money(doc.VatTotal)}" : $"в т.ч. НДС {rate} — {Money(doc.VatTotal)}";
+            }
+            return "в т.ч. НДС " + string.Join(", ", groups.Select(g => $"{g.Rate} — {Money(g.Vat)}"));
+        }
+
+        /// <summary>Готовое назначение платежа для платёжки по накладной</summary>
+        public static string PaymentPurpose(UpdDocument doc)
+        {
+            var number = string.IsNullOrWhiteSpace(doc.Number) ? "" : $" № {doc.Number}";
+            var date = doc.Date.HasValue ? $" от {doc.Date.Value:dd.MM.yyyy}" : "";
+            return $"Оплата по УПД{number}{date}. Сумма {Money(doc.Total)}, {VatPhrase(doc)}";
+        }
+
+        /// <summary>«20%», «10%», «20/120», «без НДС»; пустая ставка — ""</summary>
+        private static string NormalizeRate(string? rate) => (rate ?? "").Trim().Replace(" %", "%");
 
         /// <summary>Сколько единиц склада в одной единице накладной — по коду ОКЕИ (если единицы совместимы)</summary>
         public static decimal DefaultFactor(string? okei, string stockUnit) => (okei, stockUnit) switch

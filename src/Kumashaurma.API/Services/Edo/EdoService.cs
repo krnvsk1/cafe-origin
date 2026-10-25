@@ -134,6 +134,8 @@ namespace Kumashaurma.API.Services.Edo
             row.SupplierKpp = Trunc(upd.SellerKpp, 9);
             row.SupplierName = Trunc(upd.SellerName ?? row.SupplierName, 300);
             row.Total = upd.Total;
+            row.VatTotal = upd.VatTotal;
+            row.WithoutVat = upd.WithoutVat;
             row.LinesCount = upd.Lines.Count;
             row.CodesCount = upd.Lines.Sum(l => l.Codes.Count);
         }

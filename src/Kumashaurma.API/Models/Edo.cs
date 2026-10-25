@@ -53,6 +53,14 @@ namespace Kumashaurma.API.Models
         [Column("total", TypeName = "decimal(14,2)")]
         public decimal Total { get; set; }
 
+        /// <summary>Сумма НДС (для платёжки); null — накладная загружена до появления колонки, считается из XML</summary>
+        [Column("vat_total", TypeName = "decimal(14,2)")]
+        public decimal? VatTotal { get; set; }
+
+        /// <summary>Накладная без НДС (продавец не плательщик НДС)</summary>
+        [Column("without_vat")]
+        public bool WithoutVat { get; set; }
+
         [Column("lines_count")]
         public int LinesCount { get; set; }
 

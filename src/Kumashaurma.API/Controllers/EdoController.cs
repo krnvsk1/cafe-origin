@@ -124,17 +124,44 @@ namespace Kumashaurma.API.Controllers
         [HttpGet("documents")]
         public async Task<IActionResult> Documents([FromQuery] string? status, [FromQuery] int take = 100)
         {
+            await BackfillVatAsync();
             var q = _context.EdoDocuments.AsNoTracking();
             if (!string.IsNullOrEmpty(status)) q = q.Where(d => d.Status == status);
             var docs = await q.OrderByDescending(d => d.Date).ThenByDescending(d => d.Id)
                 .Take(Math.Clamp(take, 1, 500))
                 .Select(d => new
                 {
-                    d.Id, d.Number, d.Date, d.SupplierInn, d.SupplierName, d.Total, d.LinesCount, d.CodesCount,
+                    d.Id, d.Number, d.Date, d.SupplierInn, d.SupplierName, d.Total, d.VatTotal, d.WithoutVat, d.LinesCount, d.CodesCount,
                     d.Status, d.Error, d.StockDocumentId, d.ReceivedAt, d.ImportedAt
                 })
                 .ToListAsync();
             return Ok(docs);
+        }
+
+        // Накладные, загруженные до появления колонки НДС, досчитываем из XML один раз
+        private const int VatBackfillBatch = 200;
+
+        private async Task BackfillVatAsync()
+        {
+            var rows = await _context.EdoDocuments
+                .Where(d => d.VatTotal == null && d.Xml != null)
+                .Take(VatBackfillBatch)
+                .ToListAsync();
+            if (rows.Count == 0) return;
+            foreach (var row in rows)
+            {
+                try
+                {
+                    var upd = UpdParser.Parse(row.Xml!);
+                    row.VatTotal = upd.VatTotal;
+                    row.WithoutVat = upd.WithoutVat;
+                }
+                catch (UpdParseException)
+                {
+                    row.VatTotal = 0; // файл не разбирается — не пытаемся снова на каждом запросе
+                }
+            }
+            await _context.SaveChangesAsync();
         }
 
         // GET: api/edo/documents/{id} — накладная со строками и подставленными позициями склада
@@ -145,10 +172,19 @@ namespace Kumashaurma.API.Controllers
             if (d == null) return NotFound(new { message = "Накладная не найдена" });
 
             object? lines = null;
+            object? vat = null;
             string? parseError = null;
             try
             {
-                var (_, view) = await _edo.ViewAsync(d);
+                var (upd, view) = await _edo.ViewAsync(d);
+                vat = new
+                {
+                    total = upd.VatTotal,
+                    withoutVat = upd.WithoutVat,
+                    byRate = UpdParser.VatByRate(upd).Select(g => new { rate = g.Rate, sum = g.Sum, vat = g.Vat }),
+                    phrase = UpdParser.VatPhrase(upd),
+                    paymentPurpose = UpdParser.PaymentPurpose(upd)
+                };
                 lines = view.Select(v => new
                 {
                     no = v.Line.No,
@@ -160,6 +196,8 @@ namespace Kumashaurma.API.Controllers
                     quantity = v.Line.Quantity,
                     price = v.Line.Price,
                     vatRate = v.Line.VatRate,
+                    vat = v.Line.Vat,
+                    withoutVat = v.Line.WithoutVat,
                     sum = v.Line.Sum,
                     codes = v.Line.Codes,
                     stockItemId = v.StockItemId,
@@ -175,6 +213,8 @@ namespace Kumashaurma.API.Controllers
             {
                 d.Id, d.Number, d.Date, d.SupplierInn, d.SupplierKpp, d.SupplierName, d.Total, d.LinesCount, d.CodesCount,
                 d.Status, error = d.Error ?? parseError, d.StockDocumentId, d.ReceivedAt, d.ImportedAt, d.FileName,
+                d.VatTotal, d.WithoutVat,
+                vat,
                 lines
             });
         }
