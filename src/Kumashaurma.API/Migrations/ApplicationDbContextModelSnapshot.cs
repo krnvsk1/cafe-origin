@@ -1839,9 +1839,13 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("sort_order");
 
-                    b.Property<int>("StockItemId")
+                    b.Property<int?>("StockItemId")
                         .HasColumnType("integer")
                         .HasColumnName("stock_item_id");
+
+                    b.Property<int?>("SubDishId")
+                        .HasColumnType("integer")
+                        .HasColumnName("sub_dish_id");
 
                     b.Property<int>("TechCardId")
                         .HasColumnType("integer")
@@ -1851,9 +1855,14 @@ namespace Kumashaurma.API.Migrations
 
                     b.HasIndex("StockItemId");
 
+                    b.HasIndex("SubDishId");
+
                     b.HasIndex("TechCardId");
 
-                    b.ToTable("tech_card_lines");
+                    b.ToTable("tech_card_lines", t =>
+                        {
+                            t.HasCheckConstraint("ck_tech_card_lines_component", "(stock_item_id IS NOT NULL AND sub_dish_id IS NULL) OR (stock_item_id IS NULL AND sub_dish_id IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Kumashaurma.API.Models.UserAddress", b =>
@@ -2365,8 +2374,12 @@ namespace Kumashaurma.API.Migrations
                     b.HasOne("Kumashaurma.API.Models.StockItem", "StockItem")
                         .WithMany()
                         .HasForeignKey("StockItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Kumashaurma.API.Models.Shawarma", "SubDish")
+                        .WithMany()
+                        .HasForeignKey("SubDishId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("Kumashaurma.API.Models.TechCard", "TechCard")
                         .WithMany("Lines")
@@ -2375,6 +2388,8 @@ namespace Kumashaurma.API.Migrations
                         .IsRequired();
 
                     b.Navigation("StockItem");
+
+                    b.Navigation("SubDish");
 
                     b.Navigation("TechCard");
                 });
