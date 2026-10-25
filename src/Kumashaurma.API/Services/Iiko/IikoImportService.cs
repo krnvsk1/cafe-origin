@@ -210,9 +210,9 @@ namespace Kumashaurma.API.Services.Iiko
                 bool saved = choice.Kind switch
                 {
                     "dish" => await _context.Shawarmas.AnyAsync(x => x.Id == choice.Id)
-                              && await SaveCardAsync(c => c.ShawarmaId == choice.Id, () => new TechCard { ShawarmaId = choice.Id }, lines, chart, false, overwrite, 1),
+                              && await SaveCardAsync(c => c.ShawarmaId == choice.Id, () => new TechCard { ShawarmaId = choice.Id }, lines, chart, false, overwrite, 1, OutputGrams(dish, chart, s)),
                     "addon" => await _context.Addons.AnyAsync(x => x.Id == choice.Id)
-                               && await SaveCardAsync(c => c.AddonId == choice.Id, () => new TechCard { AddonId = choice.Id }, lines, chart, false, overwrite, 1),
+                               && await SaveCardAsync(c => c.AddonId == choice.Id, () => new TechCard { AddonId = choice.Id }, lines, chart, false, overwrite, 1, OutputGrams(dish, chart, s)),
                     _ => false
                 };
                 if (saved) cards++; else skipped++;
@@ -225,7 +225,8 @@ namespace Kumashaurma.API.Services.Iiko
 
         /// <summary>Создать или заменить техкарту. false — карта уже есть и перезапись выключена</summary>
         private async Task<bool> SaveCardAsync(System.Linq.Expressions.Expression<Func<TechCard, bool>> find, Func<TechCard> create,
-            List<(StockItem Item, decimal Gross, decimal Loss)> lines, IikoChart chart, bool semi, bool overwrite, decimal unitFactor)
+            List<(StockItem Item, decimal Gross, decimal Loss)> lines, IikoChart chart, bool semi, bool overwrite, decimal unitFactor,
+            decimal? outputGrams = null)
         {
             await _context.SaveChangesAsync(); // новые позиции склада получают Id
             var card = await _context.TechCards.Include(c => c.Lines).FirstOrDefaultAsync(find);
@@ -242,9 +243,7 @@ namespace Kumashaurma.API.Services.Iiko
             }
 
             card.YieldQuantity = semi ? Math.Round(chart.AssembledAmount * unitFactor, 3) : 1;
-            // Выход блюда в граммах — сумма нетто весовых ингредиентов (для справки)
-            var weight = lines.Where(l => l.Item.Unit is StockUnits.Kg or StockUnits.Liter).Sum(l => l.Gross * (1 - l.Loss / 100m)) * 1000m;
-            card.OutputWeight = !semi && weight > 0 ? Math.Round(weight / Math.Max(chart.AssembledAmount, 1), 1) : null;
+            card.OutputWeight = !semi && outputGrams is > 0 ? Math.Round(outputGrams.Value, 1) : null;
             var tech = chart.Technology?.Trim();
             card.Instructions = string.IsNullOrEmpty(tech) ? card.Instructions : tech.Length > 4000 ? tech[..4000] : tech;
             card.UpdatedAt = DateTime.UtcNow;
@@ -264,6 +263,27 @@ namespace Kumashaurma.API.Services.Iiko
                 });
             }
             return true;
+        }
+
+        /// <summary>
+        /// Выход порции, г. Берём вес порции из карточки блюда iiko (UNIT_WEIGHT); если его нет — считаем по карте:
+        /// весовые ингредиенты и полуфабрикаты — по выходу, штучные — по весу нетто из карты (iiko пишет его в кг) или весу штуки.
+        /// </summary>
+        public static decimal? OutputGrams(IikoProduct dish, IikoChart chart, IikoSnapshot s)
+        {
+            if (dish.UnitWeight > 0 && UnitOf(dish.Unit).Unit == StockUnits.Piece) return dish.UnitWeight * 1000m;
+
+            decimal kg = 0;
+            foreach (var i in chart.Items)
+            {
+                var p = s.Products.GetValueOrDefault(i.ProductId);
+                var (unit, factor) = UnitOf(p?.Unit);
+                var output = i.AmountOut > 0 ? i.AmountOut : i.AmountMiddle;
+                kg += unit == StockUnits.Piece
+                    ? output > 0 ? output : (p?.UnitWeight ?? 0) * i.AmountIn
+                    : (output > 0 ? output : i.AmountIn) * factor;
+            }
+            return kg > 0 ? kg * 1000m / Math.Max(chart.AssembledAmount, 1) : null;
         }
 
         /// <summary>Единица iiko → единица склада и множитель (г → кг × 0,001)</summary>

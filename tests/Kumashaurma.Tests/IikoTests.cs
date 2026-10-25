@@ -43,6 +43,31 @@ namespace Kumashaurma.Tests
             Assert.Equal(2m, Assert.Single(old["02415"].Items).AmountIn);
         }
 
+        [Fact]
+        public void CountsPieceAndSemiIngredientsInOutputWeight()
+        {
+            var s = new IikoSnapshot();
+            s.Products["lav"] = new IikoProduct { Id = "lav", Name = "Лаваш", Type = "GOODS", Unit = "шт" };
+            s.Products["cut"] = new IikoProduct { Id = "cut", Name = "П/Ф котлета", Type = "PREPARED", Unit = "шт", UnitWeight = 0.147m };
+            s.Products["sauce"] = new IikoProduct { Id = "sauce", Name = "П/Ф соус", Type = "PREPARED", Unit = "кг" };
+            var chart = new IikoChart
+            {
+                AssembledAmount = 1,
+                Items =
+                {
+                    new IikoChartItem { ProductId = "lav", AmountIn = 1, AmountMiddle = 0.089m, AmountOut = 0.089m },  // 1 шт = 89 г
+                    new IikoChartItem { ProductId = "cut", AmountIn = 1 },                                          // 1 шт × 147 г
+                    new IikoChartItem { ProductId = "sauce", AmountIn = 0.05m, AmountMiddle = 0.05m, AmountOut = 0.045m },
+                }
+            };
+            var dish = new IikoProduct { Id = "d", Name = "Шаурма", Type = "DISH", Unit = "кг" };
+            Assert.Equal(281m, IikoImportService.OutputGrams(dish, chart, s));
+
+            // Если у блюда в порциях указан вес порции — берём его
+            var portion = new IikoProduct { Id = "d2", Name = "Шаурма", Type = "DISH", Unit = "порц", UnitWeight = 0.3m };
+            Assert.Equal(300m, IikoImportService.OutputGrams(portion, chart, s));
+        }
+
         [Theory]
         [InlineData("кг", "kg", 1)]
         [InlineData("г", "kg", 0.001)]

@@ -19,6 +19,8 @@ namespace Kumashaurma.API.Services.Iiko
         public string? MainUnitId { get; set; }
         /// <summary>Название единицы (кг, л, шт, порц)</summary>
         public string? Unit { get; set; }
+        /// <summary>Вес единицы, кг (у блюда в порциях — выход порции; у штучного товара — вес штуки)</summary>
+        public decimal UnitWeight { get; set; }
     }
 
     public class IikoChartItem
@@ -196,6 +198,7 @@ namespace Kumashaurma.API.Services.Iiko
                     Name = r["NAME"].Trim(),
                     Type = (r.GetValueOrDefault("TYPE") ?? "").Trim().ToUpperInvariant(),
                     Unit = r.GetValueOrDefault("MEASURE_UNIT")?.Trim(),
+                    UnitWeight = Dec(r.GetValueOrDefault("UNIT_WEIGHT")),
                 })
                 .ToList();
         }
