@@ -204,6 +204,12 @@ builder.Services.AddSingleton<Kumashaurma.API.Services.Chz.ChzSettingsProvider>(
 builder.Services.AddHttpClient<Kumashaurma.API.Services.Chz.ChzClient>(client => client.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddScoped<Kumashaurma.API.Services.Chz.ChzService>();
 
+// Электронные накладные из СБИС (Saby): настраивается в админке (Склад → Накладные СБИС)
+builder.Services.AddSingleton<Kumashaurma.API.Services.Edo.SbisSettingsProvider>();
+builder.Services.AddHttpClient<Kumashaurma.API.Services.Edo.SbisClient>(client => client.Timeout = TimeSpan.FromSeconds(60));
+builder.Services.AddScoped<Kumashaurma.API.Services.Edo.EdoService>();
+builder.Services.AddHostedService<Kumashaurma.API.Services.Edo.SbisSyncWorker>();
+
 // Импорт меню с kumashaurma.ru
 builder.Services.AddHttpClient<MenuImportService>(client =>
 {

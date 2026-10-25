@@ -58,6 +58,8 @@ namespace Kumashaurma.API.Data
 
         // Честный знак
         public DbSet<ChzDocument> ChzDocuments { get; set; } = null!;
+        public DbSet<EdoDocument> EdoDocuments { get; set; } = null!;
+        public DbSet<EdoItemMapping> EdoItemMappings { get; set; } = null!;
 
         // ЕГАИС
         public DbSet<EgaisDocument> EgaisDocuments { get; set; } = null!;
@@ -401,6 +403,19 @@ namespace Kumashaurma.API.Data
             });
 
             modelBuilder.Entity<StockItem>(entity => entity.HasIndex(e => e.EgaisAlcCode));
+
+            modelBuilder.Entity<EdoDocument>(entity =>
+            {
+                entity.HasIndex(e => e.SbisId).IsUnique();
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.Date);
+            });
+
+            modelBuilder.Entity<EdoItemMapping>(entity =>
+            {
+                entity.HasIndex(e => new { e.SupplierInn, e.ItemKey }).IsUnique();
+                entity.HasOne(e => e.StockItem).WithMany().HasForeignKey(e => e.StockItemId).OnDelete(DeleteBehavior.Cascade);
+            });
 
             modelBuilder.Entity<ChzDocument>(entity =>
             {
