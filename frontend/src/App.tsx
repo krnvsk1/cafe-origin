@@ -304,7 +304,8 @@ function App() {
                       minWidth: { xs: 48, sm: 120 },
                       px: { xs: 1.5, sm: 2.25 },
                       fontWeight: 700,
-                      '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } },
+                      whiteSpace: 'nowrap',
+                      '& .MuiButton-startIcon': { mr: { xs: totalItems ? 0.75 : 0, sm: 1 } },
                     }}
                   >
                     <Box component="span" sx={{ display: { xs: totalItems ? 'inline' : 'none', sm: 'inline' } }}>

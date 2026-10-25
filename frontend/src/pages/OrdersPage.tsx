@@ -632,7 +632,7 @@ const OrdersPage: React.FC = () => {
 
       {/* Статистика - только для админов */}
       {!isLoading && orders.length > 0 && isAdmin && (
-        <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(5, 1fr)' }, gap: 2, mb: 3 }}>
           <Paper sx={{ p: 2, minWidth: 120 }}>
             <Typography variant="body2" color="text.secondary">Всего заказов</Typography>
             <Typography variant="h6">{orders.length}</Typography>
@@ -658,7 +658,7 @@ const OrdersPage: React.FC = () => {
           <Paper sx={{ p: 2, minWidth: 120 }}>
             <Typography variant="body2" color="text.secondary">Выручка</Typography>
             <Typography variant="h6" sx={{ color: 'primary.main' }}>
-              {stats.total} ₽
+              {stats.total.toLocaleString('ru-RU')} ₽
             </Typography>
           </Paper>
         </Box>

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { plural } from '../components/CartPanel';
 import {
   Container,
   Typography,
@@ -36,7 +37,6 @@ import {
   useTheme,
   Tooltip,
   CircularProgress,
-  Badge
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -372,21 +372,26 @@ const AdminMenuPage: React.FC = () => {
                                 color="primary"
                                 sx={{ height: 22, fontSize: '0.7rem' }}
                               />
-                              <Badge
-                                badgeContent={children.length}
-                                color={availableCount === children.length ? 'success' : availableCount > 0 ? 'warning' : 'default'}
-                                sx={{
-                                  '& .MuiBadge-badge': {
-                                    fontSize: '0.7rem',
-                                    height: 20,
+                              <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                <Box
+                                  component="span"
+                                  sx={{
                                     minWidth: 20,
-                                  }
-                                }}
-                              >
-                                <Typography variant="body2" color="text.secondary">
-                                  позиций
-                                </Typography>
-                              </Badge>
+                                    height: 20,
+                                    px: 0.5,
+                                    borderRadius: 10,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '0.7rem',
+                                    color: 'common.white',
+                                    bgcolor: availableCount === children.length ? 'success.main' : availableCount > 0 ? 'warning.main' : 'grey.500',
+                                  }}
+                                >
+                                  {children.length}
+                                </Box>
+                                {plural(children.length, ['позиция', 'позиции', 'позиций'])}
+                              </Typography>
                               {parent.description && (
                                 <Typography
                                   variant="body2"
