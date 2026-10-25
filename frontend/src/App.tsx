@@ -1,10 +1,9 @@
-import { BrowserRouter as Router, Routes, Route, Link, NavLink, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import {
   AppBar, Toolbar, Typography, Button, Box, Container,
   ThemeProvider, CssBaseline,
   IconButton, Drawer, List, ListItem, ListItemButton,
   ListItemIcon, ListItemText, useMediaQuery,
-  Menu, MenuItem,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
@@ -22,13 +21,14 @@ import {
   DeliveryDining as DeliveryIcon,
   Map as MapIcon,
   Insights as InsightsIcon,
-  ExpandMore as ExpandMoreIcon,
   DarkModeOutlined as DarkModeIcon,
   LightModeOutlined as LightModeIcon,
   ShoppingBagOutlined as ShoppingBagIcon,
   Inventory2Outlined as InventoryIcon,
   AdminPanelSettingsOutlined as RolesIcon,
   PointOfSaleOutlined as PosIcon,
+  AppsRounded as AppsIcon,
+  RestaurantMenuOutlined as ProductsIcon,
 } from '@mui/icons-material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
@@ -69,6 +69,8 @@ import RolesPage from './pages/RolesPage';
 import PosPage from './pages/PosPage';
 import { P, useCan } from './auth/permissions';
 import { apiClient } from './api/client';
+import { useIsFullscreen } from './hooks/useFullscreen';
+import ControlCenter, { type ControlLink } from './components/ControlCenter';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,10 +87,11 @@ function App() {
 
   const { theme: themeMode, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isFullscreen = useIsFullscreen();
   const [authOpen, setAuthOpen] = useState(false);
   const [promoInfo, setPromoInfo] = useState<PromoCodeValidation | null>(null);
   const [pointsDiscount, setPointsDiscount] = useState(0);
-  const [adminMenuAnchor, setAdminMenuAnchor] = useState<HTMLElement | null>(null);
+  const [controlCenterOpen, setControlCenterOpen] = useState(false);
 
   const cartOpen = useOrderFlowStore((state) => state.cartOpen);
   const deliveryType = useOrderFlowStore((state) => state.deliveryType);
@@ -185,23 +188,23 @@ function App() {
     setMobileMenuOpen(false);
   };
 
-  // Разделы управления: показываются по правам ролей (и в меню «Управление», и в боковом меню)
+  // Разделы управления: показываются по правам ролей (и в окне «Управление», и в боковом меню)
   const staffLinks = ([
-    { text: 'Дашборд', icon: <DashboardIcon />, path: '/admin/dashboard', perms: [P.Dashboard] },
-    { text: 'Аналитика', icon: <InsightsIcon />, path: '/admin/analytics', perms: [P.Analytics] },
-    { text: 'Касса', icon: <PosIcon />, path: '/pos', perms: [P.Pos] },
-    { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', perms: [P.Kitchen] },
-    { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', perms: [P.Delivery, P.CouriersAssign] },
-    { text: 'Товары', icon: <AddIcon />, path: '/admin/menu', perms: [P.Menu] },
-    { text: 'Стоп-лист', icon: <BlockIcon />, path: '/admin/stoplist', perms: [P.StopList] },
-    { text: 'Зоны доставки', icon: <MapIcon />, path: '/admin/zones', perms: [P.Zones] },
-    { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', perms: [P.PromoCodes] },
-    { text: 'Отзывы', icon: <ReviewsIcon />, path: '/admin/reviews', perms: [P.Reviews] },
-    { text: 'Склад', icon: <InventoryIcon />, path: '/admin/inventory', perms: [P.InventoryView, P.TechCards, P.Chz] },
-    { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', perms: [P.Menu] },
-    { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', perms: [P.UsersView, P.UsersRoles] },
-    { text: 'Роли и доступы', icon: <RolesIcon />, path: '/admin/roles', perms: [P.Roles] },
-  ] as { text: string; icon: React.ReactNode; path: string; perms: string[] }[])
+    { text: 'Касса', icon: <PosIcon />, path: '/pos', perms: [P.Pos], group: 'Смена', hint: 'Заказы у стойки: в зале и с собой' },
+    { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', perms: [P.Kitchen], group: 'Смена', hint: 'Новые заказы, приготовление, техкарты' },
+    { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', perms: [P.Delivery, P.CouriersAssign], group: 'Смена', hint: 'Заказы курьеров и маршруты' },
+    { text: 'Товары', icon: <ProductsIcon />, path: '/admin/menu', perms: [P.Menu], group: 'Меню', hint: 'Карточки, варианты и добавки' },
+    { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', perms: [P.Menu], group: 'Меню', hint: 'Новая позиция в меню' },
+    { text: 'Стоп-лист', icon: <BlockIcon />, path: '/admin/stoplist', perms: [P.StopList], group: 'Меню', hint: 'Что закончилось сегодня' },
+    { text: 'Дашборд', icon: <DashboardIcon />, path: '/admin/dashboard', perms: [P.Dashboard], group: 'Продажи и маркетинг', hint: 'Сводка за день' },
+    { text: 'Аналитика', icon: <InsightsIcon />, path: '/admin/analytics', perms: [P.Analytics], group: 'Продажи и маркетинг', hint: 'Выручка, заказы, популярные позиции' },
+    { text: 'Промокоды', icon: <PromoIcon />, path: '/admin/promocodes', perms: [P.PromoCodes], group: 'Продажи и маркетинг', hint: 'Скидки и акции' },
+    { text: 'Отзывы', icon: <ReviewsIcon />, path: '/admin/reviews', perms: [P.Reviews], group: 'Продажи и маркетинг', hint: 'Оценки и ответы гостям' },
+    { text: 'Зоны доставки', icon: <MapIcon />, path: '/admin/zones', perms: [P.Zones], group: 'Продажи и маркетинг', hint: 'Где возим и за сколько' },
+    { text: 'Склад', icon: <InventoryIcon />, path: '/admin/inventory', perms: [P.InventoryView, P.TechCards, P.Chz], group: 'Склад', hint: 'Остатки, накладные, ЕГАИС, Честный знак' },
+    { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', perms: [P.UsersView, P.UsersRoles], group: 'Команда', hint: 'Гости и сотрудники' },
+    { text: 'Роли и доступы', icon: <RolesIcon />, path: '/admin/roles', perms: [P.Roles], group: 'Команда', hint: 'Что доступно каждой роли' },
+  ] as (ControlLink & { perms: string[] })[])
     .filter(link => isAuthenticated && can(...link.perms));
 
   const getMenuItems = () => {
@@ -211,7 +214,6 @@ function App() {
       { text: 'Мои баллы', icon: <StarIcon />, path: '/points' },
     ];
 
-    staffLinks.forEach(link => items.push({ text: link.text, icon: link.icon, path: link.path }));
     return items;
   };
 
@@ -221,6 +223,8 @@ function App() {
         <CssBaseline />
         <Router>
           <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            {/* На весь экран (кухня, касса) шапку и подвал не показываем */}
+            {!isFullscreen && (
             <AppBar position="sticky" sx={{ zIndex: (t) => t.zIndex.appBar }}>
               <Container maxWidth={false} sx={{ maxWidth: 1320 }}>
                 <Toolbar disableGutters sx={{ gap: { xs: 1, md: 2 }, minHeight: { xs: 60, md: 72 } }}>
@@ -256,29 +260,14 @@ function App() {
                       {staffLinks.length > 0 && (
                         <>
                           <Button
-                            onClick={(e) => setAdminMenuAnchor(e.currentTarget)}
-                            endIcon={<ExpandMoreIcon />}
+                            onClick={() => setControlCenterOpen(true)}
+                            startIcon={<AppsIcon />}
+                            aria-haspopup="dialog"
                             sx={{ color: 'text.secondary', fontWeight: 600 }}
                           >
                             Управление
                           </Button>
-                          <Menu
-                            anchorEl={adminMenuAnchor}
-                            open={Boolean(adminMenuAnchor)}
-                            onClose={() => setAdminMenuAnchor(null)}
-                          >
-                            {staffLinks.map((link) => (
-                              <MenuItem
-                                key={link.path}
-                                component={Link}
-                                to={link.path}
-                                onClick={() => setAdminMenuAnchor(null)}
-                              >
-                                <ListItemIcon>{link.icon}</ListItemIcon>
-                                <ListItemText>{link.text}</ListItemText>
-                              </MenuItem>
-                            ))}
-                          </Menu>
+
                         </>
                       )}
                     </Box>
@@ -304,7 +293,8 @@ function App() {
                       minWidth: { xs: 48, sm: 120 },
                       px: { xs: 1.5, sm: 2.25 },
                       fontWeight: 700,
-                      '& .MuiButton-startIcon': { mr: { xs: 0, sm: 1 } },
+                      whiteSpace: 'nowrap',
+                      '& .MuiButton-startIcon': { mr: { xs: totalItems ? 0.75 : 0, sm: 1 } },
                     }}
                   >
                     <Box component="span" sx={{ display: { xs: totalItems ? 'inline' : 'none', sm: 'inline' } }}>
@@ -314,6 +304,7 @@ function App() {
                 </Toolbar>
               </Container>
             </AppBar>
+            )}
 
             <Drawer
               anchor="left"
@@ -348,6 +339,19 @@ function App() {
                       </ListItemButton>
                     </ListItem>
                   ))}
+                  {/* Разделы сотрудников — тем же окном «Управление», что и в шапке */}
+                  {staffLinks.length > 0 && (
+                    <ListItem disablePadding sx={{ mb: 0.5 }}>
+                      <ListItemButton
+                        onClick={() => { closeMobileMenu(); setControlCenterOpen(true); }}
+                        aria-haspopup="dialog"
+                        sx={{ borderRadius: 3, py: 1.25 }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 40, color: 'text.secondary' }}><AppsIcon /></ListItemIcon>
+                        <ListItemText primary="Управление" primaryTypographyProps={{ fontWeight: 600 }} />
+                      </ListItemButton>
+                    </ListItem>
+                  )}
                 </List>
 
                 <Box sx={{ mt: 'auto', pt: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -362,9 +366,9 @@ function App() {
             <Container
               maxWidth={false}
               sx={{
-                maxWidth: 1320,
-                pt: { xs: 2, md: 3 },
-                pb: { xs: 12, md: 6 },
+                maxWidth: isFullscreen ? 'none' : 1320,
+                pt: isFullscreen ? 2 : { xs: 2, md: 3 },
+                pb: isFullscreen ? 2 : { xs: 12, md: 6 },
                 flex: 1,
                 px: { xs: 2, sm: 3 },
               }}
@@ -431,6 +435,9 @@ function App() {
               onClose={() => setAuthOpen(false)}
             />
 
+            <ControlCenter open={controlCenterOpen} onClose={() => setControlCenterOpen(false)} links={staffLinks} />
+
+            {!isFullscreen && (
             <Box component="footer" sx={{ py: 3, px: 2, mt: 'auto', borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
               <Container maxWidth={false} sx={{ maxWidth: 1320, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
                 <BrandLogo />
@@ -440,6 +447,7 @@ function App() {
                 </Typography>
               </Container>
             </Box>
+            )}
           </Box>
         </Router>
       </ThemeProvider>

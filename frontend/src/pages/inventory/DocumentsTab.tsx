@@ -93,7 +93,7 @@ const DocumentsTab: React.FC<Props> = ({ type, openId, onOpenedId }) => {
         ) : (
           <>
             <ListHeader>
-              <Box sx={{ width: 110 }}>Дата</Box>
+              <Box sx={{ width: 120 }}>Дата</Box>
               <Box sx={{ flex: 1 }}>{type === 'receipt' ? 'Накладная' : 'Документ'}</Box>
               <Box sx={{ width: 120 }}>Статус</Box>
               <Box sx={{ width: 140, textAlign: 'right' }}>{type === 'inventory' ? 'Расхождение' : 'Сумма'}</Box>
@@ -107,7 +107,7 @@ const DocumentsTab: React.FC<Props> = ({ type, openId, onOpenedId }) => {
                   : 'Инвентаризация';
               return (
                 <ListRow key={d.id} onClick={() => setEditor({ id: d.id })} muted={d.status === 'cancelled'}>
-                  <Box sx={{ width: 110, display: { xs: 'none', md: 'block' }, color: 'text.secondary' }}>{fmtDate(d.date)}</Box>
+                  <Box sx={{ width: 120, flexShrink: 0, whiteSpace: 'nowrap', display: { xs: 'none', md: 'block' }, color: 'text.secondary' }}>{fmtDate(d.date)}</Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                       <Typography sx={{ fontWeight: 600 }} noWrap>{title}</Typography>

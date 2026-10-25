@@ -67,7 +67,7 @@ export interface Shawarma {
   
   // ==================== ORDER (Заказы) ====================
   
-  export type OrderStatus = 'Новый' | 'Готовится' | 'Готов' | 'В пути' | 'Доставлен' | 'Выполнен' | 'Отменён';
+  export type OrderStatus = 'Новый' | 'Принят' | 'Готовится' | 'Готов' | 'В пути' | 'Доставлен' | 'Выполнен' | 'Отменён';
 
   // Оплата: cash — наличными, card — картой при получении, online — онлайн (ЮKassa)
   export type PaymentMethod = 'cash' | 'card' | 'online';

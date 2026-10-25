@@ -61,9 +61,11 @@ const ReportsTab: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
             <StatTile label="Выручка" value={fmtMoney(sales.data.totals.revenue)} />
             <StatTile label="Себестоимость" value={fmtMoney(sales.data.totals.cost)} hint="по блюдам с техкартой" />
-            <StatTile label="Валовая прибыль" value={fmtMoney(sales.data.totals.margin)} tone="good" />
+            {/* Прибыль и фудкост считаются только по блюдам с техкартой — иначе их легко сравнить со всей выручкой */}
+            <StatTile label="Валовая прибыль" value={fmtMoney(sales.data.totals.margin)} tone="good" hint="по блюдам с техкартой" />
             <StatTile
               label="Фудкост"
+              hint="по блюдам с техкартой"
               value={sales.data.totals.foodCostPercent !== null ? `${sales.data.totals.foodCostPercent} %` : '—'}
               tone={(sales.data.totals.foodCostPercent ?? 0) > 40 ? 'danger' : (sales.data.totals.foodCostPercent ?? 0) > 30 ? 'warning' : 'good'}
             />
