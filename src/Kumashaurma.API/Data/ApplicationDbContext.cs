@@ -331,14 +331,6 @@ namespace Kumashaurma.API.Data
                     .WithMany()
                     .HasForeignKey(e => e.StockItemId)
                     .OnDelete(DeleteBehavior.Restrict);
-                // Блюдо удалили из меню — строка с ним уходит из составов
-                entity.HasIndex(e => e.SubDishId);
-                entity.HasOne(e => e.SubDish)
-                    .WithMany()
-                    .HasForeignKey(e => e.SubDishId)
-                    .OnDelete(DeleteBehavior.Cascade);
-                entity.ToTable(t => t.HasCheckConstraint("ck_tech_card_lines_component",
-                    "(stock_item_id IS NOT NULL AND sub_dish_id IS NULL) OR (stock_item_id IS NULL AND sub_dish_id IS NOT NULL)"));
             });
 
             modelBuilder.Entity<StockMovement>(entity =>
@@ -387,6 +379,14 @@ namespace Kumashaurma.API.Data
                     .WithMany()
                     .HasForeignKey(e => e.StockItemId)
                     .OnDelete(DeleteBehavior.Restrict);
+                // Блюдо удалили из меню — строка с ним уходит из составов
+                entity.HasIndex(e => e.SubDishId);
+                entity.HasOne(e => e.SubDish)
+                    .WithMany()
+                    .HasForeignKey(e => e.SubDishId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.ToTable(t => t.HasCheckConstraint("ck_tech_card_lines_component",
+                    "(stock_item_id IS NOT NULL AND sub_dish_id IS NULL) OR (stock_item_id IS NULL AND sub_dish_id IS NOT NULL)"));
             });
 
             modelBuilder.Entity<EgaisDocument>(entity =>

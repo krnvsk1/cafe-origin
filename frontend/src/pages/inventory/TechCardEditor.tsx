@@ -1,14 +1,15 @@
 import * as React from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Autocomplete, Box, Typography, IconButton,
-  Alert, CircularProgress, InputAdornment, useMediaQuery, useTheme, createFilterOptions,
+  Alert, CircularProgress, InputAdornment, useMediaQuery, useTheme, createFilterOptions, ToggleButtonGroup, ToggleButton,
 } from '@mui/material';
 import {
   Close as CloseIcon, Add as AddIcon, DeleteOutline as DeleteIcon, ContentCopy as CopyIcon, EditOutlined as EditIcon,
+  RestaurantMenuOutlined as DishIcon,
 } from '@mui/icons-material';
 import {
   useTechCard, useStockItems, useSaveTechCard, useDeleteTechCard, useDishes, fetchTechCard, apiError,
-  fmtMoney, UNIT_LABELS, type TechCardTarget, type StockItem, type TechCardData, type DishRow,
+  fmtMoney, fmtPortions, UNIT_LABELS, type TechCardTarget, type StockItem, type TechCardData, type DishRow,
 } from '../../api/inventory';
 import { tokens } from '../../theme';
 import { FoodCost, Pill } from './ui';
@@ -24,10 +25,12 @@ interface Props {
 interface LineState {
   key: string;
   stockItemId: number | null;
+  /** Блюдо меню в составе (kind = 'dish'), amount — доля порции */
+  subDishId: number | null;
   name: string;
   unit: StockItem['unit'] | null;
-  kind: StockItem['kind'] | null;
-  /** В граммах/миллилитрах для кг/л, в штуках для шт */
+  kind: StockItem['kind'] | 'dish' | null;
+  /** В граммах/миллилитрах для кг/л, в штуках для шт, в порциях для блюда */
   amount: string;
   loss: string;
 }
@@ -45,19 +48,25 @@ const factor = (unit: StockItem['unit'] | null) => (unit === 'kg' || unit === 'l
 const smallUnit = (unit: StockItem['unit'] | null) => (unit === 'kg' ? 'г' : unit === 'l' ? 'мл' : unit === 'pcs' ? 'шт' : '');
 let seq = 0;
 const newKey = () => `t${++seq}`;
-const emptyLine = (): LineState => ({ key: newKey(), stockItemId: null, name: '', unit: null, kind: null, amount: '', loss: '' });
+const emptyLine = (): LineState => ({ key: newKey(), stockItemId: null, subDishId: null, name: '', unit: null, kind: null, amount: '', loss: '' });
+const emptyDishLine = (): LineState => ({ key: newKey(), stockItemId: null, subDishId: null, name: '', unit: null, kind: 'dish', amount: '1', loss: '' });
+/** Частые доли порции: целое блюдо, половина, треть, четверть */
+const PORTIONS: [string, string][] = [['1', '1'], ['0.5', '½'], ['0.3333', '⅓'], ['0.25', '¼']];
 const itemFilter = createFilterOptions<StockItem>({ stringify: o => `${o.name} ${o.category ?? ''}` });
 
 const fromCard = (card: TechCardData): LineState[] =>
-  card.lines.map(l => ({
-    key: newKey(),
-    stockItemId: l.stockItemId,
-    name: l.stockItemName ?? '',
-    unit: l.unit,
-    kind: l.kind,
-    amount: String(Math.round(l.gross * factor(l.unit) * 1000) / 1000),
-    loss: l.lossPercent ? String(l.lossPercent) : '',
-  }));
+  card.lines.map(l => l.subDishId
+    ? { key: newKey(), stockItemId: null, subDishId: l.subDishId, name: l.stockItemName ?? '', unit: null, kind: 'dish' as const, amount: String(Math.round(l.gross * 10000) / 10000), loss: '' }
+    : {
+        key: newKey(),
+        stockItemId: l.stockItemId,
+        subDishId: null,
+        name: l.stockItemName ?? '',
+        unit: l.unit === 'portion' ? null : l.unit,
+        kind: l.kind,
+        amount: String(Math.round(l.gross * factor(l.unit === 'portion' ? null : l.unit) * 1000) / 1000),
+        loss: l.lossPercent ? String(l.lossPercent) : '',
+      });
 
 const TechCardEditor: React.FC<Props> = ({ open, target, id, onClose }) => {
   const theme = useTheme();
@@ -107,8 +116,16 @@ const TechCardEditor: React.FC<Props> = ({ open, target, id, onClose }) => {
   const update = (key: string, patch: Partial<LineState>) => setLines(ls => ls.map(l => (l.key === key ? { ...l, ...patch } : l)));
   const choose = (l: LineState, item: StockItem) => update(l.key, { stockItemId: item.id, name: item.name, unit: item.unit, kind: item.kind });
 
-  const lineGross = (l: LineState) => num(l.amount) / factor(l.unit);
-  const lineCost = (l: LineState) => (l.stockItemId ? lineGross(l) * (itemsById.get(l.stockItemId)?.unitCost ?? 0) : 0);
+  const dishOptions = React.useMemo(
+    () => (dishesData?.dishes ?? []).filter(d => !(target === 'dish' && d.id === id)),
+    [dishesData, target, id]
+  );
+  const dishesById = React.useMemo(() => new Map((dishesData?.dishes ?? []).map(d => [d.id, d])), [dishesData]);
+
+  const lineGross = (l: LineState) => (l.kind === 'dish' ? num(l.amount) : num(l.amount) / factor(l.unit));
+  const lineCost = (l: LineState) =>
+    l.subDishId ? num(l.amount) * (dishesById.get(l.subDishId)?.cost ?? 0)
+      : l.stockItemId ? lineGross(l) * (itemsById.get(l.stockItemId)?.unitCost ?? 0) : 0;
   const totalCost = lines.reduce((s, l) => s + lineCost(l), 0);
   const yieldNum = num(yieldQuantity) || 1;
   const portionCost = target === 'semi' ? totalCost / yieldNum : totalCost;
@@ -118,11 +135,11 @@ const TechCardEditor: React.FC<Props> = ({ open, target, id, onClose }) => {
 
   const handleSave = async () => {
     setError('');
-    const filled = lines.filter(l => l.stockItemId);
+    const filled = lines.filter(l => l.stockItemId || l.subDishId);
     if (filled.length === 0) { setError('Добавьте хотя бы один ингредиент'); return; }
     const bad = filled.find(l => num(l.amount) <= 0);
     if (bad) { setError(`Укажите количество для «${bad.name}»`); return; }
-    if (lines.some(l => !l.stockItemId && l.amount)) { setError('В одной из строк не выбран ингредиент'); return; }
+    if (lines.some(l => l.kind !== 'dish' && !l.stockItemId && l.amount)) { setError('В одной из строк не выбран ингредиент'); return; }
     if (target === 'semi' && num(yieldQuantity) <= 0) { setError('Укажите выход полуфабриката'); return; }
 
     try {
@@ -133,7 +150,9 @@ const TechCardEditor: React.FC<Props> = ({ open, target, id, onClose }) => {
           outputWeight: outputWeight ? num(outputWeight) : null,
           yieldQuantity: target === 'semi' ? num(yieldQuantity) : 1,
           instructions: instructions.trim() || null,
-          lines: filled.map(l => ({ stockItemId: l.stockItemId!, gross: lineGross(l), lossPercent: num(l.loss) })),
+          lines: filled.map(l => (l.subDishId
+            ? { subDishId: l.subDishId, gross: num(l.amount), lossPercent: 0 }
+            : { stockItemId: l.stockItemId!, gross: lineGross(l), lossPercent: num(l.loss) })),
         },
       });
       onClose();
@@ -261,6 +280,91 @@ const TechCardEditor: React.FC<Props> = ({ open, target, id, onClose }) => {
               </Box>
 
               {lines.map((l, index) => {
+                if (l.kind === 'dish') {
+                  const dish = l.subDishId ? dishesById.get(l.subDishId) ?? null : null;
+                  const value = dish ?? (l.subDishId ? ({ id: l.subDishId, name: l.name, cost: null } as DishRow) : null);
+                  return (
+                    <Box
+                      key={l.key}
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr 1fr 40px', md: 'minmax(0,1fr) 130px 100px 90px 100px 40px' },
+                        gridTemplateAreas: { xs: '"item item del" "gross loss del" "info info info"', md: 'none' },
+                        gap: 1,
+                        alignItems: 'start',
+                        py: 1.25,
+                        borderTop: index ? '1px solid' : 0,
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Autocomplete<DishRow, false, false, false>
+                        size="small"
+                        options={dishOptions}
+                        value={value}
+                        groupBy={d => d.category || 'Без раздела'}
+                        onChange={(_, d) => d && update(l.key, { subDishId: d.id, name: d.name })}
+                        getOptionLabel={d => d.name}
+                        isOptionEqualToValue={(a, b) => a.id === b.id}
+                        renderOption={(props, d) => {
+                          const { key, ...rest } = props as typeof props & { key: string };
+                          return (
+                            <li key={key} {...rest}>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography noWrap>{d.name}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {d.techCard === 'none' ? 'нет техкарты — не спишется' : `себестоимость ${fmtMoney(d.cost)}`}
+                                </Typography>
+                              </Box>
+                            </li>
+                          );
+                        }}
+                        renderInput={params => (
+                          <TextField {...params} placeholder="Блюдо из меню"
+                            InputProps={{ ...params.InputProps, startAdornment: <><DishIcon fontSize="small" sx={{ color: 'text.secondary', ml: 0.5 }} />{params.InputProps.startAdornment}</> }} />
+                        )}
+                        sx={{ gridArea: { xs: 'item', md: 'auto' } }}
+                      />
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={l.amount}
+                        onChange={e => update(l.key, { amount: e.target.value })}
+                        sx={{ gridArea: { xs: 'gross', md: 'auto' } }}
+                        slotProps={{
+                          input: { endAdornment: <InputAdornment position="end">порц</InputAdornment> },
+                          htmlInput: { min: 0, step: 'any', inputMode: 'decimal', 'aria-label': 'Порций' },
+                        }}
+                      />
+                      <ToggleButtonGroup
+                        exclusive
+                        size="small"
+                        value={PORTIONS.find(([v]) => Math.abs(Number(v) - num(l.amount)) < 0.001)?.[0] ?? null}
+                        onChange={(_, v) => v && update(l.key, { amount: v })}
+                        sx={{ gridArea: { xs: 'loss', md: 'auto' }, height: 40, '& .MuiToggleButton-root': { px: 0.9, flex: 1 } }}
+                      >
+                        {PORTIONS.map(([v, label]) => <ToggleButton key={v} value={v} aria-label={`${label} порции`}>{label}</ToggleButton>)}
+                      </ToggleButtonGroup>
+                      <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', justifyContent: 'flex-end', height: 40, color: 'text.secondary' }}>
+                        {l.amount ? fmtPortions(num(l.amount)) : ''}
+                      </Box>
+                      <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', justifyContent: 'flex-end', height: 40, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        {l.subDishId && l.amount ? fmtMoney(Math.round(lineCost(l) * 100) / 100) : ''}
+                      </Box>
+                      <IconButton
+                        aria-label="Удалить строку"
+                        onClick={() => setLines(ls => (ls.length > 1 ? ls.filter(x => x.key !== l.key) : [emptyLine()]))}
+                        sx={{ gridArea: { xs: 'del', md: 'auto' }, color: 'text.secondary' }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                      {dish && dish.techCard === 'none' && (
+                        <Typography variant="caption" color="warning.main" sx={{ gridArea: { xs: 'info', md: 'auto' }, gridColumn: { md: '1 / -1' } }}>
+                          У «{dish.name}» нет техкарты — при продаже по этой строке ничего не спишется
+                        </Typography>
+                      )}
+                    </Box>
+                  );
+                }
                 const selected = l.stockItemId
                   ? itemsById.get(l.stockItemId) ?? ({ id: l.stockItemId, name: l.name, unit: l.unit ?? 'kg', kind: l.kind ?? 'raw' } as StockItem)
                   : null;
@@ -365,11 +469,20 @@ const TechCardEditor: React.FC<Props> = ({ open, target, id, onClose }) => {
                   </Box>
                 );
               })}
-              <Button startIcon={<AddIcon />} onClick={() => setLines(ls => [...ls, emptyLine()])} sx={{ mt: 1, bgcolor: t.surfaceMuted }}>
-                Добавить ингредиент
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+                <Button startIcon={<AddIcon />} onClick={() => setLines(ls => [...ls, emptyLine()])} sx={{ bgcolor: t.surfaceMuted }}>
+                  Добавить ингредиент
+                </Button>
+                {target !== 'semi' && (
+                  <Button startIcon={<DishIcon />} onClick={() => setLines(ls => [...ls.filter(x => x.stockItemId || x.subDishId || x.amount), emptyDishLine()])} sx={{ bgcolor: t.surfaceMuted }}>
+                    Добавить блюдо
+                  </Button>
+                )}
+              </Box>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                Брутто — сколько берётся со склада. Потери — очистка, ужарка, отходы; на списание не влияют, нужны для расчёта выхода.
+                {target === 'semi'
+                  ? 'Полуфабрикат собирается из товаров и других полуфабрикатов. Брутто — сколько берётся со склада, потери — очистка, ужарка; выход партии — сколько получилось.'
+                  : 'Блюдо собирается из товаров, полуфабрикатов и других блюд (целиком или долей: ½, ⅓). Брутто — сколько берётся со склада; потери на списание не влияют, нужны для расчёта выхода.'}
               </Typography>
             </Box>
 

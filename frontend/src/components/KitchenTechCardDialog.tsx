@@ -5,9 +5,9 @@ import {
 } from '@mui/material';
 import { MenuBookOutlined as RecipeIcon } from '@mui/icons-material';
 import { useKitchenTechCard, type KitchenOrderItem, type KitchenTechCard } from '../api/staff';
-import { fmtQty, type StockUnit } from '../api/inventory';
+import { fmtQty, fmtPortions, type StockUnit } from '../api/inventory';
 
-const qty = (value: number, unit: string) => fmtQty(value, (unit || null) as StockUnit | null);
+const qty = (value: number, unit: string) => (unit === 'portion' ? fmtPortions(value) : fmtQty(value, (unit || null) as StockUnit | null));
 
 const CardSection: React.FC<{ card: KitchenTechCard; heading?: string; portions: number }> = ({ card, heading, portions }) => (
   <Box sx={{ mb: 3 }}>
@@ -26,8 +26,8 @@ const CardSection: React.FC<{ card: KitchenTechCard; heading?: string; portions:
           </TableRow>
         </TableHead>
         <TableBody>
-          {card.lines.map(line => (
-            <TableRow key={line.stockItemId}>
+          {card.lines.map((line, i) => (
+            <TableRow key={`${line.stockItemId ?? `d${line.dishId}`}-${i}`}>
               <TableCell sx={{ fontWeight: 500 }}>{line.name}</TableCell>
               <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{qty(line.gross, line.unit)}</TableCell>
               <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
@@ -81,7 +81,7 @@ const KitchenTechCardDialog: React.FC<{ item: KitchenOrderItem | null; onClose: 
         {data?.addons.map(card => <CardSection key={card.title} card={card} heading={`Добавка: ${card.title}`} portions={portions} />)}
         {data && data.semis.length > 0 && (
           <>
-            <Typography variant="overline" color="text.secondary">Полуфабрикаты из состава</Typography>
+            <Typography variant="overline" color="text.secondary">Полуфабрикаты и блюда из состава</Typography>
             {data.semis.map(card => <CardSection key={card.title} card={card} portions={1} />)}
           </>
         )}
