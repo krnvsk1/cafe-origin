@@ -69,6 +69,7 @@ import RolesPage from './pages/RolesPage';
 import PosPage from './pages/PosPage';
 import { P, useCan } from './auth/permissions';
 import { apiClient } from './api/client';
+import { useIsFullscreen } from './hooks/useFullscreen';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,6 +86,7 @@ function App() {
 
   const { theme: themeMode, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isFullscreen = useIsFullscreen();
   const [authOpen, setAuthOpen] = useState(false);
   const [promoInfo, setPromoInfo] = useState<PromoCodeValidation | null>(null);
   const [pointsDiscount, setPointsDiscount] = useState(0);
@@ -221,6 +223,8 @@ function App() {
         <CssBaseline />
         <Router>
           <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+            {/* На весь экран (кухня, касса) шапку и подвал не показываем */}
+            {!isFullscreen && (
             <AppBar position="sticky" sx={{ zIndex: (t) => t.zIndex.appBar }}>
               <Container maxWidth={false} sx={{ maxWidth: 1320 }}>
                 <Toolbar disableGutters sx={{ gap: { xs: 1, md: 2 }, minHeight: { xs: 60, md: 72 } }}>
@@ -315,6 +319,7 @@ function App() {
                 </Toolbar>
               </Container>
             </AppBar>
+            )}
 
             <Drawer
               anchor="left"
@@ -363,9 +368,9 @@ function App() {
             <Container
               maxWidth={false}
               sx={{
-                maxWidth: 1320,
-                pt: { xs: 2, md: 3 },
-                pb: { xs: 12, md: 6 },
+                maxWidth: isFullscreen ? 'none' : 1320,
+                pt: isFullscreen ? 2 : { xs: 2, md: 3 },
+                pb: isFullscreen ? 2 : { xs: 12, md: 6 },
                 flex: 1,
                 px: { xs: 2, sm: 3 },
               }}
@@ -432,6 +437,7 @@ function App() {
               onClose={() => setAuthOpen(false)}
             />
 
+            {!isFullscreen && (
             <Box component="footer" sx={{ py: 3, px: 2, mt: 'auto', borderTop: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
               <Container maxWidth={false} sx={{ maxWidth: 1320, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
                 <BrandLogo />
@@ -441,6 +447,7 @@ function App() {
                 </Typography>
               </Container>
             </Box>
+            )}
           </Box>
         </Router>
       </ThemeProvider>

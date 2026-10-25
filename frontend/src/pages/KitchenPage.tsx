@@ -4,21 +4,22 @@ import {
   Menu, MenuItem, ListItemIcon, ListItemText, ListSubheader,
 } from '@mui/material';
 import {
-  Fullscreen as FullscreenIcon,
-  FullscreenExit as FullscreenExitIcon,
   VolumeUp as VolumeUpIcon,
   VolumeOff as VolumeOffIcon,
   Schedule as ScheduleIcon,
   MusicNote as MusicNoteIcon,
+  MenuBookOutlined as RecipeIcon,
   Check as CheckIcon,
 } from '@mui/icons-material';
 import { useKitchenOrders, useSetOrderStatus } from '../api/staff';
-import type { KitchenOrder } from '../api/staff';
+import type { KitchenOrder, KitchenOrderItem } from '../api/staff';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
 import {
   playChime, unlockAudio, isAudioBlocked, subscribeAudioState, MELODIES, getMelody, setMelody, type MelodyId,
 } from '../utils/sound';
 import { formatScheduled } from '../utils/schedule';
+import FullscreenButton from '../components/FullscreenButton';
+import KitchenTechCardDialog from '../components/KitchenTechCardDialog';
 import type { OrderStatus } from '../types';
 
 const SOUND_KEY = 'kitchen-sound';
@@ -45,7 +46,7 @@ const COLUMNS: { status: OrderStatus; title: string; color: string }[] = [
   { status: 'Готов', title: 'Готовы', color: '#2e7d32' },
 ];
 
-const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, now }) => {
+const KitchenCard: React.FC<{ order: KitchenOrder; now: number; onRecipe: (item: KitchenOrderItem) => void }> = ({ order, now, onRecipe }) => {
   const setStatus = useSetOrderStatus();
   // now обновляется раз в 30 с — заказ, пришедший между тиками, «моложе» now; без ограничения было «-1 мин»
   const minutes = Math.max(0, Math.floor((now - new Date(order.createdAt).getTime()) / 60000));
@@ -91,9 +92,17 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, no
 
       {order.items.map((item, idx) => (
         <Box key={idx} sx={{ mb: 0.75 }}>
-          <Typography fontWeight={700} sx={{ fontSize: '1.05rem' }}>
-            {item.quantity} × {item.name}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+            <Typography fontWeight={700} sx={{ fontSize: '1.05rem', flex: 1 }}>
+              {item.quantity} × {item.name}
+            </Typography>
+            {/* Техкарта — по запросу повара, чтобы не загромождать карточку */}
+            <Tooltip title="Техкарта">
+              <IconButton size="small" onClick={() => onRecipe(item)} aria-label={`Техкарта: ${item.name}`} sx={{ mt: -0.25, color: 'text.secondary' }}>
+                <RecipeIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
           {item.addons.length > 0 && (
             <Typography variant="body2" color="text.secondary" sx={{ pl: 2 }}>
               + {item.addons.map(a => (a.quantity > 1 ? `${a.addonName} ×${a.quantity}` : a.addonName)).join(', ')}
@@ -136,12 +145,11 @@ const KitchenPage: React.FC = () => {
   const { data: orders, isLoading, error } = useKitchenOrders();
   const invalidate = useInvalidateOnOrderEvent();
   const now = useNow();
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [soundOn, setSoundOn] = React.useState(() => {
     try { return localStorage.getItem(SOUND_KEY) !== 'off'; } catch { return true; }
   });
   const [melody, setMelodyState] = React.useState<MelodyId>(getMelody);
+  const [recipeItem, setRecipeItem] = React.useState<KitchenOrderItem | null>(null);
 
   // Живые события только обновляют список; звук зависит от того, что в «Новых» (так он есть, даже если заказ пришёл опросом)
   useEventStream('/api/events/orders', invalidate);
@@ -166,12 +174,6 @@ const KitchenPage: React.FC = () => {
   }, []);
   const audioBlocked = React.useSyncExternalStore(subscribeAudioState, isAudioBlocked);
 
-  React.useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
-
   const [melodyMenu, setMelodyMenu] = React.useState<HTMLElement | null>(null);
   // Выбор сразу проигрывает мелодию; меню не закрываем, чтобы можно было послушать все
   const chooseMelody = (id: MelodyId) => {
@@ -187,16 +189,11 @@ const KitchenPage: React.FC = () => {
     try { localStorage.setItem(SOUND_KEY, next ? 'on' : 'off'); } catch { /* ignore */ }
   };
 
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void containerRef.current?.requestFullscreen?.();
-  };
-
   const later = (orders ?? []).filter(o => o.isLater);
   const current = (orders ?? []).filter(o => !o.isLater);
 
   return (
-    <Box ref={containerRef} sx={{ bgcolor: 'background.default', p: isFullscreen ? 2 : 0, minHeight: isFullscreen ? '100vh' : undefined, overflow: 'auto' }}>
+    <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <Typography variant="h4" fontWeight={700} sx={{ flex: 1 }}>Кухня</Typography>
         <Tooltip title={`Мелодия сигнала: ${MELODIES[melody].label}`}>
@@ -216,9 +213,7 @@ const KitchenPage: React.FC = () => {
         <Tooltip title={soundOn ? 'Выключить звук новых заказов' : 'Включить звук новых заказов'}>
           <IconButton onClick={toggleSound}>{soundOn ? <VolumeUpIcon /> : <VolumeOffIcon />}</IconButton>
         </Tooltip>
-        <Tooltip title={isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}>
-          <IconButton onClick={toggleFullscreen}>{isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}</IconButton>
-        </Tooltip>
+        <FullscreenButton />
       </Box>
 
       {soundOn && audioBlocked && (
@@ -246,7 +241,7 @@ const KitchenPage: React.FC = () => {
                 <Typography variant="h6" fontWeight={700}>{col.title}</Typography>
                 <Chip size="small" label={list.length} />
               </Box>
-              {list.map(o => <KitchenCard key={o.id} order={o} now={now} />)}
+              {list.map(o => <KitchenCard key={o.id} order={o} now={now} onRecipe={setRecipeItem} />)}
               {list.length === 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>Пусто</Typography>
               )}
@@ -259,10 +254,11 @@ const KitchenPage: React.FC = () => {
               <Typography variant="h6" fontWeight={700}>Ко времени (позже)</Typography>
               <Chip size="small" label={later.length} />
             </Box>
-            {later.map(o => <KitchenCard key={o.id} order={o} now={now} />)}
+            {later.map(o => <KitchenCard key={o.id} order={o} now={now} onRecipe={setRecipeItem} />)}
           </Box>
         )}
       </Box>
+      <KitchenTechCardDialog item={recipeItem} onClose={() => setRecipeItem(null)} />
     </Box>
   );
 };

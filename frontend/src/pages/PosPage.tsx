@@ -15,6 +15,8 @@ import {
 } from '../api/pos';
 import { apiError } from '../api/inventory';
 import ProductModal from '../components/ProductModal';
+import FullscreenButton from '../components/FullscreenButton';
+import { useIsFullscreen } from '../hooks/useFullscreen';
 import type { Shawarma, SelectedAddon } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import { tokens } from '../theme';
@@ -537,6 +539,7 @@ const PosOrders: React.FC = () => {
 const PosPage: React.FC = () => {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+  const isFullscreen = useIsFullscreen();
   const { data: summary } = usePosSummary();
   const [tab, setTab] = React.useState<'new' | 'orders'>('new');
   const [lines, setLines] = React.useState<TicketLine[]>([]);
@@ -601,13 +604,14 @@ const PosPage: React.FC = () => {
             <span>нал {money(summary.cash)} · карта {money(summary.card)}</span>
           </Box>
         )}
+        <Box sx={{ ml: summary ? 0 : 'auto' }}><FullscreenButton /></Box>
       </Box>
 
       {tab === 'orders' ? <PosOrders /> : (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 380px' }, gap: 2, alignItems: 'start' }}>
           <PosMenu onPick={pick} />
           {isDesktop && (
-            <Box sx={{ position: 'sticky', top: 84, height: 'calc(100vh - 100px)', bgcolor: 'background.paper', borderRadius: '24px', overflow: 'hidden' }}>
+            <Box sx={{ position: 'sticky', top: isFullscreen ? 16 : 84, height: isFullscreen ? 'calc(100vh - 32px)' : 'calc(100vh - 100px)', bgcolor: 'background.paper', borderRadius: '24px', overflow: 'hidden' }}>
               {ticket}
             </Box>
           )}
