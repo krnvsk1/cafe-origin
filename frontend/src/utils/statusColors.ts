@@ -8,6 +8,10 @@ export const getStatusColor = (status: OrderStatus, themeMode: 'light' | 'dark')
       bg: isLight ? '#e3f2fd' : '#1e3a5f', 
       color: isLight ? '#1976d2' : '#90caf9' 
     };
+    case 'Принят': return { 
+      bg: isLight ? '#fff8e1' : '#5c4300', 
+      color: isLight ? '#C77700' : '#ffd54f' 
+    };
     case 'Готовится': return { 
       bg: isLight ? '#fff3e0' : '#663c00', 
       color: isLight ? '#f57c00' : '#ffb74d' 

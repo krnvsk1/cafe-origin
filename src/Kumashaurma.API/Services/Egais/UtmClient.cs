@@ -135,13 +135,17 @@ namespace Kumashaurma.API.Services.Egais
             }
         }
 
+        /// <summary>Сколько ждать УТМ при проверке подключения из настроек</summary>
+        public static readonly TimeSpan PingTimeout = TimeSpan.FromSeconds(8);
+
         /// <summary>Отвечает ли УТМ (по сохранённому или переданному адресу)</summary>
-        public async Task<(bool Ok, string? Error)> PingAsync(string? url = null, CancellationToken ct = default)
+        public async Task<(bool Ok, string? Error)> PingAsync(string? url = null, CancellationToken ct = default, TimeSpan? timeout = null)
         {
+            var limit = timeout ?? PingTimeout;
             try
             {
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(TimeSpan.FromSeconds(8));
+                cts.CancelAfter(limit);
                 using var res = await _http.GetAsync(new Uri(url != null ? BaseOf(url) : Base, "opt/out?limit=1"), cts.Token);
                 if (!res.IsSuccessStatusCode) return (false, $"УТМ ответил кодом {(int)res.StatusCode}");
                 var body = await res.Content.ReadAsStringAsync(cts.Token);
@@ -149,7 +153,7 @@ namespace Kumashaurma.API.Services.Egais
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                return (false, "УТМ не ответил за 8 секунд");
+                return (false, $"УТМ не ответил за {limit.TotalSeconds:0} с");
             }
             catch (Exception ex) when (ex is HttpRequestException or UriFormatException)
             {

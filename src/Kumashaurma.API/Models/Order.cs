@@ -134,7 +134,7 @@ namespace Kumashaurma.API.Models
         public AppUser? User { get; set; }
         [JsonIgnore]
         public PromoCode? PromoCode { get; set; }
-        [JsonIgnore]
+        // Состав заказа отдаётся клиенту (список заказов, дашборд, повтор заказа); обратная ссылка OrderItem.Order скрыта
         public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
     }
 }

@@ -63,14 +63,27 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
   }, []);
 
   // Форматирование телефона
+  // Номер без кода страны (10 цифр). Код страны отбрасываем, только если он действительно есть:
+  // «+7…» из маски, или 11 цифр с 7/8 при вставке. Иначе вставленный 9991234567 терял первую цифру.
+  const nationalDigits = (value: string) => {
+    const trimmed = value.trim();
+    const digits = trimmed.replace(/\D/g, '');
+    if (trimmed.startsWith('+7')) return digits.slice(1, 11);
+    if (digits.length === 11 && /^[78]/.test(digits)) return digits.slice(1);
+    return digits.slice(0, 10);
+  };
+
   const formatPhone = (value: string) => {
-    const digits = value.replace(/\D/g, '');
-    if (digits.length === 0) return '';
-    if (digits.length <= 1) return `+7 (${digits}`;
-    if (digits.length <= 4) return `+7 (${digits.slice(1, 4)}`;
-    if (digits.length <= 7) return `+7 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}`;
-    if (digits.length <= 9) return `+7 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 9)}`;
-    return `+7 (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9, 11)}`;
+    const trimmed = value.trim();
+    // Первой набрали 8 или 7 — это код страны, ждём номер дальше
+    if (!trimmed.startsWith('+') && /^[78]$/.test(trimmed)) return '+7 (';
+    const n = nationalDigits(value);
+    if (n.length === 0) return '';
+    let result = `+7 (${n.slice(0, 3)}`;
+    if (n.length > 3) result += `) ${n.slice(3, 6)}`;
+    if (n.length > 6) result += `-${n.slice(6, 8)}`;
+    if (n.length > 8) result += `-${n.slice(8, 10)}`;
+    return result;
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {

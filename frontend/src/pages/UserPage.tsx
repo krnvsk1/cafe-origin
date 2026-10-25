@@ -202,6 +202,7 @@ const UsersPage: React.FC = () => {
     const config = roleCfg(role);
     return (
       <Chip
+        key={role}
         size="small"
         label={config.label}
         icon={config.icon as React.ReactElement}

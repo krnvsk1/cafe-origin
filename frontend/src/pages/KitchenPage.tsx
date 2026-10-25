@@ -1,19 +1,25 @@
 import * as React from 'react';
 import {
   Box, Typography, Paper, Button, Chip, IconButton, Tooltip, Alert, LinearProgress, Divider,
+  Menu, MenuItem, ListItemIcon, ListItemText, ListSubheader,
 } from '@mui/material';
 import {
-  Fullscreen as FullscreenIcon,
-  FullscreenExit as FullscreenExitIcon,
   VolumeUp as VolumeUpIcon,
   VolumeOff as VolumeOffIcon,
   Schedule as ScheduleIcon,
+  MusicNote as MusicNoteIcon,
+  MenuBookOutlined as RecipeIcon,
+  Check as CheckIcon,
 } from '@mui/icons-material';
 import { useKitchenOrders, useSetOrderStatus } from '../api/staff';
-import type { KitchenOrder } from '../api/staff';
+import type { KitchenOrder, KitchenOrderItem } from '../api/staff';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
-import { playChime, unlockAudio } from '../utils/sound';
+import {
+  playChime, unlockAudio, isAudioBlocked, subscribeAudioState, MELODIES, getMelody, setMelody, type MelodyId,
+} from '../utils/sound';
 import { formatScheduled } from '../utils/schedule';
+import FullscreenButton from '../components/FullscreenButton';
+import KitchenTechCardDialog from '../components/KitchenTechCardDialog';
 import type { OrderStatus } from '../types';
 
 const SOUND_KEY = 'kitchen-sound';
@@ -28,20 +34,31 @@ const useNow = (intervalMs = 30000) => {
   return now;
 };
 
+// Пока в «Новых» есть заказ, кухня повторяет сигнал с этим интервалом
+const NEW_ORDER_ALARM_INTERVAL_MS = 10_000;
+const NEW_COLOR = '#1976d2';
+const ACCEPTED_COLOR = '#C77700';
+
 const COLUMNS: { status: OrderStatus; title: string; color: string }[] = [
-  { status: 'Новый', title: 'Новые', color: '#1976d2' },
+  { status: 'Новый', title: 'Новые', color: NEW_COLOR },
+  { status: 'Принят', title: 'Принятые', color: ACCEPTED_COLOR },
   { status: 'Готовится', title: 'Готовятся', color: '#f57c00' },
   { status: 'Готов', title: 'Готовы', color: '#2e7d32' },
 ];
 
-const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, now }) => {
+const KitchenCard: React.FC<{ order: KitchenOrder; now: number; onRecipe: (item: KitchenOrderItem) => void }> = ({ order, now, onRecipe }) => {
   const setStatus = useSetOrderStatus();
-  const minutes = Math.floor((now - new Date(order.createdAt).getTime()) / 60000);
+  // now обновляется раз в 30 с — заказ, пришедший между тиками, «моложе» now; без ограничения было «-1 мин»
+  const minutes = Math.max(0, Math.floor((now - new Date(order.createdAt).getTime()) / 60000));
   const late = order.status !== 'Готов' && !order.scheduledFor && minutes >= 20;
   const isPickup = order.deliveryType !== 'Доставка';
+  const accepted = order.status === 'Принят';
+  // Новый заказ (не «ко времени») звенит и мигает, пока его не примут
+  const ringing = order.status === 'Новый' && !order.isLater;
 
   const next: { label: string; status: OrderStatus } | null =
-    order.status === 'Новый' ? { label: 'Начать готовить', status: 'Готовится' }
+    order.status === 'Новый' ? { label: 'Принять', status: 'Принят' }
+      : order.status === 'Принят' ? { label: 'Начать готовить', status: 'Готовится' }
       : order.status === 'Готовится' ? { label: 'Готово', status: 'Готов' }
       // Самовывоз/в зале кухня выдаёт сама; доставку забирает курьер
       : isPickup ? { label: 'Выдан', status: 'Выполнен' }
@@ -52,7 +69,12 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, no
       sx={{
         p: 1.5, mb: 1.5,
         border: '2px solid',
-        borderColor: late ? 'error.main' : 'divider',
+        borderColor: late ? 'error.main' : ringing ? NEW_COLOR : accepted ? ACCEPTED_COLOR : 'divider',
+        animation: ringing ? 'kitchen-new-pulse 1.6s ease-in-out infinite' : 'none',
+        '@keyframes kitchen-new-pulse': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(25, 118, 210, 0)' },
+          '50%': { boxShadow: '0 0 0 5px rgba(25, 118, 210, 0.35)' },
+        },
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -70,9 +92,17 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, no
 
       {order.items.map((item, idx) => (
         <Box key={idx} sx={{ mb: 0.75 }}>
-          <Typography fontWeight={700} sx={{ fontSize: '1.05rem' }}>
-            {item.quantity} × {item.name}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+            <Typography fontWeight={700} sx={{ fontSize: '1.05rem', flex: 1 }}>
+              {item.quantity} × {item.name}
+            </Typography>
+            {/* Техкарта — по запросу повара, чтобы не загромождать карточку */}
+            <Tooltip title="Техкарта">
+              <IconButton size="small" onClick={() => onRecipe(item)} aria-label={`Техкарта: ${item.name}`} sx={{ mt: -0.25, color: 'text.secondary' }}>
+                <RecipeIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
           {item.addons.length > 0 && (
             <Typography variant="body2" color="text.secondary" sx={{ pl: 2 }}>
               + {item.addons.map(a => (a.quantity > 1 ? `${a.addonName} ×${a.quantity}` : a.addonName)).join(', ')}
@@ -88,7 +118,7 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, no
       <Divider sx={{ my: 1 }} />
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }} noWrap>{order.customerName}</Typography>
-        {order.status === 'Новый' && (
+        {(order.status === 'Новый' || accepted) && (
           <Button size="small" color="error" onClick={() => {
             if (window.confirm(`Отменить заказ #${order.id}?`)) setStatus.mutate({ id: order.id, status: 'Отменён' });
           }}>
@@ -115,50 +145,82 @@ const KitchenPage: React.FC = () => {
   const { data: orders, isLoading, error } = useKitchenOrders();
   const invalidate = useInvalidateOnOrderEvent();
   const now = useNow();
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [soundOn, setSoundOn] = React.useState(() => {
     try { return localStorage.getItem(SOUND_KEY) !== 'off'; } catch { return true; }
   });
+  const [melody, setMelodyState] = React.useState<MelodyId>(getMelody);
+  const [recipeItem, setRecipeItem] = React.useState<KitchenOrderItem | null>(null);
 
-  useEventStream('/api/events/orders', (evt) => {
-    invalidate(evt);
-    if (evt.type === 'created' && soundOn) playChime();
-  });
+  // Живые события только обновляют список; звук зависит от того, что в «Новых» (так он есть, даже если заказ пришёл опросом)
+  useEventStream('/api/events/orders', invalidate);
 
+  // Сигнал звучит сразу и повторяется, пока в «Новых» есть заказ; приняли последний — звук пропадает
+  const ringing = soundOn && (orders ?? []).some(o => o.status === 'Новый' && !o.isLater);
   React.useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
+    if (!ringing) return;
+    playChime(melody);
+    const timer = setInterval(() => playChime(melody), NEW_ORDER_ALARM_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [ringing, melody]);
+
+  // Браузер включает звук только после действия пользователя — разблокируем по любому касанию или клавише на экране кухни
+  React.useEffect(() => {
+    document.addEventListener('pointerdown', unlockAudio);
+    document.addEventListener('keydown', unlockAudio);
+    return () => {
+      document.removeEventListener('pointerdown', unlockAudio);
+      document.removeEventListener('keydown', unlockAudio);
+    };
   }, []);
+  const audioBlocked = React.useSyncExternalStore(subscribeAudioState, isAudioBlocked);
+
+  const [melodyMenu, setMelodyMenu] = React.useState<HTMLElement | null>(null);
+  // Выбор сразу проигрывает мелодию; меню не закрываем, чтобы можно было послушать все
+  const chooseMelody = (id: MelodyId) => {
+    setMelody(id);
+    setMelodyState(id);
+    playChime(id);
+  };
 
   const toggleSound = () => {
     const next = !soundOn;
     setSoundOn(next);
-    if (next) { unlockAudio(); playChime(); }
+    if (next) playChime(melody);
     try { localStorage.setItem(SOUND_KEY, next ? 'on' : 'off'); } catch { /* ignore */ }
-  };
-
-  const toggleFullscreen = () => {
-    unlockAudio();
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void containerRef.current?.requestFullscreen?.();
   };
 
   const later = (orders ?? []).filter(o => o.isLater);
   const current = (orders ?? []).filter(o => !o.isLater);
 
   return (
-    <Box ref={containerRef} sx={{ bgcolor: 'background.default', p: isFullscreen ? 2 : 0, minHeight: isFullscreen ? '100vh' : undefined, overflow: 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }} onClick={unlockAudio}>
+    <Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <Typography variant="h4" fontWeight={700} sx={{ flex: 1 }}>Кухня</Typography>
+        <Tooltip title={`Мелодия сигнала: ${MELODIES[melody].label}`}>
+          <IconButton onClick={e => setMelodyMenu(e.currentTarget)} aria-label="Выбрать мелодию сигнала">
+            <MusicNoteIcon />
+          </IconButton>
+        </Tooltip>
+        <Menu anchorEl={melodyMenu} open={!!melodyMenu} onClose={() => setMelodyMenu(null)}>
+          <ListSubheader sx={{ lineHeight: '36px' }}>Новый заказ — повтор каждые 10 с, пока не примут</ListSubheader>
+          {(Object.keys(MELODIES) as MelodyId[]).map(id => (
+            <MenuItem key={id} selected={id === melody} onClick={() => chooseMelody(id)}>
+              <ListItemIcon>{id === melody && <CheckIcon fontSize="small" />}</ListItemIcon>
+              <ListItemText>{MELODIES[id].label}</ListItemText>
+            </MenuItem>
+          ))}
+        </Menu>
         <Tooltip title={soundOn ? 'Выключить звук новых заказов' : 'Включить звук новых заказов'}>
           <IconButton onClick={toggleSound}>{soundOn ? <VolumeUpIcon /> : <VolumeOffIcon />}</IconButton>
         </Tooltip>
-        <Tooltip title={isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}>
-          <IconButton onClick={toggleFullscreen}>{isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}</IconButton>
-        </Tooltip>
+        <FullscreenButton />
       </Box>
+
+      {soundOn && audioBlocked && (
+        <Alert severity="warning" icon={<VolumeOffIcon />} sx={{ mb: 2, cursor: 'pointer' }}>
+          Браузер заблокировал звук — коснитесь экрана, чтобы слышать новые заказы
+        </Alert>
+      )}
 
       {isLoading && <LinearProgress />}
       {error && <Alert severity="error">Не удалось загрузить заказы</Alert>}
@@ -166,7 +228,7 @@ const KitchenPage: React.FC = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: later.length ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: `repeat(${COLUMNS.length + (later.length ? 1 : 0)}, minmax(0, 1fr))` },
           gap: 2,
           alignItems: 'start',
         }}
@@ -179,7 +241,7 @@ const KitchenPage: React.FC = () => {
                 <Typography variant="h6" fontWeight={700}>{col.title}</Typography>
                 <Chip size="small" label={list.length} />
               </Box>
-              {list.map(o => <KitchenCard key={o.id} order={o} now={now} />)}
+              {list.map(o => <KitchenCard key={o.id} order={o} now={now} onRecipe={setRecipeItem} />)}
               {list.length === 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>Пусто</Typography>
               )}
@@ -192,10 +254,11 @@ const KitchenPage: React.FC = () => {
               <Typography variant="h6" fontWeight={700}>Ко времени (позже)</Typography>
               <Chip size="small" label={later.length} />
             </Box>
-            {later.map(o => <KitchenCard key={o.id} order={o} now={now} />)}
+            {later.map(o => <KitchenCard key={o.id} order={o} now={now} onRecipe={setRecipeItem} />)}
           </Box>
         )}
       </Box>
+      <KitchenTechCardDialog item={recipeItem} onClose={() => setRecipeItem(null)} />
     </Box>
   );
 };

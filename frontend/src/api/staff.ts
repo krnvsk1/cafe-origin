@@ -14,8 +14,51 @@ export interface KitchenOrder {
   createdAt: string;
   scheduledFor: string | null;
   isLater: boolean;
-  items: { name: string; quantity: number; addons: { addonName: string; quantity: number }[] }[];
+  items: KitchenOrderItem[];
 }
+
+export interface KitchenOrderItem {
+  shawarmaId: number;
+  name: string;
+  quantity: number;
+  addons: { addonId: number; addonName: string; quantity: number }[];
+}
+
+export interface KitchenTechCardLine {
+  stockItemId: number;
+  name: string;
+  unit: string;
+  isSemi: boolean;
+  gross: number;
+  net: number;
+  lossPercent: number;
+}
+
+export interface KitchenTechCard {
+  title: string;
+  outputWeight: number | null;
+  yieldQuantity: number;
+  instructions: string | null;
+  lines: KitchenTechCardLine[];
+}
+
+export interface KitchenTechCardResponse {
+  title: string;
+  dish: KitchenTechCard | null;
+  addons: KitchenTechCard[];
+  semis: KitchenTechCard[];
+}
+
+/** Техкарта блюда и выбранных добавок для повара (без себестоимости); грузится только когда окно открыто */
+export const useKitchenTechCard = (item: KitchenOrderItem | null) =>
+  useQuery<KitchenTechCardResponse>({
+    queryKey: ['kitchen-techcard', item?.shawarmaId, item?.addons.map(a => a.addonId).join(',')],
+    queryFn: () => apiClient
+      .get(`/api/kitchen/techcard/${item!.shawarmaId}`, { params: { addons: item!.addons.map(a => a.addonId).join(',') || undefined } })
+      .then(res => res.data),
+    enabled: !!item,
+    staleTime: 5 * 60 * 1000,
+  });
 
 export const useKitchenOrders = () =>
   useQuery<KitchenOrder[]>({

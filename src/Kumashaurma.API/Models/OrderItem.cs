@@ -37,7 +37,6 @@ namespace Kumashaurma.API.Models
         public decimal Subtotal => Price * Quantity;
         
         // 👇 ДОБАВЛЯЕМ: связь с выбранными добавками
-        [JsonIgnore]
         public ICollection<OrderItemAddon> SelectedAddons { get; set; } = new List<OrderItemAddon>();
     }
 }

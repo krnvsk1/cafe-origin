@@ -211,9 +211,17 @@ namespace Kumashaurma.Tests
             db.Orders.Add(order);
             await db.SaveChangesAsync();
 
-            // Новый → Готовится: списание
+            // Новый → Принят: повар принял, но ещё не готовит — ничего не списываем
+            order.Status = OrderStatuses.Accepted;
+            await svc.OnOrderStatusChangedAsync(order, OrderStatuses.New, OrderStatuses.Accepted);
+            await db.SaveChangesAsync();
+
+            Assert.Null(order.StockDeductedAt);
+            Assert.Equal(10m, chicken.Quantity);
+
+            // Принят → Готовится: списание
             order.Status = OrderStatuses.Preparing;
-            await svc.OnOrderStatusChangedAsync(order, OrderStatuses.New, OrderStatuses.Preparing);
+            await svc.OnOrderStatusChangedAsync(order, OrderStatuses.Accepted, OrderStatuses.Preparing);
             await db.SaveChangesAsync();
 
             Assert.NotNull(order.StockDeductedAt);
