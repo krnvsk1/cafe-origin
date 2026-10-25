@@ -36,7 +36,8 @@ const COLUMNS: { status: OrderStatus; title: string; color: string }[] = [
 
 const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, now }) => {
   const setStatus = useSetOrderStatus();
-  const minutes = Math.floor((now - new Date(order.createdAt).getTime()) / 60000);
+  // now обновляется раз в 30 с — заказ, пришедший между тиками, «моложе» now; без ограничения было «-1 мин»
+  const minutes = Math.max(0, Math.floor((now - new Date(order.createdAt).getTime()) / 60000));
   const late = order.status !== 'Готов' && !order.scheduledFor && minutes >= 20;
   const isPickup = order.deliveryType !== 'Доставка';
 
