@@ -9,6 +9,8 @@ namespace Kumashaurma.API.Services
     public static class OrderStatuses
     {
         public const string New = "Новый";
+        /// <summary>Повар принял заказ, но ещё не начал готовить — кухня подаёт звуковой сигнал</summary>
+        public const string Accepted = "Принят";
         public const string Preparing = "Готовится";
         public const string Ready = "Готов";
         public const string OnTheWay = "В пути";
@@ -16,7 +18,11 @@ namespace Kumashaurma.API.Services
         public const string Completed = "Выполнен";
         public const string Cancelled = "Отменён";
 
-        public static readonly string[] All = { New, Preparing, Ready, OnTheWay, Delivered, Completed, Cancelled };
+        public static readonly string[] All = { New, Accepted, Preparing, Ready, OnTheWay, Delivered, Completed, Cancelled };
+
+        /// <summary>Готовить ещё не начали: продукты со склада не списаны</summary>
+        public static bool IsNotStarted(string status) =>
+            status == New || status == Accepted;
 
         public static bool IsFinal(string status) =>
             status == Delivered || status == Completed || status == Cancelled;

@@ -14,6 +14,7 @@ namespace Kumashaurma.API.Services
     {
         private static readonly Dictionary<string, string> CustomerTexts = new()
         {
+            [OrderStatuses.Accepted] = "👍 Кухня приняла ваш заказ",
             [OrderStatuses.Preparing] = "👨‍🍳 Начали готовить ваш заказ",
             [OrderStatuses.Ready] = "✅ Заказ готов",
             [OrderStatuses.OnTheWay] = "🛵 Курьер уже в пути",

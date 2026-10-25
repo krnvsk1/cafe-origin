@@ -145,7 +145,7 @@ namespace Kumashaurma.API.Services
 
         public async Task OnOrderStatusChangedAsync(Order order, string oldStatus, string newStatus)
         {
-            var shouldBeDeducted = newStatus != OrderStatuses.New && newStatus != OrderStatuses.Cancelled;
+            var shouldBeDeducted = !OrderStatuses.IsNotStarted(newStatus) && newStatus != OrderStatuses.Cancelled;
 
             if (shouldBeDeducted && order.StockDeductedAt == null)
                 await DeductForOrderAsync(order);

@@ -29,7 +29,7 @@ namespace Kumashaurma.API.Controllers
         [HttpGet("orders")]
         public async Task<IActionResult> GetOrders()
         {
-            var active = new[] { OrderStatuses.New, OrderStatuses.Preparing, OrderStatuses.Ready };
+            var active = new[] { OrderStatuses.New, OrderStatuses.Accepted, OrderStatuses.Preparing, OrderStatuses.Ready };
             var since = DateTime.UtcNow.AddDays(-2); // защита от «зависших» старых заказов
 
             var orders = await _context.Orders

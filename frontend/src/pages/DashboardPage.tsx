@@ -209,9 +209,9 @@ const DashboardPage: React.FC = () => {
     const totalShawarmas = shawarmas.length;
     const availableShawarmas = shawarmas.filter(s => s.isAvailable).length;
     
-    // Активные заказы (Новый или Готовится) - вычисляем локально
+    // Активные заказы (Новый, Принят или Готовится) - вычисляем локально
     const activeOrders = orders.filter(o => 
-      o.status === 'Новый' || o.status === 'Готовится'
+      o.status === 'Новый' || o.status === 'Принят' || o.status === 'Готовится'
     ).length;
 
     // Берем статистику с бэкенда, если доступна

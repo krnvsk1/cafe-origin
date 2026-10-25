@@ -10,14 +10,14 @@ const OrderProgress: React.FC<{ status: OrderStatus; deliveryType?: string }> = 
   const isDelivery = !deliveryType || deliveryType === 'Доставка';
   const steps: { key: OrderStatus[]; label: string }[] = isDelivery
     ? [
-        { key: ['Новый'], label: 'Принят' },
+        { key: ['Новый', 'Принят'], label: 'Принят' },
         { key: ['Готовится'], label: 'Готовится' },
         { key: ['Готов'], label: 'Готов' },
         { key: ['В пути'], label: 'В пути' },
         { key: ['Доставлен', 'Выполнен'], label: 'Доставлен' },
       ]
     : [
-        { key: ['Новый'], label: 'Принят' },
+        { key: ['Новый', 'Принят'], label: 'Принят' },
         { key: ['Готовится'], label: 'Готовится' },
         { key: ['Готов'], label: 'Можно забирать' },
         { key: ['Доставлен', 'Выполнен', 'В пути'], label: 'Выдан' },

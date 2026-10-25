@@ -310,7 +310,7 @@ const OrderCard: React.FC<{
                     open={Boolean(anchorEl)}
                     onClose={() => setAnchorEl(null)}
                   >
-                    {['Новый', 'Готовится', 'Готов', 'В пути', 'Доставлен', 'Отменён'].map((status) => (
+                    {['Новый', 'Принят', 'Готовится', 'Готов', 'В пути', 'Доставлен', 'Отменён'].map((status) => (
                       <MenuItem 
                         key={status} 
                         onClick={() => handleStatusChange(status as OrderStatus)}
@@ -672,7 +672,7 @@ const OrdersPage: React.FC = () => {
             onClick={() => setStatusFilter('all')}
             color={statusFilter === 'all' ? 'primary' : 'default'}
           />
-          {['Новый', 'Готовится', 'Готов', 'В пути', 'Доставлен', 'Отменён'].map(status => (
+          {['Новый', 'Принят', 'Готовится', 'Готов', 'В пути', 'Доставлен', 'Отменён'].map(status => (
             <Chip
               key={status}
               label={status}

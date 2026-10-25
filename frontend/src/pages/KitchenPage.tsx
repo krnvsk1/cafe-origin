@@ -28,8 +28,13 @@ const useNow = (intervalMs = 30000) => {
   return now;
 };
 
+// Пока есть принятые, но не начатые заказы, кухня повторяет сигнал с этим интервалом
+const ACCEPTED_ALARM_INTERVAL_MS = 10_000;
+const ACCEPTED_COLOR = '#C77700';
+
 const COLUMNS: { status: OrderStatus; title: string; color: string }[] = [
   { status: 'Новый', title: 'Новые', color: '#1976d2' },
+  { status: 'Принят', title: 'Принятые', color: ACCEPTED_COLOR },
   { status: 'Готовится', title: 'Готовятся', color: '#f57c00' },
   { status: 'Готов', title: 'Готовы', color: '#2e7d32' },
 ];
@@ -40,9 +45,11 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, no
   const minutes = Math.max(0, Math.floor((now - new Date(order.createdAt).getTime()) / 60000));
   const late = order.status !== 'Готов' && !order.scheduledFor && minutes >= 20;
   const isPickup = order.deliveryType !== 'Доставка';
+  const accepted = order.status === 'Принят';
 
   const next: { label: string; status: OrderStatus } | null =
-    order.status === 'Новый' ? { label: 'Начать готовить', status: 'Готовится' }
+    order.status === 'Новый' ? { label: 'Принять', status: 'Принят' }
+      : order.status === 'Принят' ? { label: 'Начать готовить', status: 'Готовится' }
       : order.status === 'Готовится' ? { label: 'Готово', status: 'Готов' }
       // Самовывоз/в зале кухня выдаёт сама; доставку забирает курьер
       : isPickup ? { label: 'Выдан', status: 'Выполнен' }
@@ -53,7 +60,13 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, no
       sx={{
         p: 1.5, mb: 1.5,
         border: '2px solid',
-        borderColor: late ? 'error.main' : 'divider',
+        borderColor: late ? 'error.main' : accepted ? ACCEPTED_COLOR : 'divider',
+        // Принятый заказ мигает, пока его не начнут готовить — вместе со звуковым сигналом
+        animation: accepted ? 'kitchen-accepted-pulse 1.6s ease-in-out infinite' : 'none',
+        '@keyframes kitchen-accepted-pulse': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(199, 119, 0, 0)' },
+          '50%': { boxShadow: '0 0 0 5px rgba(199, 119, 0, 0.35)' },
+        },
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -89,7 +102,7 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, no
       <Divider sx={{ my: 1 }} />
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }} noWrap>{order.customerName}</Typography>
-        {order.status === 'Новый' && (
+        {(order.status === 'Новый' || accepted) && (
           <Button size="small" color="error" onClick={() => {
             if (window.confirm(`Отменить заказ #${order.id}?`)) setStatus.mutate({ id: order.id, status: 'Отменён' });
           }}>
@@ -126,6 +139,15 @@ const KitchenPage: React.FC = () => {
     invalidate(evt);
     if (evt.type === 'created' && soundOn) playChime();
   });
+
+  // Сигнал повторяется, пока есть принятые заказы; «Начать готовить» у последнего — и звук пропадает
+  const ringing = soundOn && (orders ?? []).some(o => o.status === 'Принят');
+  React.useEffect(() => {
+    if (!ringing) return;
+    playChime();
+    const timer = setInterval(playChime, ACCEPTED_ALARM_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [ringing]);
 
   // Браузер включает звук только после действия пользователя — разблокируем по любому касанию или клавише на экране кухни
   React.useEffect(() => {
@@ -183,7 +205,7 @@ const KitchenPage: React.FC = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: later.length ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: `repeat(${COLUMNS.length + (later.length ? 1 : 0)}, minmax(0, 1fr))` },
           gap: 2,
           alignItems: 'start',
         }}

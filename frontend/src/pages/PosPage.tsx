@@ -43,6 +43,7 @@ const hasAddons = (s: Shawarma) => ((s as unknown as { addons?: unknown[] }).add
 
 const STATUS_COLORS: Record<string, string> = {
   'Новый': '#2563EB',
+  'Принят': '#C77700',
   'Готовится': '#C77700',
   'Готов': tokens.herb,
   'Выполнен': '#7B776F',
@@ -356,6 +357,7 @@ const Ticket: React.FC<{
 
 const NEXT_STATUS: Record<string, { status: string; label: string } | undefined> = {
   'Новый': { status: 'Готовится', label: 'На кухню' },
+  'Принят': { status: 'Готовится', label: 'Начать готовить' },
   'Готовится': { status: 'Готов', label: 'Готов' },
   'Готов': { status: 'Выполнен', label: 'Выдан' },
 };
