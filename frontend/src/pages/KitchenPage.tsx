@@ -12,7 +12,7 @@ import {
 import { useKitchenOrders, useSetOrderStatus } from '../api/staff';
 import type { KitchenOrder } from '../api/staff';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
-import { playChime, unlockAudio } from '../utils/sound';
+import { playChime, unlockAudio, isAudioBlocked, subscribeAudioState } from '../utils/sound';
 import { formatScheduled } from '../utils/schedule';
 import type { OrderStatus } from '../types';
 
@@ -127,6 +127,17 @@ const KitchenPage: React.FC = () => {
     if (evt.type === 'created' && soundOn) playChime();
   });
 
+  // Браузер включает звук только после действия пользователя — разблокируем по любому касанию или клавише на экране кухни
+  React.useEffect(() => {
+    document.addEventListener('pointerdown', unlockAudio);
+    document.addEventListener('keydown', unlockAudio);
+    return () => {
+      document.removeEventListener('pointerdown', unlockAudio);
+      document.removeEventListener('keydown', unlockAudio);
+    };
+  }, []);
+  const audioBlocked = React.useSyncExternalStore(subscribeAudioState, isAudioBlocked);
+
   React.useEffect(() => {
     const onChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onChange);
@@ -136,12 +147,11 @@ const KitchenPage: React.FC = () => {
   const toggleSound = () => {
     const next = !soundOn;
     setSoundOn(next);
-    if (next) { unlockAudio(); playChime(); }
+    if (next) playChime();
     try { localStorage.setItem(SOUND_KEY, next ? 'on' : 'off'); } catch { /* ignore */ }
   };
 
   const toggleFullscreen = () => {
-    unlockAudio();
     if (document.fullscreenElement) void document.exitFullscreen();
     else void containerRef.current?.requestFullscreen?.();
   };
@@ -151,7 +161,7 @@ const KitchenPage: React.FC = () => {
 
   return (
     <Box ref={containerRef} sx={{ bgcolor: 'background.default', p: isFullscreen ? 2 : 0, minHeight: isFullscreen ? '100vh' : undefined, overflow: 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }} onClick={unlockAudio}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <Typography variant="h4" fontWeight={700} sx={{ flex: 1 }}>Кухня</Typography>
         <Tooltip title={soundOn ? 'Выключить звук новых заказов' : 'Включить звук новых заказов'}>
           <IconButton onClick={toggleSound}>{soundOn ? <VolumeUpIcon /> : <VolumeOffIcon />}</IconButton>
@@ -160,6 +170,12 @@ const KitchenPage: React.FC = () => {
           <IconButton onClick={toggleFullscreen}>{isFullscreen ? <FullscreenExitIcon /> : <FullscreenIcon />}</IconButton>
         </Tooltip>
       </Box>
+
+      {soundOn && audioBlocked && (
+        <Alert severity="warning" icon={<VolumeOffIcon />} sx={{ mb: 2, cursor: 'pointer' }}>
+          Браузер заблокировал звук — коснитесь экрана, чтобы слышать новые заказы
+        </Alert>
+      )}
 
       {isLoading && <LinearProgress />}
       {error && <Alert severity="error">Не удалось загрузить заказы</Alert>}
