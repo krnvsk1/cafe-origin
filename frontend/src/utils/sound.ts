@@ -53,25 +53,21 @@ export const MELODIES: Record<MelodyId, { label: string; notes: Note[] }> = {
   },
 };
 
-/** Вид сигнала: пришёл новый заказ / повтор, пока заказ принят, но не начат */
-export type SignalKind = 'new' | 'accepted';
+const DEFAULT_MELODY: MelodyId = 'chime';
+const MELODY_KEY = 'kitchen-melody';
 
-// По умолчанию разные, чтобы на слух отличать новый заказ от принятого
-const DEFAULT_MELODIES: Record<SignalKind, MelodyId> = { new: 'chime', accepted: 'triple' };
-const melodyKey = (kind: SignalKind) => `kitchen-melody-${kind}`;
-
-/** Выбранная мелодия хранится на устройстве: у каждого кухонного планшета может быть своя */
-export const getMelody = (kind: SignalKind): MelodyId => {
+/** Мелодия сигнала новых заказов; хранится на устройстве — у каждого кухонного планшета может быть своя */
+export const getMelody = (): MelodyId => {
   try {
-    const saved = localStorage.getItem(melodyKey(kind));
-    return saved && saved in MELODIES ? (saved as MelodyId) : DEFAULT_MELODIES[kind];
+    const saved = localStorage.getItem(MELODY_KEY);
+    return saved && saved in MELODIES ? (saved as MelodyId) : DEFAULT_MELODY;
   } catch {
-    return DEFAULT_MELODIES[kind];
+    return DEFAULT_MELODY;
   }
 };
 
-export const setMelody = (kind: SignalKind, id: MelodyId) => {
-  try { localStorage.setItem(melodyKey(kind), id); } catch { /* ignore */ }
+export const setMelody = (id: MelodyId) => {
+  try { localStorage.setItem(MELODY_KEY, id); } catch { /* ignore */ }
 };
 
 const DEFAULT_GAIN = 0.4;
@@ -92,7 +88,7 @@ const scheduleMelody = (audio: AudioContext, notes: Note[]) => {
   });
 };
 
-/** Сыграть мелодию (выбранную для вида сигнала — getMelody) */
+/** Сыграть мелодию (выбранную на устройстве — getMelody) */
 export const playChime = (melody: MelodyId) => {
   try {
     const audio = getContext();

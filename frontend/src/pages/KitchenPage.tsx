@@ -16,7 +16,7 @@ import { useKitchenOrders, useSetOrderStatus } from '../api/staff';
 import type { KitchenOrder } from '../api/staff';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
 import {
-  playChime, unlockAudio, isAudioBlocked, subscribeAudioState, MELODIES, getMelody, setMelody, type MelodyId, type SignalKind,
+  playChime, unlockAudio, isAudioBlocked, subscribeAudioState, MELODIES, getMelody, setMelody, type MelodyId,
 } from '../utils/sound';
 import { formatScheduled } from '../utils/schedule';
 import type { OrderStatus } from '../types';
@@ -33,17 +33,13 @@ const useNow = (intervalMs = 30000) => {
   return now;
 };
 
-// Пока есть принятые, но не начатые заказы, кухня повторяет сигнал с этим интервалом
-const ACCEPTED_ALARM_INTERVAL_MS = 10_000;
+// Пока в «Новых» есть заказ, кухня повторяет сигнал с этим интервалом
+const NEW_ORDER_ALARM_INTERVAL_MS = 10_000;
+const NEW_COLOR = '#1976d2';
 const ACCEPTED_COLOR = '#C77700';
 
-const SIGNAL_SECTIONS: { kind: SignalKind; title: string }[] = [
-  { kind: 'new', title: 'Новый заказ' },
-  { kind: 'accepted', title: 'Принятый заказ — повтор каждые 10 с' },
-];
-
 const COLUMNS: { status: OrderStatus; title: string; color: string }[] = [
-  { status: 'Новый', title: 'Новые', color: '#1976d2' },
+  { status: 'Новый', title: 'Новые', color: NEW_COLOR },
   { status: 'Принят', title: 'Принятые', color: ACCEPTED_COLOR },
   { status: 'Готовится', title: 'Готовятся', color: '#f57c00' },
   { status: 'Готов', title: 'Готовы', color: '#2e7d32' },
@@ -56,6 +52,8 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, no
   const late = order.status !== 'Готов' && !order.scheduledFor && minutes >= 20;
   const isPickup = order.deliveryType !== 'Доставка';
   const accepted = order.status === 'Принят';
+  // Новый заказ (не «ко времени») звенит и мигает, пока его не примут
+  const ringing = order.status === 'Новый' && !order.isLater;
 
   const next: { label: string; status: OrderStatus } | null =
     order.status === 'Новый' ? { label: 'Принять', status: 'Принят' }
@@ -70,12 +68,11 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number }> = ({ order, no
       sx={{
         p: 1.5, mb: 1.5,
         border: '2px solid',
-        borderColor: late ? 'error.main' : accepted ? ACCEPTED_COLOR : 'divider',
-        // Принятый заказ мигает, пока его не начнут готовить — вместе со звуковым сигналом
-        animation: accepted ? 'kitchen-accepted-pulse 1.6s ease-in-out infinite' : 'none',
-        '@keyframes kitchen-accepted-pulse': {
-          '0%, 100%': { boxShadow: '0 0 0 0 rgba(199, 119, 0, 0)' },
-          '50%': { boxShadow: '0 0 0 5px rgba(199, 119, 0, 0.35)' },
+        borderColor: late ? 'error.main' : ringing ? NEW_COLOR : accepted ? ACCEPTED_COLOR : 'divider',
+        animation: ringing ? 'kitchen-new-pulse 1.6s ease-in-out infinite' : 'none',
+        '@keyframes kitchen-new-pulse': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(25, 118, 210, 0)' },
+          '50%': { boxShadow: '0 0 0 5px rgba(25, 118, 210, 0.35)' },
         },
       }}
     >
@@ -144,24 +141,19 @@ const KitchenPage: React.FC = () => {
   const [soundOn, setSoundOn] = React.useState(() => {
     try { return localStorage.getItem(SOUND_KEY) !== 'off'; } catch { return true; }
   });
-  const [melodies, setMelodies] = React.useState<Record<SignalKind, MelodyId>>(() => ({
-    new: getMelody('new'),
-    accepted: getMelody('accepted'),
-  }));
+  const [melody, setMelodyState] = React.useState<MelodyId>(getMelody);
 
-  useEventStream('/api/events/orders', (evt) => {
-    invalidate(evt);
-    if (evt.type === 'created' && soundOn) playChime(melodies.new);
-  });
+  // Живые события только обновляют список; звук зависит от того, что в «Новых» (так он есть, даже если заказ пришёл опросом)
+  useEventStream('/api/events/orders', invalidate);
 
-  // Сигнал повторяется, пока есть принятые заказы; «Начать готовить» у последнего — и звук пропадает
-  const ringing = soundOn && (orders ?? []).some(o => o.status === 'Принят');
+  // Сигнал звучит сразу и повторяется, пока в «Новых» есть заказ; приняли последний — звук пропадает
+  const ringing = soundOn && (orders ?? []).some(o => o.status === 'Новый' && !o.isLater);
   React.useEffect(() => {
     if (!ringing) return;
-    playChime(melodies.accepted);
-    const timer = setInterval(() => playChime(melodies.accepted), ACCEPTED_ALARM_INTERVAL_MS);
+    playChime(melody);
+    const timer = setInterval(() => playChime(melody), NEW_ORDER_ALARM_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [ringing, melodies.accepted]);
+  }, [ringing, melody]);
 
   // Браузер включает звук только после действия пользователя — разблокируем по любому касанию или клавише на экране кухни
   React.useEffect(() => {
@@ -182,16 +174,16 @@ const KitchenPage: React.FC = () => {
 
   const [melodyMenu, setMelodyMenu] = React.useState<HTMLElement | null>(null);
   // Выбор сразу проигрывает мелодию; меню не закрываем, чтобы можно было послушать все
-  const chooseMelody = (kind: SignalKind, id: MelodyId) => {
-    setMelody(kind, id);
-    setMelodies(prev => ({ ...prev, [kind]: id }));
+  const chooseMelody = (id: MelodyId) => {
+    setMelody(id);
+    setMelodyState(id);
     playChime(id);
   };
 
   const toggleSound = () => {
     const next = !soundOn;
     setSoundOn(next);
-    if (next) playChime(melodies.new);
+    if (next) playChime(melody);
     try { localStorage.setItem(SOUND_KEY, next ? 'on' : 'off'); } catch { /* ignore */ }
   };
 
@@ -207,21 +199,19 @@ const KitchenPage: React.FC = () => {
     <Box ref={containerRef} sx={{ bgcolor: 'background.default', p: isFullscreen ? 2 : 0, minHeight: isFullscreen ? '100vh' : undefined, overflow: 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <Typography variant="h4" fontWeight={700} sx={{ flex: 1 }}>Кухня</Typography>
-        <Tooltip title="Мелодии сигналов">
-          <IconButton onClick={e => setMelodyMenu(e.currentTarget)} aria-label="Выбрать мелодии сигналов">
+        <Tooltip title={`Мелодия сигнала: ${MELODIES[melody].label}`}>
+          <IconButton onClick={e => setMelodyMenu(e.currentTarget)} aria-label="Выбрать мелодию сигнала">
             <MusicNoteIcon />
           </IconButton>
         </Tooltip>
         <Menu anchorEl={melodyMenu} open={!!melodyMenu} onClose={() => setMelodyMenu(null)}>
-          {SIGNAL_SECTIONS.flatMap(({ kind, title }) => [
-            <ListSubheader key={`${kind}-title`} sx={{ lineHeight: '36px' }}>{title}</ListSubheader>,
-            ...(Object.keys(MELODIES) as MelodyId[]).map(id => (
-              <MenuItem key={`${kind}-${id}`} selected={id === melodies[kind]} onClick={() => chooseMelody(kind, id)}>
-                <ListItemIcon>{id === melodies[kind] && <CheckIcon fontSize="small" />}</ListItemIcon>
-                <ListItemText>{MELODIES[id].label}</ListItemText>
-              </MenuItem>
-            )),
-          ])}
+          <ListSubheader sx={{ lineHeight: '36px' }}>Новый заказ — повтор каждые 10 с, пока не примут</ListSubheader>
+          {(Object.keys(MELODIES) as MelodyId[]).map(id => (
+            <MenuItem key={id} selected={id === melody} onClick={() => chooseMelody(id)}>
+              <ListItemIcon>{id === melody && <CheckIcon fontSize="small" />}</ListItemIcon>
+              <ListItemText>{MELODIES[id].label}</ListItemText>
+            </MenuItem>
+          ))}
         </Menu>
         <Tooltip title={soundOn ? 'Выключить звук новых заказов' : 'Включить звук новых заказов'}>
           <IconButton onClick={toggleSound}>{soundOn ? <VolumeUpIcon /> : <VolumeOffIcon />}</IconButton>
