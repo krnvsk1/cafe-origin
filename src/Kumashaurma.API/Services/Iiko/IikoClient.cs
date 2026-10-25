@@ -121,10 +121,14 @@ namespace Kumashaurma.API.Services.Iiko
             var (status, body) = await GetRawAsync($"{baseUrl}/api/auth?login={Uri.EscapeDataString(login.Trim())}&pass={Sha1(password)}", ct);
             if (status == HttpStatusCode.OK && body.Trim().Length is > 10 and < 200 && !body.TrimStart().StartsWith('<'))
                 return body.Trim();
-            if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden || body.Contains("password", StringComparison.OrdinalIgnoreCase))
-                throw new IikoException($"iiko не пустил: неверный логин или пароль ({Short(body)})");
+            // Сначала лицензия: iiko отвечает 401/403 и тогда, когда пароль верный, но нет лицензии на API
+            if (body.Contains("REST_API", StringComparison.OrdinalIgnoreCase) || body.Contains("(2000)"))
+                throw new IikoException("Логин и пароль подошли, но в лицензии iiko нет модуля REST API (код 2000) — " +
+                                        $"его подключает дилер iiko. Без него забрать техкарты по API нельзя ({Short(body)})");
             if (body.Contains("licen", StringComparison.OrdinalIgnoreCase) || body.Contains("лиценз", StringComparison.OrdinalIgnoreCase))
                 throw new IikoException($"iiko: нет свободной лицензии на подключение — закройте лишний iikoOffice и повторите ({Short(body)})");
+            if (status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden || body.Contains("password", StringComparison.OrdinalIgnoreCase))
+                throw new IikoException($"iiko не пустил: неверный логин или пароль ({Short(body)})");
             throw new IikoException($"iiko ответил {(int)status}: {Short(body)}");
         }
 
