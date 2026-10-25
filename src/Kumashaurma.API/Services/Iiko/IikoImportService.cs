@@ -123,6 +123,8 @@ namespace Kumashaurma.API.Services.Iiko
             var byName = new Dictionary<string, StockItem>();
             foreach (var i in stock) byName.TryAdd(Normalize(i.Name), i);
             var semiDone = new Dictionary<string, StockItem>();
+            // Блюда iiko, которые переносятся в наши блюда: если такое блюдо входит в состав другого — ссылаемся на него, а не делаем п/ф
+            var dishMap = choices.Where(c => c.Kind == "dish").GroupBy(c => c.IikoId).ToDictionary(g => g.Key, g => g.First().Id);
 
             // Позиция склада для ингредиента iiko (создаём, если нет)
             StockItem Item(IikoProduct p, bool semi)
@@ -156,7 +158,7 @@ namespace Kumashaurma.API.Services.Iiko
                 if (item.Kind == StockItemKinds.Semi && s.Charts.TryGetValue(p.Id, out var chart) && path.Add(p.Id))
                 {
                     await _context.SaveChangesAsync();
-                    var lines = await LinesAsync(chart, path);
+                    var lines = await LinesAsync(chart, path, allowDishes: false);
                     if (lines.Count > 0 && await SaveCardAsync(c => c.StockItemId == item.Id, () => new TechCard { StockItemId = item.Id },
                             lines, chart, semi: true, overwrite, unitFactor: UnitOf(p.Unit).Factor))
                         semiCards++;
@@ -165,9 +167,9 @@ namespace Kumashaurma.API.Services.Iiko
                 return item;
             }
 
-            async Task<List<(StockItem Item, decimal Gross, decimal Loss)>> LinesAsync(IikoChart chart, HashSet<string> path)
+            async Task<List<(StockItem? Item, int? DishId, decimal Gross, decimal Loss)>> LinesAsync(IikoChart chart, HashSet<string> path, bool allowDishes)
             {
-                var result = new List<(StockItem, decimal, decimal)>();
+                var result = new List<(StockItem?, int?, decimal, decimal)>();
                 foreach (var i in chart.Items.OrderBy(i => i.SortWeight))
                 {
                     if (i.AmountIn <= 0) continue;
@@ -181,13 +183,19 @@ namespace Kumashaurma.API.Services.Iiko
                         warnings.Add($"«{p.Name}» входит сам в себя — строка пропущена");
                         continue;
                     }
+                    // Блюдо в составе (сет, «½ пиццы»), которое тоже есть в нашем меню: строка-ссылка на долю порции
+                    if (allowDishes && p.Type == "DISH" && dishMap.TryGetValue(p.Id, out var ourDishId) && UnitOf(p.Unit).Unit == StockUnits.Piece)
+                    {
+                        result.Add((null, ourDishId, Math.Round(i.AmountIn, 4), 0));
+                        continue;
+                    }
                     var isSemi = p.Type is "PREPARED" or "DISH" && s.Charts.ContainsKey(p.Id);
                     var item = isSemi ? await Semi(p, path) : Item(p, semi: false);
                     var (unit, factor) = UnitOf(p.Unit);
                     // Для штучных ингредиентов iiko пишет нетто в килограммах (1 шт → 0,089 кг) — потерь тут нет
                     var output = i.AmountOut > 0 ? i.AmountOut : i.AmountMiddle > 0 ? i.AmountMiddle : i.AmountIn;
                     var loss = unit == StockUnits.Piece ? 0 : Math.Clamp(Math.Round((1 - output / i.AmountIn) * 100, 2), 0, 99);
-                    result.Add((item, Math.Round(i.AmountIn * factor, 4), loss));
+                    result.Add((item, null, Math.Round(i.AmountIn * factor, 4), loss));
                 }
                 return result;
             }
@@ -200,7 +208,7 @@ namespace Kumashaurma.API.Services.Iiko
                     continue;
                 }
                 var path = new HashSet<string> { dish.Id };
-                var lines = await LinesAsync(chart, path);
+                var lines = await LinesAsync(chart, path, allowDishes: true);
                 if (lines.Count == 0)
                 {
                     warnings.Add($"«{dish.Name}»: в карте iiko нет ингредиентов с весом — пропущено");
@@ -225,7 +233,7 @@ namespace Kumashaurma.API.Services.Iiko
 
         /// <summary>Создать или заменить техкарту. false — карта уже есть и перезапись выключена</summary>
         private async Task<bool> SaveCardAsync(System.Linq.Expressions.Expression<Func<TechCard, bool>> find, Func<TechCard> create,
-            List<(StockItem Item, decimal Gross, decimal Loss)> lines, IikoChart chart, bool semi, bool overwrite, decimal unitFactor,
+            List<(StockItem? Item, int? DishId, decimal Gross, decimal Loss)> lines, IikoChart chart, bool semi, bool overwrite, decimal unitFactor,
             decimal? outputGrams = null)
         {
             await _context.SaveChangesAsync(); // новые позиции склада получают Id
@@ -250,13 +258,14 @@ namespace Kumashaurma.API.Services.Iiko
 
             // Одинаковые ингредиенты в карте iiko складываем
             var order = 0;
-            foreach (var g in lines.GroupBy(l => l.Item))
+            foreach (var g in lines.GroupBy(l => (l.Item, l.DishId)))
             {
                 var gross = g.Sum(x => x.Gross);
                 var net = g.Sum(x => x.Gross * (1 - x.Loss / 100m));
                 card.Lines.Add(new TechCardLine
                 {
-                    StockItem = g.Key,
+                    StockItem = g.Key.Item,
+                    SubDishId = g.Key.DishId,
                     Gross = Math.Round(gross / (semi ? 1 : Math.Max(chart.AssembledAmount, 1)), 4),
                     LossPercent = gross > 0 ? Math.Clamp(Math.Round((1 - net / gross) * 100, 2), 0, 99) : 0,
                     SortOrder = order++

@@ -41,7 +41,11 @@ namespace Kumashaurma.API.Services
                 items = items.AsNoTracking();
                 cards = cards.AsNoTracking();
             }
-            return new TechCardCalculator(await items.ToListAsync(), await cards.ToListAsync());
+            var dishes = await _context.Shawarmas.AsNoTracking()
+                .Select(d => new { d.Id, d.ParentId, d.Name, ParentName = d.Parent != null ? d.Parent.Name : null })
+                .ToListAsync();
+            return new TechCardCalculator(await items.ToListAsync(), await cards.ToListAsync(),
+                dishes.Select(d => (d.Id, d.ParentId, d.ParentName != null ? $"{d.ParentName} · {d.Name}" : d.Name)));
         }
 
         // ================= Документы =================

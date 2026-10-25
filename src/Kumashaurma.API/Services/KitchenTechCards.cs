@@ -2,7 +2,9 @@ using Kumashaurma.API.Models;
 
 namespace Kumashaurma.API.Services
 {
-    public record KitchenTechCardLine(int StockItemId, string Name, string Unit, bool IsSemi, decimal Gross, decimal Net, decimal LossPercent);
+    /// <param name="Unit">kg / l / pcs, для блюда в составе — portion (Gross — доля порции)</param>
+    public record KitchenTechCardLine(int? StockItemId, string Name, string Unit, bool IsSemi, decimal Gross, decimal Net, decimal LossPercent,
+        int? DishId = null, bool IsDish = false);
 
     public record KitchenTechCard(string Title, decimal? OutputWeight, decimal YieldQuantity, string? Instructions, IReadOnlyList<KitchenTechCardLine> Lines);
 
@@ -19,6 +21,9 @@ namespace Kumashaurma.API.Services
                 .OrderBy(l => l.SortOrder)
                 .Select(l =>
                 {
+                    if (l.SubDishId is int dishId)
+                        return new KitchenTechCardLine(null, calc.DishName(dishId) ?? "Удалённое блюдо", "portion", false,
+                            l.Gross, l.Gross, 0, dishId, true);
                     var item = calc.Item(l.StockItemId);
                     return new KitchenTechCardLine(
                         l.StockItemId,
@@ -34,14 +39,17 @@ namespace Kumashaurma.API.Services
             return new KitchenTechCard(title, card.OutputWeight, card.YieldQuantity, instructions, lines);
         }
 
-        /// <summary>Карты полуфабрикатов из состава (соус, заготовка) — один уровень, без повторов</summary>
-        public static List<KitchenTechCard> SemiCards(IEnumerable<KitchenTechCard> cards, TechCardCalculator calc) =>
-            cards
-                .SelectMany(c => c.Lines)
-                .Where(l => l.IsSemi)
-                .GroupBy(l => l.StockItemId)
-                .Select(g => ToView(calc.ForSemi(g.Key), g.First().Name, calc))
-                .OfType<KitchenTechCard>()
-                .ToList();
+        /// <summary>Карты полуфабрикатов и блюд из состава (соус, заготовка, половина пиццы) — один уровень, без повторов</summary>
+        public static List<KitchenTechCard> SemiCards(IEnumerable<KitchenTechCard> cards, TechCardCalculator calc)
+        {
+            var lines = cards.SelectMany(c => c.Lines).ToList();
+            var semis = lines.Where(l => l.IsSemi && l.StockItemId.HasValue)
+                .GroupBy(l => l.StockItemId!.Value)
+                .Select(g => ToView(calc.ForSemi(g.Key), g.First().Name, calc));
+            var dishes = lines.Where(l => l.IsDish && l.DishId.HasValue)
+                .GroupBy(l => l.DishId!.Value)
+                .Select(g => ToView(calc.ForDish(g.Key), g.First().Name, calc));
+            return semis.Concat(dishes).OfType<KitchenTechCard>().ToList();
+        }
     }
 }

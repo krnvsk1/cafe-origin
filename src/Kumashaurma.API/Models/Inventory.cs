@@ -379,13 +379,22 @@ namespace Kumashaurma.API.Models
         [JsonIgnore]
         public TechCard? TechCard { get; set; }
 
+        /// <summary>Товар или полуфабрикат со склада (либо он, либо блюдо)</summary>
         [Column("stock_item_id")]
-        public int StockItemId { get; set; }
+        public int? StockItemId { get; set; }
 
         [ForeignKey(nameof(StockItemId))]
         public StockItem? StockItem { get; set; }
 
-        /// <summary>Брутто — сколько списывается со склада, в единицах позиции</summary>
+        /// <summary>Другое блюдо меню в составе (сет, комбо, «½ пиццы»): Gross — доля порции</summary>
+        [Column("sub_dish_id")]
+        public int? SubDishId { get; set; }
+
+        [ForeignKey(nameof(SubDishId))]
+        [JsonIgnore]
+        public Shawarma? SubDish { get; set; }
+
+        /// <summary>Брутто — сколько списывается со склада, в единицах позиции; для блюда — порций (0,5 = половина)</summary>
         [Column("gross", TypeName = "decimal(14,4)")]
         public decimal Gross { get; set; }
 

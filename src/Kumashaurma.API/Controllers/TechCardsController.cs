@@ -31,7 +31,10 @@ namespace Kumashaurma.API.Controllers
 
         public class TechCardLineRequest
         {
-            public int StockItemId { get; set; }
+            /// <summary>Товар или полуфабрикат</summary>
+            public int? StockItemId { get; set; }
+            /// <summary>…или другое блюдо меню (только в картах блюд и добавок); Gross — доля порции</summary>
+            public int? SubDishId { get; set; }
             public decimal Gross { get; set; }
             public decimal LossPercent { get; set; }
         }
@@ -167,20 +170,34 @@ namespace Kumashaurma.API.Controllers
 
             if (request.Lines.Count == 0) return BadRequest(new { message = "Добавьте хотя бы один ингредиент" });
             if (request.Lines.Count > 100) return BadRequest(new { message = "Слишком много ингредиентов" });
+            if (request.Lines.Any(l => l.StockItemId.HasValue == l.SubDishId.HasValue))
+                return BadRequest(new { message = "В каждой строке выберите либо товар/полуфабрикат, либо блюдо" });
             if (request.Lines.Any(l => l.Gross <= 0)) return BadRequest(new { message = "Укажите вес брутто у всех ингредиентов" });
             if (request.Lines.Any(l => l.LossPercent < 0 || l.LossPercent >= 100)) return BadRequest(new { message = "Потери должны быть от 0 до 99 %" });
             if (target == Semi && request.YieldQuantity <= 0) return BadRequest(new { message = "Укажите выход полуфабриката" });
+            if (target == Semi && request.Lines.Any(l => l.SubDishId.HasValue))
+                return BadRequest(new { message = "Полуфабрикат собирается из товаров и других полуфабрикатов — блюдо в него добавить нельзя" });
 
-            var ids = request.Lines.Select(l => l.StockItemId).Distinct().ToList();
+            var ids = request.Lines.Where(l => l.StockItemId.HasValue).Select(l => l.StockItemId!.Value).Distinct().ToList();
             var known = await _context.StockItems.AsNoTracking().Where(i => ids.Contains(i.Id)).Select(i => i.Id).ToListAsync();
             if (known.Count != ids.Count) return BadRequest(new { message = "Некоторые ингредиенты не найдены — обновите страницу" });
 
+            var dishIds = request.Lines.Where(l => l.SubDishId.HasValue).Select(l => l.SubDishId!.Value).Distinct().ToList();
+            var knownDishes = await _context.Shawarmas.AsNoTracking().Where(d => dishIds.Contains(d.Id)).Select(d => d.Id).ToListAsync();
+            if (knownDishes.Count != dishIds.Count) return BadRequest(new { message = "Некоторые блюда из состава не найдены — обновите страницу" });
+
+            var calc = await _inventory.LoadCalculatorAsync();
             if (target == Semi)
             {
                 if (ids.Contains(id)) return BadRequest(new { message = "Полуфабрикат не может входить сам в себя" });
-                var calc = await _inventory.LoadCalculatorAsync();
                 if (calc.CreatesCycle(id, ids))
                     return BadRequest(new { message = "Получается замкнутый круг: один из полуфабрикатов уже содержит этот" });
+            }
+            if (target == Dish && dishIds.Count > 0)
+            {
+                if (dishIds.Contains(id)) return BadRequest(new { message = "Блюдо не может входить само в себя" });
+                if (calc.CreatesDishCycle(id, dishIds))
+                    return BadRequest(new { message = "Получается замкнутый круг: одно из блюд в составе уже содержит это блюдо" });
             }
 
             var card = await _context.TechCards.Include(c => c.Lines).FirstOrDefaultAsync(c =>
@@ -213,8 +230,9 @@ namespace Kumashaurma.API.Controllers
                 card.Lines.Add(new TechCardLine
                 {
                     StockItemId = l.StockItemId,
+                    SubDishId = l.SubDishId,
                     Gross = Math.Round(l.Gross, 4),
-                    LossPercent = Math.Round(l.LossPercent, 2),
+                    LossPercent = l.SubDishId.HasValue ? 0 : Math.Round(l.LossPercent, 2),
                     SortOrder = order++
                 });
             }
@@ -419,13 +437,15 @@ namespace Kumashaurma.API.Controllers
                     return new
                     {
                         l.StockItemId,
-                        stockItemName = item?.Name,
-                        unit = item?.Unit,
-                        kind = item?.Kind,
+                        l.SubDishId,
+                        stockItemName = l.SubDishId is int dishId ? calc.DishName(dishId) : item?.Name,
+                        // Блюдо в составе считается порциями
+                        unit = l.SubDishId.HasValue ? "portion" : item?.Unit,
+                        kind = l.SubDishId.HasValue ? "dish" : item?.Kind,
                         l.Gross,
                         l.LossPercent,
                         net = l.Net,
-                        unitCost = Math.Round(calc.UnitCost(l.StockItemId), 2),
+                        unitCost = Math.Round(calc.ComponentUnitCost(l), 2),
                         cost = calc.LineCost(l)
                     };
                 })
