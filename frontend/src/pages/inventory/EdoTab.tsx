@@ -12,7 +12,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   useEdoState, useEdoDocuments, useEdoDocument, useSaveEdoSettings, testEdoSettings, edoSync, edoImport, edoIgnore, edoRestore,
-  EDO_STATUS, OKEI, CHZ_PREFILL_KEY, defaultFactor, type EdoState, type EdoStatus, type EdoLine,
+  EDO_STATUS, OKEI, CHZ_PREFILL_KEY, defaultFactor, type EdoState, type EdoStatus, type EdoLine, type EdoVat,
 } from '../../api/edo';
 import { useStockItems, apiError, fmtMoney, fmtDate, fmtDateTime, fmtQty, UNIT_LABELS, type StockItem } from '../../api/inventory';
 import { useCan, P } from '../../auth/permissions';
@@ -522,7 +522,8 @@ const EdoTab: React.FC<{ onOpenReceipt: (id: number) => void }> = ({ onOpenRecei
                 </Box>
                 <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
                   <Typography sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtMoney(d.total)}</Typography>
-                  {(d.withoutVat || d.vatTotal !== null) && (
+                  {/* != null: старый API без колонки НДС не присылает поле вовсе */}
+                  {(d.withoutVat || d.vatTotal != null) && (
                     <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
                       {d.withoutVat ? 'без НДС' : `НДС ${fmtMoney(d.vatTotal ?? 0)}`}
                     </Typography>
