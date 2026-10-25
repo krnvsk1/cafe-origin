@@ -31,6 +31,7 @@ namespace Kumashaurma.API.Controllers
         }
 
         private EgaisOptions _options => _settings.Current;
+        private static readonly TimeSpan StatusPingTimeout = TimeSpan.FromSeconds(2);
 
         public class SettingsRequest
         {
@@ -125,7 +126,8 @@ namespace Kumashaurma.API.Controllers
         [HttpGet("status")]
         public async Task<IActionResult> Status()
         {
-            var reachable = _options.Enabled && (await _utm.PingAsync(null, HttpContext.RequestAborted)).Ok;
+            // Короткий таймаут: по статусу рисуется вкладка ЕГАИС, и недоступный УТМ не должен задерживать её на 8 секунд
+            var reachable = _options.Enabled && (await _utm.PingAsync(null, HttpContext.RequestAborted, StatusPingTimeout)).Ok;
             var counts = await _context.EgaisDocuments.AsNoTracking()
                 .GroupBy(d => d.Status)
                 .Select(g => new { g.Key, Count = g.Count() })
