@@ -14,7 +14,8 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/egais")]
-    [HasPermission(Permissions.InventoryView)]
+    // Статус и настройки нужны и на странице «Настройка интеграций» (право Settings)
+    [HasPermission(Permissions.InventoryView, Permissions.Settings)]
     public class EgaisController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

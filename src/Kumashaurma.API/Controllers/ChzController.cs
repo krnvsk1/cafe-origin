@@ -12,7 +12,8 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/chz")]
-    [HasPermission(Permissions.Chz)]
+    // Статус и настройки нужны и на странице «Настройка интеграций» (право Settings)
+    [HasPermission(Permissions.Chz, Permissions.Settings)]
     public class ChzController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

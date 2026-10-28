@@ -4,20 +4,21 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete, InputAdornment, createFilterOptions, useTheme, useMediaQuery,
 } from '@mui/material';
 import {
-  Close as CloseIcon, SettingsOutlined as SettingsIcon, Sync as SyncIcon, ChevronRight as ChevronRightIcon,
+  Close as CloseIcon, Sync as SyncIcon, ChevronRight as ChevronRightIcon,
   Add as AddIcon, ReceiptLongOutlined as DocIcon, QrCode2 as CodesIcon, AutoAwesome as RememberedIcon,
   ContentCopy as CopyIcon, Check as CopiedIcon,
 } from '@mui/icons-material';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  useEdoState, useEdoDocuments, useEdoDocument, useSaveEdoSettings, testEdoSettings, edoSync, edoImport, edoIgnore, edoRestore,
-  EDO_STATUS, OKEI, CHZ_PREFILL_KEY, defaultFactor, type EdoState, type EdoStatus, type EdoLine, type EdoVat,
+  useEdoState, useEdoDocuments, useEdoDocument, edoSync, edoImport, edoIgnore, edoRestore,
+  EDO_STATUS, OKEI, CHZ_PREFILL_KEY, defaultFactor, type EdoStatus, type EdoLine, type EdoVat,
 } from '../../api/edo';
 import { useStockItems, apiError, fmtMoney, fmtDate, fmtDateTime, fmtQty, UNIT_LABELS, type StockItem } from '../../api/inventory';
 import { useCan, P } from '../../auth/permissions';
 import { tokens } from '../../theme';
 import { Panel, ListRow, EmptyState } from './ui';
+import IntegrationStatus from './IntegrationStatus';
 import StockItemDialog from './StockItemDialog';
 
 type CreateOption = { create: true; inputValue: string };
@@ -26,110 +27,6 @@ const itemFilter = createFilterOptions<StockItem>({ stringify: o => `${o.name} $
 
 
 const unitOf = (l: EdoLine) => l.unitName || (l.okei ? OKEI[l.okei] : null) || 'ед.';
-
-// ============ Настройки ============
-
-const EdoSettingsDialog: React.FC<{ open: boolean; state: EdoState; onClose: () => void }> = ({ open, state, onClose }) => {
-  const save = useSaveEdoSettings();
-  const [enabled, setEnabled] = React.useState(true);
-  const [login, setLogin] = React.useState('');
-  const [password, setPassword] = React.useState('');
-  const [account, setAccount] = React.useState('');
-  const [minutes, setMinutes] = React.useState('15');
-  const [days, setDays] = React.useState('14');
-  const [busy, setBusy] = React.useState(false);
-  const [result, setResult] = React.useState<{ ok: boolean; text: string } | null>(null);
-
-  React.useEffect(() => {
-    if (!open) return;
-    setEnabled(state.enabled || !state.login);
-    setLogin(state.login);
-    setPassword('');
-    setAccount(state.account ?? '');
-    setMinutes(String(state.autoSyncMinutes));
-    setDays(String(state.initialDays));
-    setResult(null);
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const input = () => ({
-    enabled, login: login.trim(), password: password || null, account: account.trim() || null,
-    autoSyncMinutes: Number(minutes) || 0, initialDays: Number(days) || 14,
-  });
-
-  const test = async () => {
-    setBusy(true);
-    setResult(null);
-    try {
-      const r = await testEdoSettings(input());
-      setResult({ ok: r.ok, text: r.message });
-    } catch (e) {
-      setResult({ ok: false, text: apiError(e) });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submit = async () => {
-    setResult(null);
-    try {
-      await save.mutateAsync(input());
-      onClose();
-    } catch (e) {
-      setResult({ ok: false, text: apiError(e) });
-    }
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Подключение к СБИС</DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
-        <Typography variant="body2" color="text.secondary">
-          Сервис заходит в СБИС (Saby) от имени пользователя и забирает входящие УПД. Лучше завести отдельного
-          сотрудника с доступом только к входящим документам и без подтверждения входа по SMS.
-        </Typography>
-        <FormControlLabel control={<Switch checked={enabled} onChange={e => setEnabled(e.target.checked)} />} label="Загружать накладные из СБИС" />
-        <TextField label="Логин СБИС" value={login} onChange={e => setLogin(e.target.value)} autoComplete="off" />
-        <TextField
-          label="Пароль"
-          type="password"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          autoComplete="new-password"
-          placeholder={state.hasPassword ? 'Сохранён — введите, чтобы заменить' : ''}
-          slotProps={{ inputLabel: { shrink: state.hasPassword || !!password } }}
-        />
-        <TextField label="Номер аккаунта (если кабинетов несколько)" value={account} onChange={e => setAccount(e.target.value)} />
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-          <TextField
-            label="Проверять каждые"
-            type="number"
-            value={minutes}
-            onChange={e => setMinutes(e.target.value)}
-            helperText="0 — только вручную"
-            slotProps={{ input: { endAdornment: <InputAdornment position="end">мин</InputAdornment> }, htmlInput: { min: 0, max: 1440 } }}
-          />
-          <TextField
-            label="Первая загрузка за"
-            type="number"
-            value={days}
-            onChange={e => setDays(e.target.value)}
-            helperText="С какой даты забрать накладные"
-            slotProps={{ input: { endAdornment: <InputAdornment position="end">дн</InputAdornment> }, htmlInput: { min: 1, max: 90 } }}
-          />
-        </Box>
-        {result && <Alert severity={result.ok ? 'success' : 'error'}>{result.text}</Alert>}
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-        <Button onClick={test} disabled={busy || !login.trim()} sx={{ mr: 'auto' }}
-          startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
-          Проверить вход
-        </Button>
-        <Button onClick={onClose} sx={{ color: 'text.secondary' }}>Отмена</Button>
-        <Button variant="contained" color="secondary" onClick={submit} disabled={save.isPending}>Сохранить</Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
 
 // ============ Накладная ============
 
@@ -435,14 +332,10 @@ const FILTERS: { value: EdoStatus | 'all'; label: string }[] = [
 ];
 
 const EdoTab: React.FC<{ onOpenReceipt: (id: number) => void }> = ({ onOpenReceipt }) => {
-  const theme = useTheme();
-  const t = tokens[theme.palette.mode];
   const qc = useQueryClient();
-  const can = useCan();
   const { data: state, isLoading } = useEdoState();
   const [filter, setFilter] = React.useState<EdoStatus | 'all'>('new');
   const { data: docs = [], isLoading: docsLoading } = useEdoDocuments(filter);
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [openId, setOpenId] = React.useState<number | null>(null);
   const [syncing, setSyncing] = React.useState(false);
   const [message, setMessage] = React.useState<{ ok: boolean; text: string } | null>(null);
@@ -467,27 +360,22 @@ const EdoTab: React.FC<{ onOpenReceipt: (id: number) => void }> = ({ onOpenRecei
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Panel>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-          <Box sx={{ flex: 1, minWidth: 220 }}>
-            <Typography sx={{ fontWeight: 700 }}>{configured ? `СБИС · ${state.login}` : 'СБИС не подключён'}</Typography>
-            <Typography variant="body2" color="text.secondary">
-              {configured
-                ? `${state.lastSyncAt ? `Проверено ${fmtDateTime(state.lastSyncAt)}` : 'Ещё не проверялось'}${state.autoSyncMinutes ? ` · автоматически каждые ${state.autoSyncMinutes} мин` : ''}`
-                : 'Входящие УПД от поставщиков будут сами появляться здесь — останется выбрать позиции склада и оприходовать.'}
-            </Typography>
-          </Box>
-          {can(P.Settings) && (
-            <Button startIcon={<SettingsIcon />} onClick={() => setSettingsOpen(true)} sx={{ bgcolor: t.surfaceMuted }}>
-              {configured ? 'Настройки' : 'Подключить'}
-            </Button>
-          )}
+        <IntegrationStatus
+          section="sbis"
+          ok={configured && !state.lastError}
+          failed={configured}
+          title={!configured ? 'СБИС не подключён' : state.lastError ? `СБИС · ${state.login}: ошибка загрузки` : `СБИС подключён · ${state.login}`}
+          details={configured
+            ? `${state.lastSyncAt ? `Проверено ${fmtDateTime(state.lastSyncAt)}` : 'Ещё не проверялось'}${state.autoSyncMinutes ? ` · автоматически каждые ${state.autoSyncMinutes} мин` : ''}`
+            : 'Входящие УПД от поставщиков будут сами появляться здесь — подключите СБИС в «Настройке интеграций».'}
+        >
           {configured && (
             <Button variant="contained" color="secondary" onClick={sync} disabled={syncing}
               startIcon={syncing ? <CircularProgress size={16} color="inherit" /> : <SyncIcon />}>
               Загрузить
             </Button>
           )}
-        </Box>
+        </IntegrationStatus>
         {state.lastError && configured && !message && <Alert severity="error" sx={{ mt: 1.5 }}>{state.lastError}</Alert>}
         {message && <Alert severity={message.ok ? 'success' : 'error'} sx={{ mt: 1.5 }} onClose={() => setMessage(null)}>{message.text}</Alert>}
       </Panel>
@@ -535,7 +423,6 @@ const EdoTab: React.FC<{ onOpenReceipt: (id: number) => void }> = ({ onOpenRecei
           })}
       </Panel>
 
-      <EdoSettingsDialog open={settingsOpen} state={state} onClose={() => setSettingsOpen(false)} />
       <EdoDocumentDialog id={openId} onClose={() => setOpenId(null)} onOpenReceipt={onOpenReceipt} />
     </Box>
   );

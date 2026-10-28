@@ -1,22 +1,22 @@
 import * as React from 'react';
 import {
-  Box, Typography, Button, TextField, MenuItem, Switch, FormControlLabel, Alert, CircularProgress, Chip, IconButton,
-  Dialog, DialogTitle, DialogContent, DialogActions, Collapse, Checkbox, useTheme, useMediaQuery,
+  Box, Typography, Button, TextField, MenuItem, Alert, CircularProgress, Chip, IconButton,
+  Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, useTheme, useMediaQuery,
 } from '@mui/material';
 import {
   QrCodeScanner as ScanIcon, Close as CloseIcon, CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon,
-  SettingsOutlined as SettingsIcon, Key as KeyIcon, ChevronRight as ChevronRightIcon, Logout as LogoutIcon, CloudDownloadOutlined as LoadIcon,
+  Key as KeyIcon, ChevronRight as ChevronRightIcon, Logout as LogoutIcon, CloudDownloadOutlined as LoadIcon,
 } from '@mui/icons-material';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useChzState, useChzDocuments, useSaveChzSettings, chzAuthStart, chzAuthComplete, chzLogout, chzPrepare, chzSubmit,
+  useChzState, useChzDocuments, chzAuthStart, chzAuthComplete, chzLogout, chzPrepare, chzSubmit,
   chzRefresh, chzDelete, fetchChzDocument, fetchChzBalance, CHZ_STATUS, type ChzDocumentDetail, type ChzState, type ChzBalance,
 } from '../../api/chz';
 import { apiError, fmtDateTime, fmtDate, toDateInput } from '../../api/inventory';
 import { listCertificates, signBase64, signText, type Certificate } from '../../utils/cryptopro';
-import { useCan, P } from '../../auth/permissions';
 import { tokens } from '../../theme';
 import { Panel, ListRow, EmptyState } from './ui';
+import IntegrationStatus from './IntegrationStatus';
 import { CHZ_PREFILL_KEY } from '../../api/edo';
 
 const CERT_KEY = 'chz-certificate';
@@ -24,88 +24,6 @@ const readCert = (): string | null => { try { return localStorage.getItem(CERT_K
 /** Сессия ЧЗ истекла (сервер отвечает 409 needSignIn) */
 const needsSignIn = (e: unknown) => !!(e as { response?: { data?: { needSignIn?: boolean } } })?.response?.data?.needSignIn;
 const writeCert = (v: string | null) => { try { v ? localStorage.setItem(CERT_KEY, v) : localStorage.removeItem(CERT_KEY); } catch { /* ignore */ } };
-
-// ============ Настройки ============
-
-const ChzSettings: React.FC<{ state: ChzState; onDone: () => void }> = ({ state, onDone }) => {
-  const save = useSaveChzSettings();
-  const [enabled, setEnabled] = React.useState(state.enabled || !state.inn);
-  const [inn, setInn] = React.useState(state.inn);
-  const [sandbox, setSandbox] = React.useState(state.sandbox);
-  const [fiasId, setFiasId] = React.useState(state.fiasId ?? '');
-  const [kpp, setKpp] = React.useState(state.kpp ?? '');
-  const [groups, setGroups] = React.useState<string[]>(state.productGroups.length ? state.productGroups : ['milk', 'water', 'beer']);
-  const [error, setError] = React.useState('');
-
-  const submit = async () => {
-    setError('');
-    try {
-      await save.mutateAsync({ enabled, inn: inn.trim(), sandbox, productGroups: groups, fiasId: fiasId.trim() || null, kpp: kpp.trim() || null });
-      onDone();
-    } catch (e) {
-      setError(apiError(e));
-    }
-  };
-
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {error && <Alert severity="error">{error}</Alert>}
-      <FormControlLabel control={<Switch checked={enabled} onChange={e => setEnabled(e.target.checked)} />} label="Работать с Честным знаком" />
-      <TextField
-        label="ИНН организации"
-        value={inn}
-        onChange={e => setInn(e.target.value.replace(/\D/g, '').slice(0, 12))}
-        helperText="Тот же, что в сертификате КЭП руководителя"
-        slotProps={{ htmlInput: { inputMode: 'numeric' } }}
-        sx={{ maxWidth: 320 }}
-      />
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: '1fr 200px' }, gap: 1.5 }}>
-        <TextField
-          label="Код ФИАС места деятельности (МОД)"
-          value={fiasId}
-          onChange={e => setFiasId(e.target.value.trim())}
-          placeholder="0c5b2444-70a0-4932-980c-b4dc0d3f02b5"
-          helperText="Обязателен для пива и воды. ЛК Честного знака → Профиль → Места осуществления деятельности"
-        />
-        <TextField
-          label="КПП"
-          value={kpp}
-          onChange={e => setKpp(e.target.value.replace(/\D/g, '').slice(0, 9))}
-          helperText={inn.length === 12 ? 'У ИП нет — оставьте пустым' : 'Для организации'}
-          slotProps={{ htmlInput: { inputMode: 'numeric' } }}
-        />
-      </Box>
-      <Box>
-        <Typography sx={{ fontWeight: 600, mb: 1 }}>Товарные группы</Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          {state.groups.map(g => {
-            const on = groups.includes(g.key);
-            return (
-              <Chip
-                key={g.key}
-                label={g.title}
-                color={on ? 'primary' : 'default'}
-                onClick={() => setGroups(on ? groups.filter(x => x !== g.key) : [...groups, g.key])}
-              />
-            );
-          })}
-        </Box>
-      </Box>
-      <FormControlLabel
-        control={<Switch checked={sandbox} onChange={e => setSandbox(e.target.checked)} />}
-        label={<Box><Typography>Тестовый контур (песочница)</Typography><Typography variant="body2" color="text.secondary">Для проверки без реального вывода кодов</Typography></Box>}
-        sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
-      />
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <Button variant="contained" color="secondary" onClick={submit} disabled={save.isPending}
-          startIcon={save.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}>
-          Сохранить
-        </Button>
-        {state.enabled && <Button onClick={onDone} sx={{ color: 'text.secondary' }}>Отмена</Button>}
-      </Box>
-    </Box>
-  );
-};
 
 // ============ Сертификат и вход ============
 
@@ -469,11 +387,9 @@ const ChzTab: React.FC = () => {
   const theme = useTheme();
   const t = tokens[theme.palette.mode];
   const qc = useQueryClient();
-  const can = useCan();
   const { data: state, isLoading } = useChzState();
   const { data: docs = [] } = useChzDocuments();
 
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [thumbprint, setThumbprint] = React.useState<string | null>(readCert());
   const [group, setGroup] = React.useState('');
   const [action, setAction] = React.useState('PRODUCTION_USE');
@@ -588,32 +504,24 @@ const ChzTab: React.FC = () => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {/* Подключение */}
+      {/* Статус подключения; настройки — в «Настройке интеграций» */}
       <Panel>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: configured && !settingsOpen ? 1.5 : 0, flexWrap: 'wrap' }}>
-          <Typography sx={{ fontWeight: 700, flex: 1 }}>
-            {configured ? `Честный знак · ИНН ${state.inn}` : 'Честный знак не подключён'}
-          </Typography>
-          {can(P.Settings) && configured && (
-            <Button size="small" startIcon={<SettingsIcon />} onClick={() => setSettingsOpen(o => !o)} sx={{ bgcolor: t.surfaceMuted }}>
-              Настройки
-            </Button>
-          )}
-        </Box>
-        {configured && !state.fiasId && !settingsOpen && (
-          <Alert severity="warning" sx={{ mb: 1.5 }}>
-            Не указан код ФИАС места деятельности — без него Честный знак отклоняет вывод пива и воды («МОД не найден»).
-            {can(P.Settings) ? ' Откройте «Настройки».' : ' Попросите администратора заполнить его.'}
-          </Alert>
-        )}
-        <Collapse in={!configured || settingsOpen}>
-          <Box sx={{ pt: 2 }}>
-            {can(P.Settings)
-              ? <ChzSettings state={state} onDone={() => setSettingsOpen(false)} />
-              : <Typography color="text.secondary">Попросите администратора указать ИНН организации и товарные группы.</Typography>}
-          </Box>
-        </Collapse>
-        {configured && !settingsOpen && <SignInPanel state={state} thumbprint={thumbprint} onThumbprint={setThumbprint} />}
+        <IntegrationStatus
+          section="chz"
+          ok={configured}
+          title={configured ? `Честный знак подключён · ИНН ${state.inn}` : 'Честный знак не подключён'}
+          details={configured
+            ? [
+                state.sandbox ? 'тестовый контур (песочница)' : 'боевой контур',
+                state.fiasId ? 'место деятельности указано' : null,
+                `группы: ${state.productGroups.map(groupTitle).join(', ')}`,
+              ].filter(Boolean).join(' · ')
+            : 'Укажите ИНН организации и товарные группы в «Настройке интеграций».'}
+          warning={configured && !state.fiasId
+            ? 'Не указан код ФИАС места деятельности — без него Честный знак отклоняет вывод пива и воды («МОД не найден»).'
+            : null}
+        />
+        {configured && <Box sx={{ mt: 1.5 }}><SignInPanel state={state} thumbprint={thumbprint} onThumbprint={setThumbprint} /></Box>}
       </Panel>
 
       {configured && (

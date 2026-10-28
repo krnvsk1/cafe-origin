@@ -19,6 +19,7 @@ import {
   RateReview as ReviewsIcon,
   SoupKitchen as KitchenIcon,
   FactCheckOutlined as HaccpIcon,
+  CableOutlined as IntegrationsIcon,
   DeliveryDining as DeliveryIcon,
   Map as MapIcon,
   Insights as InsightsIcon,
@@ -65,6 +66,7 @@ import AdminReviewsPage from './pages/AdminReviewsPage';
 import KitchenPage from './pages/KitchenPage';
 import HaccpPage from './pages/haccp/HaccpPage';
 import HaccpReminder from './components/HaccpReminder';
+import IntegrationsPage from './pages/IntegrationsPage';
 import CourierPage from './pages/CourierPage';
 import AdminDeliveryZonesPage from './pages/AdminDeliveryZonesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
@@ -210,6 +212,7 @@ function App() {
     { text: 'Платежи поставщикам', icon: <FinanceIcon />, path: '/admin/finance', perms: [P.Finance], group: 'Финансы', hint: 'Что и когда оплатить по накладным СБИС' },
     { text: 'Склад', icon: <InventoryIcon />, path: '/admin/inventory', perms: [P.InventoryView, P.TechCards, P.Chz], group: 'Склад', hint: 'Остатки, накладные, ЕГАИС, Честный знак' },
     { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', perms: [P.UsersView, P.UsersRoles], group: 'Команда', hint: 'Гости и сотрудники' },
+    { text: 'Настройка интеграций', icon: <IntegrationsIcon />, path: '/admin/integrations', perms: [P.Settings], group: 'Команда', hint: 'ЕГАИС, Честный знак, СБИС' },
     { text: 'Роли и доступы', icon: <RolesIcon />, path: '/admin/roles', perms: [P.Roles], group: 'Команда', hint: 'Что доступно каждой роли' },
   ] as (ControlLink & { perms: string[] })[])
     .filter(link => isAuthenticated && can(...link.perms));
@@ -410,6 +413,7 @@ function App() {
                 {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory" element={<InventoryPage />} />}
                 {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory/:tab" element={<InventoryPage />} />}
                 {can(P.Finance) && <Route path="/admin/finance" element={<FinancePage />} />}
+                {can(P.Settings) && <Route path="/admin/integrations" element={<IntegrationsPage />} />}
                 {can(P.UsersView, P.UsersRoles) && <Route path="/admin/users" element={<UsersPage />} />}
                 {can(P.Roles) && <Route path="/admin/roles" element={<RolesPage />} />}
 

@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import {
   Sync as SyncIcon, Close as CloseIcon, ChevronRight as ChevronRightIcon, LocalBarOutlined as BeerIcon,
-  Add as AddIcon, CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon, SettingsOutlined as SettingsIcon,
+  Add as AddIcon, CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon,
 } from '@mui/icons-material';
 import {
   useEgaisState, useEgaisDocuments, useEgaisDocument, useEgaisSync, useEgaisMapping, useEgaisAct, EGAIS_STATUS,
@@ -19,7 +19,7 @@ import { useCan, P } from '../../auth/permissions';
 import { tokens } from '../../theme';
 import { Panel, ListRow, EmptyState, Pill } from './ui';
 import StockItemDialog from './StockItemDialog';
-import EgaisSettingsDialog from './EgaisSettingsDialog';
+import IntegrationStatus from './IntegrationStatus';
 
 type CreateOption = { create: true; inputValue: string };
 const isCreate = (o: unknown): o is CreateOption => !!o && typeof o === 'object' && 'create' in (o as object);
@@ -369,7 +369,6 @@ const EgaisTab: React.FC = () => {
   const sync = useEgaisSync();
   const [openId, setOpenId] = React.useState<number | null>(null);
   const [message, setMessage] = React.useState<{ ok: boolean; text: string } | null>(null);
-  const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [requesting, setRequesting] = React.useState(false);
   const [diagOpen, setDiagOpen] = React.useState(false);
   const qc = useQueryClient();
@@ -389,7 +388,6 @@ const EgaisTab: React.FC = () => {
   };
   // ЕГАИС принимает запрос накладных без акта не чаще раза в 48 часов
   const nextRequestAt = state?.nextUnacceptedRequestAt ?? null;
-  const canSettings = can(P.Settings);
 
   const runSync = async () => {
     setMessage(null);
@@ -415,32 +413,16 @@ const EgaisTab: React.FC = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Panel>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <Box sx={{ flex: 1, minWidth: 240 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {state?.enabled && state.reachable ? <OkIcon sx={{ color: tokens.herb }} /> : <ErrIcon sx={{ color: state?.enabled ? tokens.chili : 'text.secondary' }} />}
-              <Typography sx={{ fontWeight: 700 }}>
-                {!state?.enabled ? 'ЕГАИС не подключён' : state.reachable ? 'УТМ на связи' : 'УТМ недоступен'}
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {!state?.enabled
-                ? (canSettings ? 'Нажмите «Подключить», укажите адрес УТМ и ФСРАР ID заведения.' : 'Попросите администратора подключить ЕГАИС.')
-                : `${state.utmUrl} · ФСРАР ID ${state.fsrarId ?? 'не указан'} · проверено ${state.lastSyncAt ? fmtDateTime(state.lastSyncAt) : 'ещё не было'}`}
-            </Typography>
-            {state?.lastSyncError && <Typography variant="body2" sx={{ color: tokens.chili, mt: 0.5 }}>{state.lastSyncError}</Typography>}
-          </Box>
-          {canSettings && (
-            <Button
-              onClick={() => setSettingsOpen(true)}
-              startIcon={<SettingsIcon />}
-              variant={state?.enabled ? 'text' : 'contained'}
-              color={state?.enabled ? 'inherit' : 'secondary'}
-              sx={state?.enabled ? { bgcolor: t.surfaceMuted } : undefined}
-            >
-              {state?.enabled ? 'Настройки' : 'Подключить ЕГАИС'}
-            </Button>
-          )}
+        <IntegrationStatus
+          section="egais"
+          ok={!!state?.enabled && !!state.reachable}
+          failed={!!state?.enabled}
+          title={!state?.enabled ? 'ЕГАИС не подключён' : state.reachable ? 'ЕГАИС подключён · УТМ на связи' : 'ЕГАИС: УТМ недоступен'}
+          details={state?.enabled
+            ? `${state.utmUrl} · ФСРАР ID ${state.fsrarId ?? 'не указан'} · проверено ${state.lastSyncAt ? fmtDateTime(state.lastSyncAt) : 'ещё не было'}`
+            : 'Укажите адрес УТМ и ФСРАР ID заведения в «Настройке интеграций».'}
+          error={state?.lastSyncError}
+        >
           {state?.enabled && can(P.InventoryManage) && (
             <Tooltip title={nextRequestAt ? `ЕГАИС принимает этот запрос раз в 48 часов. Повторить можно после ${fmtDateTime(nextRequestAt)}` : ''}>
               <span>
@@ -457,7 +439,7 @@ const EgaisTab: React.FC = () => {
               Проверить входящие
             </Button>
           )}
-        </Box>
+        </IntegrationStatus>
         {message && <Alert severity={message.ok ? 'success' : 'warning'} sx={{ mt: 1.5 }} onClose={() => setMessage(null)}>{message.text}</Alert>}
       </Panel>
 
@@ -505,7 +487,6 @@ const EgaisTab: React.FC = () => {
       </Panel>
 
       <EgaisDocumentDialog id={openId} onClose={() => setOpenId(null)} />
-      <EgaisSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <DiagnosticsDialog open={diagOpen} onClose={() => setDiagOpen(false)} />
     </Box>
   );

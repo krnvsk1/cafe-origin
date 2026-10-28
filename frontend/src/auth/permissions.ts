@@ -59,6 +59,7 @@ const STAFF_HOME: [string[], string][] = [
   [[P.Reviews], '/admin/reviews'],
   [[P.UsersView, P.UsersRoles], '/admin/users'],
   [[P.Roles], '/admin/roles'],
+  [[P.Settings], '/admin/integrations'],
 ];
 
 export const staffHomePath = (user: User | null | undefined): string | null =>
