@@ -2,18 +2,23 @@ import * as React from 'react';
 import {
   Box, Typography, Button, TextField, InputAdornment, ToggleButtonGroup, ToggleButton, IconButton, Chip,
   CircularProgress, Alert, Dialog, DialogContent, DialogActions, Switch, FormControlLabel, Drawer, Collapse,
-  useMediaQuery, useTheme, Snackbar,
+  useMediaQuery, useTheme, Snackbar, Menu, MenuItem, Checkbox,
 } from '@mui/material';
 import {
   Search as SearchIcon, Add as AddIcon, Remove as RemoveIcon, DeleteOutline as DeleteIcon,
   ReceiptLongOutlined as ReceiptIcon, CheckCircleRounded as CheckIcon, PersonOutline as PersonIcon,
   ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, KeyboardArrowDown as ArrowDownIcon,
+  PrintOutlined as PrintIcon,
 } from '@mui/icons-material';
 import { useShawarmas } from '../api/hooks';
 import {
   useCreatePosOrder, usePosOrders, usePosSummary, useSetOrderStatus, lookupPosCustomer, type PosOrder,
 } from '../api/pos';
 import { apiError } from '../api/inventory';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  useFiscalState, fiscalShift, fiscalSell, fiscalReturn, SHIFT_TEXT, type FiscalReceiptResult,
+} from '../api/fiscal';
 import ProductModal from '../components/ProductModal';
 import FullscreenButton from '../components/FullscreenButton';
 import { useIsFullscreen } from '../hooks/useFullscreen';
@@ -182,7 +187,7 @@ const useHiddenBelow = (deps: unknown) => {
 const Ticket: React.FC<{
   lines: TicketLine[];
   onChange: (lines: TicketLine[]) => void;
-  onDone: (orderId: number, change: number | null) => void;
+  onDone: (orderId: number, change: number | null, fiscal: FiscalReceiptResult | null) => void;
 }> = ({ lines, onChange, onDone }) => {
   const theme = useTheme();
   const t = tokens[theme.palette.mode];
@@ -249,7 +254,7 @@ const Ticket: React.FC<{
         comment: comment.trim() || null,
         sendToKitchen: toKitchen,
       });
-      onDone(res.id, res.change);
+      onDone(res.id, res.change, res.fiscal ?? null);
       reset();
     } catch (e) {
       setError(apiError(e));
@@ -432,6 +437,37 @@ const NEXT_STATUS: Record<string, { status: string; label: string } | undefined>
   'Готов': { status: 'Выполнен', label: 'Выдан' },
 };
 
+/** Строка «чек» в карточке заказа смены: пробит / ошибка / возврат, с кнопками */
+const FiscalLine: React.FC<{ order: PosOrder; busy: boolean; onPrint: (kind: 'sell' | 'return') => void }> = ({ order: o, busy, onPrint }) => {
+  const f = o.fiscal;
+  const cancelled = o.status === 'Отменён';
+  const returned = f?.kind === 'sellReturn' && f.status === 'done';
+  let text: string;
+  let color: string;
+  if (returned) { text = `Чек возврата пробит${f?.fiscalDocumentNumber ? ` · ФД № ${f.fiscalDocumentNumber}` : ''}`; color = '#7B776F'; }
+  else if (o.sold && f?.kind === 'sellReturn') { text = `Чек возврата не пробит${f.error ? `: ${f.error}` : ''}`; color = tokens.chili; }
+  else if (o.sold) { text = `Чек пробит${f?.kind === 'sell' && f.fiscalDocumentNumber ? ` · ФД № ${f.fiscalDocumentNumber}` : ''}`; color = tokens.herb; }
+  else if (f?.status === 'processing') { text = 'Чек печатается…'; color = '#C77700'; }
+  else if (f) { text = `Чек не пробит${f.error ? `: ${f.error}` : ''}`; color = tokens.chili; }
+  else { text = 'Чек не пробивался'; color = '#7B776F'; }
+
+  const action = !o.sold && !cancelled ? { kind: 'sell' as const, label: f?.status === 'processing' ? 'Проверить' : 'Пробить чек' }
+    : o.sold && !returned && cancelled ? { kind: 'return' as const, label: 'Чек возврата' }
+      : null;
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Typography variant="body2" sx={{ color, fontWeight: 600, flex: 1, minWidth: 0 }}>{text}</Typography>
+      {action && (
+        <Button size="small" onClick={() => onPrint(action.kind)} disabled={busy}
+          startIcon={busy ? <CircularProgress size={14} color="inherit" /> : <PrintIcon />}>
+          {action.label}
+        </Button>
+      )}
+    </Box>
+  );
+};
+
 const PosOrders: React.FC = () => {
   const theme = useTheme();
   const t = tokens[theme.palette.mode];
@@ -439,13 +475,37 @@ const PosOrders: React.FC = () => {
   const [active, setActive] = React.useState(true);
   const { data: orders = [], isLoading } = usePosOrders(all);
   const setStatus = useSetOrderStatus();
+  const qc = useQueryClient();
+  const { data: fiscal } = useFiscalState(false);
   const [confirmCancel, setConfirmCancel] = React.useState<PosOrder | null>(null);
+  const [withReturn, setWithReturn] = React.useState(true);
+  const [printing, setPrinting] = React.useState<number | null>(null);
   const [error, setError] = React.useState('');
+
+  const print = async (id: number, kind: 'sell' | 'return') => {
+    setPrinting(id);
+    setError('');
+    try {
+      const r = await (kind === 'sell' ? fiscalSell(id) : fiscalReturn(id));
+      if (r.status !== 'done') setError(`Чек по заказу № ${id} не пробит${r.error ? `: ${r.error}` : ''}`);
+    } catch (e) {
+      setError(apiError(e));
+    } finally {
+      setPrinting(null);
+      qc.invalidateQueries({ queryKey: ['pos'] });
+      qc.invalidateQueries({ queryKey: ['fiscal'] });
+    }
+  };
+
+  const cancel = async (o: PosOrder, refund: boolean) => {
+    setConfirmCancel(null);
+    if (await change(o.id, 'Отменён') && refund) await print(o.id, 'return');
+  };
 
   const list = active ? orders.filter(o => !['Выполнен', 'Доставлен', 'Отменён'].includes(o.status)) : orders;
 
   const change = async (id: number, status: string) => {
-    try { await setStatus.mutateAsync({ id, status }); } catch (e) { setError(apiError(e)); }
+    try { await setStatus.mutateAsync({ id, status }); return true; } catch (e) { setError(apiError(e)); return false; }
   };
 
   return (
@@ -482,6 +542,9 @@ const PosOrders: React.FC = () => {
                   {o.source !== 'pos' ? ' · сайт' : ''}
                   {o.customerName && o.customerName !== 'Гость' ? ` · ${o.customerName}` : ''}
                 </Typography>
+                {fiscal?.enabled && (o.paymentMethod === 'cash' || o.paymentMethod === 'card') && (
+                  <FiscalLine order={o} busy={printing === o.id} onPrint={kind => print(o.id, kind)} />
+                )}
                 <Box sx={{ bgcolor: t.surfaceMuted, borderRadius: '12px', px: 1.5, py: 1 }}>
                   {o.items.map((i, idx) => (
                     <Typography key={idx} variant="body2">
@@ -499,7 +562,7 @@ const PosOrders: React.FC = () => {
                     </Typography>
                   </Typography>
                   {!['Выполнен', 'Доставлен', 'Отменён'].includes(o.status) && (
-                    <Button size="small" onClick={() => setConfirmCancel(o)} sx={{ color: 'text.secondary' }}>Отменить</Button>
+                    <Button size="small" onClick={() => { setWithReturn(true); setConfirmCancel(o); }} sx={{ color: 'text.secondary' }}>Отменить</Button>
                   )}
                   {next && (
                     <Button variant="contained" size="small" onClick={() => change(o.id, next.status)} disabled={setStatus.isPending}>
@@ -519,15 +582,107 @@ const PosOrders: React.FC = () => {
           <Typography color="text.secondary">
             Продукты вернутся на склад. Деньги гостю нужно вернуть вручную{confirmCancel?.paymentMethod === 'card' ? ' через терминал' : ''}.
           </Typography>
+          {confirmCancel?.sold && (
+            <FormControlLabel sx={{ mt: 1 }} control={<Checkbox checked={withReturn} onChange={e => setWithReturn(e.target.checked)} />} label="Пробить чек возврата" />
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button onClick={() => setConfirmCancel(null)} sx={{ color: 'text.secondary' }}>Нет</Button>
-          <Button variant="contained" color="error" onClick={() => { if (confirmCancel) void change(confirmCancel.id, 'Отменён'); setConfirmCancel(null); }}>
+          <Button variant="contained" color="error" onClick={() => { if (confirmCancel) void cancel(confirmCancel, confirmCancel.sold && withReturn); }}>
             Отменить заказ
           </Button>
         </DialogActions>
       </Dialog>
     </Box>
+  );
+};
+
+// ============ Онлайн-касса ============
+
+/** Итог чека после оплаты: пробит (ФД №) или ошибка с кнопкой «Повторить» */
+const ReceiptState: React.FC<{ receipt: FiscalReceiptResult; busy: boolean; onRetry: () => void }> = ({ receipt, busy, onRetry }) => {
+  if (receipt.status === 'done') {
+    return (
+      <Typography sx={{ mt: 1.5, color: tokens.herb, fontWeight: 600 }}>
+        Чек пробит{receipt.fiscalDocumentNumber ? ` · ФД № ${receipt.fiscalDocumentNumber}` : ''}
+        {receipt.clientContact ? ` · копия на ${receipt.clientContact}` : ''}
+      </Typography>
+    );
+  }
+  return (
+    <Alert
+      severity={receipt.status === 'processing' ? 'warning' : 'error'}
+      sx={{ mt: 2, textAlign: 'left' }}
+      action={
+        <Button color="inherit" size="small" onClick={onRetry} disabled={busy} startIcon={busy ? <CircularProgress size={14} color="inherit" /> : <PrintIcon />}>
+          {receipt.status === 'processing' ? 'Проверить' : 'Повторить'}
+        </Button>
+      }
+    >
+      {receipt.status === 'processing' ? 'Касса ещё печатает чек' : 'Чек не пробит'}{receipt.error ? `: ${receipt.error}` : ''}
+    </Alert>
+  );
+};
+
+/** Смена на кассе АТОЛ: состояние, открыть, X-отчёт, закрыть (Z-отчёт) */
+const ShiftControl: React.FC = () => {
+  const qc = useQueryClient();
+  const { data } = useFiscalState(true);
+  const [anchor, setAnchor] = React.useState<HTMLElement | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [confirmClose, setConfirmClose] = React.useState(false);
+  const [message, setMessage] = React.useState<{ ok: boolean; text: string } | null>(null);
+
+  if (!data?.enabled) return null;
+  const state = data.shiftError ? 'error' : data.shiftState ?? 'unknown';
+  const color = state === 'opened' ? tokens.herb : state === 'closed' ? '#7B776F' : tokens.chili;
+  const label = data.shiftError ? 'Касса недоступна' : `${SHIFT_TEXT[state] ?? 'Смена'}${state === 'opened' && data.shiftNumber ? ` № ${data.shiftNumber}` : ''}`;
+
+  const run = async (op: 'open' | 'close' | 'x') => {
+    setAnchor(null);
+    setConfirmClose(false);
+    setBusy(true);
+    setMessage(null);
+    try {
+      const r = await fiscalShift(op);
+      qc.setQueryData(['fiscal', 'status', true], r);
+      setMessage({ ok: true, text: op === 'open' ? 'Смена открыта' : op === 'close' ? 'Смена закрыта, Z-отчёт напечатан' : 'X-отчёт напечатан' });
+    } catch (e) {
+      setMessage({ ok: false, text: apiError(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Chip
+        icon={busy ? <CircularProgress size={14} /> : <PrintIcon />}
+        label={label}
+        onClick={e => setAnchor(e.currentTarget)}
+        sx={{ bgcolor: `${color}1f`, color, fontWeight: 700, '& .MuiChip-icon': { color } }}
+      />
+      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)}>
+        {data.shiftError && <MenuItem disabled sx={{ whiteSpace: 'normal', maxWidth: 320 }}>{data.shiftError}</MenuItem>}
+        <MenuItem onClick={() => run('open')} disabled={state === 'opened'}>Открыть смену</MenuItem>
+        <MenuItem onClick={() => run('x')}>X-отчёт</MenuItem>
+        <MenuItem onClick={() => { setAnchor(null); setConfirmClose(true); }} disabled={state === 'closed'}>Закрыть смену (Z-отчёт)</MenuItem>
+        <MenuItem onClick={() => { setAnchor(null); qc.invalidateQueries({ queryKey: ['fiscal'] }); }}>Обновить состояние</MenuItem>
+      </Menu>
+      <Dialog open={confirmClose} onClose={() => setConfirmClose(false)} maxWidth="xs" fullWidth>
+        <DialogContent>
+          <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', mb: 1 }}>Закрыть смену на кассе?</Typography>
+          <Typography color="text.secondary">Касса напечатает Z-отчёт. Новые чеки откроют следующую смену.</Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setConfirmClose(false)} sx={{ color: 'text.secondary' }}>Нет</Button>
+          <Button variant="contained" color="secondary" onClick={() => run('close')}>Закрыть смену</Button>
+        </DialogActions>
+      </Dialog>
+      <Snackbar open={!!message} autoHideDuration={5000} onClose={() => setMessage(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+        <Alert severity={message?.ok ? 'success' : 'error'} onClose={() => setMessage(null)}>{message?.text}</Alert>
+      </Snackbar>
+    </>
   );
 };
 
@@ -545,7 +700,9 @@ const PosPage: React.FC = () => {
   const [lines, setLines] = React.useState<TicketLine[]>([]);
   const [picking, setPicking] = React.useState<Shawarma | null>(null);
   const [ticketOpen, setTicketOpen] = React.useState(false);
-  const [done, setDone] = React.useState<{ id: number; change: number | null } | null>(null);
+  const [done, setDone] = React.useState<{ id: number; change: number | null; fiscal: FiscalReceiptResult | null } | null>(null);
+  const [retrying, setRetrying] = React.useState(false);
+  const qc = useQueryClient();
   const [toast, setToast] = React.useState('');
 
   const addLine = (card: Shawarma, child: Shawarma, quantity: number, addons: SelectedAddon[], comment: string) => {
@@ -585,7 +742,7 @@ const PosPage: React.FC = () => {
     <Ticket
       lines={lines}
       onChange={setLines}
-      onDone={(id, change) => { setDone({ id, change }); setLines([]); setTicketOpen(false); }}
+      onDone={(id, change, fiscal) => { setDone({ id, change, fiscal }); setLines([]); setTicketOpen(false); }}
     />
   );
 
@@ -604,7 +761,7 @@ const PosPage: React.FC = () => {
             <span>нал {money(summary.cash)} · карта {money(summary.card)}</span>
           </Box>
         )}
-        <Box sx={{ ml: summary ? 0 : 'auto' }}><FullscreenButton /></Box>
+        <Box sx={{ ml: summary ? 0 : 'auto', display: 'flex', gap: 1, alignItems: 'center' }}><ShiftControl /><FullscreenButton /></Box>
       </Box>
 
       {tab === 'orders' ? <PosOrders /> : (
@@ -647,6 +804,23 @@ const PosPage: React.FC = () => {
           <CheckIcon sx={{ fontSize: 64, color: tokens.herb }} />
           <Typography sx={{ fontWeight: 800, fontSize: '1.6rem', mt: 1 }}>Заказ № {done?.id}</Typography>
           <Typography color="text.secondary">принят и передан на кухню</Typography>
+          {done?.fiscal && <ReceiptState
+            receipt={done.fiscal}
+            busy={retrying}
+            onRetry={async () => {
+              if (!done) return;
+              setRetrying(true);
+              try {
+                const r = await fiscalSell(done.id);
+                setDone({ ...done, fiscal: r });
+              } catch (e) {
+                setDone({ ...done, fiscal: { status: 'error', error: apiError(e) } });
+              } finally {
+                setRetrying(false);
+                qc.invalidateQueries({ queryKey: ['pos'] });
+              }
+            }}
+          />}
           {done?.change !== null && done?.change !== undefined && done.change > 0 && (
             <Box sx={{ mt: 2.5, bgcolor: 'rgba(255,201,51,0.25)', borderRadius: '16px', py: 2 }}>
               <Typography color="text.secondary">Сдача</Typography>

@@ -799,6 +799,109 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("egais_document_lines");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.FiscalReceipt", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClientContact")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("client_contact");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("error");
+
+                    b.Property<string>("FiscalDateTime")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("fiscal_date_time");
+
+                    b.Property<long?>("FiscalDocumentNumber")
+                        .HasColumnType("bigint")
+                        .HasColumnName("fiscal_document_number");
+
+                    b.Property<string>("FiscalDocumentSign")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("fiscal_document_sign");
+
+                    b.Property<string>("FnNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("fn_number");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_method");
+
+                    b.Property<int?>("ReceiptNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("receipt_number");
+
+                    b.Property<string>("RequestJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("request_json");
+
+                    b.Property<string>("RequestUuid")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("request_uuid");
+
+                    b.Property<int?>("ShiftNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("shift_number");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("Total")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("fiscal_receipts");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.HaccpEntry", b =>
                 {
                     b.Property<int>("Id")
@@ -2460,6 +2563,15 @@ namespace Kumashaurma.API.Migrations
                     b.Navigation("Document");
 
                     b.Navigation("StockItem");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.FiscalReceipt", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.Order", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Kumashaurma.API.Models.HaccpEntry", b =>
