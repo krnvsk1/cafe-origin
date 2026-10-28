@@ -5,6 +5,7 @@ using Kumashaurma.API.Data;
 using Kumashaurma.API.Extensions;
 using Kumashaurma.API.Models;
 using Kumashaurma.API.Services;
+using Kumashaurma.API.Services.Fiscal;
 
 namespace Kumashaurma.API.Controllers
 {
@@ -23,13 +24,15 @@ namespace Kumashaurma.API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly IOrderStatusService _statusService;
         private readonly IOrderEventBus _events;
+        private readonly FiscalService _fiscal;
         private readonly ILogger<PosController> _logger;
 
-        public PosController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, ILogger<PosController> logger)
+        public PosController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, FiscalService fiscal, ILogger<PosController> logger)
         {
             _context = context;
             _statusService = statusService;
             _events = events;
+            _fiscal = fiscal;
             _logger = logger;
         }
 
@@ -194,8 +197,17 @@ namespace Kumashaurma.API.Controllers
 
             _logger.LogInformation("🧾 Касса: заказ #{OrderId} на {Total} ₽ ({Payment}), кассир {CashierId}", order.Id, order.Total, payment, cashierId);
 
+            // Чек на кассе АТОЛ. Если касса недоступна — заказ всё равно принят, чек можно повторить из списка заказов
+            object? fiscal = null;
+            if (order.Total > 0 && await _fiscal.EnabledAsync())
+            {
+                try { fiscal = FiscalController.View(await _fiscal.PrintAsync(order.Id, Models.FiscalKinds.Sell, cashierId, HttpContext.RequestAborted)); }
+                catch (FiscalException ex) { fiscal = new { status = Models.FiscalStatuses.Error, error = ex.Message }; }
+            }
+
             return Ok(new
             {
+                fiscal,
                 order.Id,
                 order.Total,
                 order.Status,
@@ -230,6 +242,9 @@ namespace Kumashaurma.API.Controllers
                     o.Notes,
                     o.CreatedAt,
                     o.CompletedAt,
+                    fiscal = _context.FiscalReceipts.Where(r => r.OrderId == o.Id).OrderByDescending(r => r.Id)
+                        .Select(r => new { r.Kind, r.Status, r.Error, r.FiscalDocumentNumber }).FirstOrDefault(),
+                    sold = _context.FiscalReceipts.Any(r => r.OrderId == o.Id && r.Kind == FiscalKinds.Sell && r.Status == FiscalStatuses.Done),
                     items = o.OrderItems.Select(i => new
                     {
                         i.Name,

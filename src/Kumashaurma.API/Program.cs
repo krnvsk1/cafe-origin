@@ -217,6 +217,11 @@ builder.Services.AddHttpClient<Kumashaurma.API.Services.Edo.SbisClient>(client =
 builder.Services.AddScoped<Kumashaurma.API.Services.Edo.EdoService>();
 builder.Services.AddHostedService<Kumashaurma.API.Services.Edo.SbisSyncWorker>();
 
+// Онлайн-касса АТОЛ (АТОЛ Web Server в локальной сети): чеки по заказам кассы
+builder.Services.AddSingleton<Kumashaurma.API.Services.Fiscal.FiscalSettingsProvider>();
+builder.Services.AddHttpClient<Kumashaurma.API.Services.Fiscal.AtolClient>(client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddScoped<Kumashaurma.API.Services.Fiscal.FiscalService>();
+
 // Импорт меню с kumashaurma.ru
 builder.Services.AddHttpClient<MenuImportService>(client =>
 {

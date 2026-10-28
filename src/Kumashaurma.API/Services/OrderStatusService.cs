@@ -192,7 +192,8 @@ namespace Kumashaurma.API.Services
             if (order.PaymentMethod != "online" || order.PaymentStatus != "paid" || string.IsNullOrEmpty(order.PaymentId))
                 return;
 
-            var refunded = await _yooKassa.RefundAsync(order.PaymentId, order.Total, $"refund-order-{order.Id}");
+            var refunded = await _yooKassa.RefundAsync(order.PaymentId, order.Total, $"refund-order-{order.Id}",
+                await Fiscal.ReceiptLines.LoadAsync(_context, order), order.Phone);
             if (refunded)
             {
                 order.PaymentStatus = "refunded";

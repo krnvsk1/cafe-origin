@@ -65,6 +65,7 @@ namespace Kumashaurma.API.Data
         public DbSet<HaccpStaff> HaccpStaff { get; set; } = null!;
         public DbSet<HaccpEntry> HaccpEntries { get; set; } = null!;
         public DbSet<HaccpEntryRevision> HaccpEntryRevisions { get; set; } = null!;
+        public DbSet<FiscalReceipt> FiscalReceipts { get; set; } = null!;
         public DbSet<EdoItemMapping> EdoItemMappings { get; set; } = null!;
 
         // ЕГАИС
@@ -436,6 +437,13 @@ namespace Kumashaurma.API.Data
             {
                 entity.HasIndex(e => e.EntryId);
                 entity.HasOne(e => e.Entry).WithMany().HasForeignKey(e => e.EntryId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<FiscalReceipt>(entity =>
+            {
+                entity.HasIndex(e => e.OrderId);
+                entity.HasIndex(e => e.Status);
+                entity.HasOne<Order>().WithMany().HasForeignKey(e => e.OrderId).OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<EdoDocument>(entity =>
