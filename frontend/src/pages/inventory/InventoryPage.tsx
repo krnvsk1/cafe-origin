@@ -11,6 +11,7 @@ import ReportsTab from './ReportsTab';
 import EgaisTab from './EgaisTab';
 import ChzTab from './ChzTab';
 import EdoTab from './EdoTab';
+import MercuryTab from './MercuryTab';
 import TechCardEditor from './TechCardEditor';
 import DocumentEditor from './DocumentEditor';
 import { useCan, P } from '../../auth/permissions';
@@ -22,6 +23,7 @@ const TABS = [
   { value: 'writeoffs', label: 'Списания' },
   { value: 'counts', label: 'Инвентаризация' },
   { value: 'egais', label: 'ЕГАИС' },
+  { value: 'mercury', label: 'Меркурий' },
   { value: 'chz', label: 'Честный знак' },
   { value: 'dishes', label: 'Блюда и техкарты' },
   { value: 'items', label: 'Номенклатура' },
@@ -118,6 +120,7 @@ const InventoryPage: React.FC = () => {
       {tab === 'writeoffs' && <DocumentsTab type="writeoff" />}
       {tab === 'counts' && <DocumentsTab type="inventory" />}
       {tab === 'egais' && <EgaisTab />}
+      {tab === 'mercury' && <MercuryTab />}
       {tab === 'chz' && <ChzTab />}
       {tab === 'edo' && <EdoTab onOpenReceipt={setOpenDocId} />}
       {tab === 'dishes' && <DishesTab onOpenCard={(target, id) => setCard({ target, id })} />}

@@ -7,12 +7,14 @@ import {
 import { useEgaisState } from '../api/egais';
 import { useChzState } from '../api/chz';
 import { useEdoState } from '../api/edo';
+import { useMercuryState } from '../api/mercury';
 import { fmtDateTime } from '../api/inventory';
 import { tokens } from '../theme';
 import { Panel } from './inventory/ui';
 import EgaisSettingsDialog from './inventory/EgaisSettingsDialog';
 import ChzSettingsDialog from './inventory/ChzSettingsDialog';
 import EdoSettingsDialog from './inventory/EdoSettingsDialog';
+import MercurySettingsDialog from './inventory/MercurySettingsDialog';
 
 type Status = 'ok' | 'error' | 'off';
 
@@ -61,7 +63,8 @@ const IntegrationsPage: React.FC = () => {
   const { data: egais, isLoading: egaisLoading } = useEgaisState();
   const { data: chz, isLoading: chzLoading } = useChzState();
   const { data: edo, isLoading: edoLoading } = useEdoState();
-  const [open, setOpen] = React.useState<'egais' | 'chz' | 'sbis' | null>(null);
+  const { data: mercury, isLoading: mercuryLoading } = useMercuryState();
+  const [open, setOpen] = React.useState<'egais' | 'chz' | 'sbis' | 'mercury' | null>(null);
 
   // Переход из вкладки склада: /admin/integrations#chz — прокручиваем к нужной карточке
   React.useEffect(() => {
@@ -76,12 +79,14 @@ const IntegrationsPage: React.FC = () => {
   const chzStatus: Status = !chzConfigured ? 'off' : chz!.fiasId ? 'ok' : 'error';
   const edoConfigured = !!edo?.enabled && !!edo.login && edo.hasPassword;
   const edoStatus: Status = !edoConfigured ? 'off' : edo!.lastError ? 'error' : 'ok';
+  const mercuryConfigured = !!mercury?.enabled && !!mercury.login && mercury.hasPassword && mercury.hasApiKey;
+  const mercuryStatus: Status = !mercuryConfigured ? 'off' : mercury!.lastError ? 'error' : 'ok';
 
   return (
     <Box sx={{ py: { xs: 2, sm: 3 }, maxWidth: 1000, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Box>
         <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.6rem', sm: '2rem' } }}>Настройка интеграций</Typography>
-        <Typography color="text.secondary">Подключение к государственным системам и ЭДО. Работа с документами — во вкладках склада.</Typography>
+        <Typography color="text.secondary">Подключение к государственным системам (ЕГАИС, Честный знак, Меркурий) и ЭДО. Работа с документами — во вкладках склада.</Typography>
       </Box>
 
       <Card
@@ -134,9 +139,27 @@ const IntegrationsPage: React.FC = () => {
         onSetup={() => setOpen('sbis')}
       />
 
+      <Card
+        id="mercury"
+        title="Меркурий (ВетИС)"
+        purpose="Гашение входящих ветеринарных документов (ВСД) на мясо, курицу, молочку"
+        loading={mercuryLoading}
+        status={mercuryStatus}
+        statusText={mercuryStatus === 'off' ? 'Не подключено' : mercuryStatus === 'ok' ? 'Подключено' : 'Ошибка загрузки'}
+        details={mercuryConfigured ? [
+          `Пользователь ВетИС: ${mercury!.initiatorLogin} · площадка ${mercury!.enterpriseGuid}`,
+          mercury!.sandbox && 'Тестовый контур',
+          `Автозагрузка: ${mercury!.autoSyncMinutes ? `каждые ${mercury!.autoSyncMinutes} мин` : 'только вручную'}`,
+          `Последняя загрузка: ${mercury!.lastSyncAt ? fmtDateTime(mercury!.lastSyncAt) : 'ещё не было'}`,
+        ] : undefined}
+        error={mercuryConfigured ? mercury!.lastError : null}
+        onSetup={() => setOpen('mercury')}
+      />
+
       <EgaisSettingsDialog open={open === 'egais'} onClose={() => setOpen(null)} />
       <ChzSettingsDialog open={open === 'chz'} onClose={() => setOpen(null)} />
       {edo && <EdoSettingsDialog open={open === 'sbis'} state={edo} onClose={() => setOpen(null)} />}
+      {mercury && <MercurySettingsDialog open={open === 'mercury'} state={mercury} onClose={() => setOpen(null)} />}
     </Box>
   );
 };
