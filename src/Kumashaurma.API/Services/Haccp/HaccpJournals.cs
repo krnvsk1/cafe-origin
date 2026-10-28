@@ -23,7 +23,9 @@ namespace Kumashaurma.API.Services.Haccp
         // Для bool: какое значение — отклонение
         bool? BadIf = null,
         string? Default = null,
-        string? Hint = null);
+        string? Hint = null,
+        // Подставлять значение из прошлой записи журнала (вид жира, средство, комиссия…)
+        bool Remember = false);
 
     /// <summary>
     /// Журнал. Frequency: per_object — ChecksPerDay раз в день по каждому объекту вида ObjectKind;
@@ -94,7 +96,7 @@ namespace Kumashaurma.API.Services.Haccp
                     new("organolepticNote", "Комментарий к оценке (вкус, запах, вид)", "text"),
                     new("allowed", "Разрешение к реализации", "bool", Required: true, BadIf: false, Default: "true"),
                     new("weight", "Результаты взвешивания порционных блюд", "number", Unit: "г"),
-                    new("commission", "Члены бракеражной комиссии", "text", Required: true, Hint: "ФИО через запятую"),
+                    new("commission", "Члены бракеражной комиссии", "text", Required: true, Hint: "ФИО через запятую", Remember: true),
                     new("note", "Примечание", "text"),
                 }),
 
@@ -110,7 +112,7 @@ namespace Kumashaurma.API.Services.Haccp
                     new("quantity", "Количество поступившей продукции", "text", Required: true, Hint: "например 12 кг, 30 шт"),
                     new("safetyDoc", "Номер документа, подтверждающего безопасность", "text", Required: true, Hint: "декларация, ветсертификат (Меркурий), УПД"),
                     new("organoleptic", "Результаты органолептической оценки", "select", Required: true, Options: Organoleptic, BadOptions: new[] { "Не соответствует" }, Default: "Соответствует"),
-                    new("storage", "Условия хранения", "text", Hint: "например +2…+6 °C"),
+                    new("storage", "Условия хранения", "text", Hint: "например +2…+6 °C", Remember: true),
                     new("sellBy", "Конечный срок реализации", "date", Required: true),
                     new("soldAt", "Дата и час фактической реализации", "datetime"),
                     new("note", "Примечание", "text"),
@@ -121,9 +123,9 @@ namespace Kumashaurma.API.Services.Haccp
                 "СанПиН 2.3/2.4.4282-26, п. 44 (контроль качества фритюрных жиров)", "per_object", HaccpObjectKinds.Fryer, false,
                 new HaccpField[]
                 {
-                    new("fatType", "Вид фритюрного жира", "text", Required: true),
+                    new("fatType", "Вид фритюрного жира", "text", Required: true, Remember: true),
                     new("qualityStart", "Органолептическая оценка жира на начало жарки", "select", Required: true, Options: FatQuality, BadOptions: new[] { "Неудовлетворительно" }, Default: "Отлично"),
-                    new("product", "Вид продукции", "text", Required: true),
+                    new("product", "Вид продукции", "text", Required: true, Remember: true),
                     new("endedAt", "Время окончания фритюрной жарки", "datetime"),
                     new("qualityEnd", "Органолептическая оценка жира по окончании жарки", "select", Options: FatQuality, BadOptions: new[] { "Неудовлетворительно" }),
                     new("carryOver", "Переходящий остаток", "number", Unit: "кг"),
@@ -135,8 +137,8 @@ namespace Kumashaurma.API.Services.Haccp
                 new HaccpField[]
                 {
                     new("kind", "Вид обработки", "select", Required: true, Options: new[] { "Текущая уборка", "Генеральная уборка", "Дезинфекция" }, Default: "Текущая уборка"),
-                    new("area", "Помещение / оборудование", "text", Required: true),
-                    new("agent", "Моющее / дезинфицирующее средство и концентрация", "text"),
+                    new("area", "Помещение / оборудование", "text", Required: true, Remember: true),
+                    new("agent", "Моющее / дезинфицирующее средство и концентрация", "text", Remember: true),
                     new("doneBy", "Кто проводил", "text", Required: true),
                     new("note", "Примечание", "text"),
                 }),

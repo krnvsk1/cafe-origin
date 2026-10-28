@@ -171,7 +171,8 @@ const EntryDialog: React.FC<Props> = ({ open, meta, journal, entry, presetObject
       setObjectId(presetObjectId ?? (objects.length === 1 ? objects[0].id : null));
       setStaffId(presetStaffId ?? null);
       setOccurredAt(toLocalInput());
-      const d = defaultValues(journal);
+      // Значения по умолчанию + то, что обычно повторяется (вид жира, средство, комиссия) — из прошлой записи
+      const d = { ...defaultValues(journal), ...(meta.lastValues?.[journal.key] ?? {}) };
       for (const f of journal.fields) if (f.type === 'datetime' && f.required && !d[f.key]) d[f.key] = toLocalInput();
       setValues(d);
       setCorrective('');

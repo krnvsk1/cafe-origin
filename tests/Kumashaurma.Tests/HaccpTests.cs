@@ -118,27 +118,50 @@ namespace Kumashaurma.Tests
         }
 
         [Fact]
-        public async Task Today_ShowsUnfilledFridgeChecksAndExpiringDocs()
+        public async Task Today_FollowsScheduleAndShowsExpiringDocs()
         {
             using var db = NewContext();
             var now = DateTime.UtcNow;
-            db.HaccpObjects.Add(new HaccpObject { Kind = HaccpObjectKinds.Fridge, Name = "Холодильник", MinValue = 2, MaxValue = 6, ChecksPerDay = 2 });
+            db.HaccpObjects.Add(new HaccpObject { Kind = HaccpObjectKinds.Fridge, Name = "Холодильник", MinValue = 2, MaxValue = 6 });
             db.HaccpStaff.Add(new HaccpStaff { FullName = "Иванов", MedicalExamUntil = HaccpJournals.Moscow(now).Date.AddDays(10) });
             await db.SaveChangesAsync();
             var svc = new HaccpService(db);
+            // Холодильник: проверки в 00:00 и 23:59 по Москве — первая уже наступила, вторая ещё нет
+            await HaccpSchedule.SaveAsync(db, new Dictionary<string, string[]> { ["fridge"] = new[] { "00:00", "23:59" }, ["health"] = new[] { "00:00" } }, null);
+
+            var before = await svc.TodayAsync(now);
+            var fridge = Assert.Single(before.Tasks, t => t.Journal == HaccpJournals.Fridge);
+            Assert.Equal((2, 1, 0, "todo"), (fridge.Expected, fridge.Due, fridge.Done, fridge.Status));
+
             await svc.CreateAsync(new[]
             {
                 new HaccpEntryInput(HaccpJournals.Fridge, db.HaccpObjects.Single().Id, null, null, null, new JsonObject { ["temperature"] = 4 }, null)
             }, Cook);
-
-            var today = await svc.TodayAsync(now);
-            var fridge = Assert.Single(today.Tasks, t => t.Journal == HaccpJournals.Fridge);
-            Assert.Equal(1, fridge.Done);
-            Assert.Equal(2, fridge.Expected);
-            Assert.Equal("partial", fridge.Status);
-            Assert.Contains(today.Tasks, t => t.Journal == HaccpJournals.Health && t.Status == "todo");
-            var alert = Assert.Single(today.Staff);
+            var after = await svc.TodayAsync(now);
+            fridge = Assert.Single(after.Tasks, t => t.Journal == HaccpJournals.Fridge);
+            Assert.Equal("ok", fridge.Status);   // сделано всё, что уже наступило, — напоминания нет
+            Assert.Equal("23:59", fridge.Next);
+            Assert.Contains(after.Tasks, t => t.Journal == HaccpJournals.Health && t.Status == "todo");
+            var alert = Assert.Single(after.Staff);
             Assert.False(alert.Expired);
+        }
+
+        [Theory]
+        [InlineData(0, 0, 2, "upcoming")]
+        [InlineData(1, 1, 2, "ok")]
+        [InlineData(0, 1, 2, "todo")]
+        [InlineData(1, 2, 2, "partial")]
+        [InlineData(2, 2, 2, "done")]
+        public void TaskStatus_ByDueSlots(int done, int due, int expected, string status) =>
+            Assert.Equal(status, HaccpService.TaskStatus(done, due, expected));
+
+        [Fact]
+        public void Schedule_NormalizesAndRejectsBadTimes()
+        {
+            var (ok, error) = HaccpSchedule.Validate(new Dictionary<string, string[]> { ["fridge"] = new[] { "18:00", "9:00", "09:00" } });
+            Assert.Null(error);
+            Assert.Equal(new[] { "09:00", "18:00" }, ok["fridge"]);
+            Assert.NotNull(HaccpSchedule.Validate(new Dictionary<string, string[]> { ["fridge"] = new[] { "25:00" } }).Error);
         }
 
         [Fact]

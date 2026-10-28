@@ -16,6 +16,8 @@ export interface HaccpField {
   badIf: boolean | null;
   default: string | null;
   hint: string | null;
+  /** Подставлять значение из прошлой записи */
+  remember: boolean;
 }
 
 export type HaccpObjectKind = 'fridge' | 'storage' | 'fryer' | 'ccp';
@@ -65,6 +67,10 @@ export interface HaccpMeta {
   staff: HaccpStaff[];
   dishes: string[];
   editWindowHours: number;
+  /** График: к какому времени (по Москве) нужна каждая запись */
+  schedule: Record<string, string[]>;
+  /** Значения «запоминаемых» граф из последней записи журнала */
+  lastValues: Record<string, Values>;
 }
 
 export type Values = Record<string, string | number | boolean | null>;
@@ -107,8 +113,12 @@ export interface TodayTask {
   objectId: number | null;
   objectName: string | null;
   expected: number;
+  /** Сколько проверок уже должно быть сделано (время по графику наступило) */
+  due: number;
   done: number;
-  status: 'done' | 'partial' | 'todo';
+  /** done — всё за день; ok — всё, что уже наступило; partial/todo — есть просроченные; upcoming — время не пришло */
+  status: 'done' | 'ok' | 'partial' | 'todo' | 'upcoming';
+  next: string | null;
   hint: string | null;
 }
 
@@ -175,6 +185,11 @@ export const deleteHaccpObject = (id: number) => apiClient.delete(`/api/haccp/ob
 export const saveHaccpStaff = (s: Partial<HaccpStaff> & { fullName: string }) =>
   (s.id ? apiClient.put<HaccpStaff>(`/api/haccp/staff/${s.id}`, s) : apiClient.post<HaccpStaff>('/api/haccp/staff', s)).then(r => r.data);
 export const deleteHaccpStaff = (id: number) => apiClient.delete(`/api/haccp/staff/${id}`);
+export const saveHaccpSchedule = (schedule: Record<string, string[]>) =>
+  apiClient.put<Record<string, string[]>>('/api/haccp/schedule', schedule).then(r => r.data);
+
+/** Просрочено по графику: время наступило, а записи нет */
+export const isOverdue = (t: TodayTask) => t.status === 'todo' || t.status === 'partial';
 
 /** Скачать журнал за период в Excel */
 export const downloadHaccpExcel = async (journal: string, from: string, to: string) => {

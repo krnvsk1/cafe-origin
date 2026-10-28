@@ -94,9 +94,7 @@ const ObjectDialog: React.FC<{ value: Partial<HaccpObject> & { kind: HaccpObject
               slotProps={{ input: { endAdornment: <InputAdornment position="end">%</InputAdornment> } }} />
           </Box>
         )}
-        <TextField label="Проверок в день" type="number" value={f.checks} onChange={e => setF({ ...f, checks: e.target.value })}
-          helperText={kind === 'fridge' ? 'Обычно 2 раза: в начале и в конце смены' : 'Сколько раз в день нужна запись'}
-          slotProps={{ htmlInput: { min: 1, max: 24 } }} />
+        <Typography variant="body2" color="text.secondary">Когда проверять — задаётся во вкладке «График».</Typography>
         {ccp && (
           <TextField label="Что делать при отклонении" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} multiline minRows={2}
             placeholder="Продолжить жарку до достижения 75 °C, повторный замер" />
@@ -223,8 +221,7 @@ const SettingsView: React.FC<{ meta: HaccpMeta }> = ({ meta }) => {
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 600 }}>{o.name}{o.isActive ? '' : ' · выключено'}</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {[o.location, rangeText(o.minValue, o.maxValue), kind === 'storage' ? rangeText(o.minHumidity, o.maxHumidity, '%') : '',
-                      `${o.checksPerDay} раз в день`].filter(Boolean).join(' · ')}
+                    {[o.location, rangeText(o.minValue, o.maxValue), kind === 'storage' ? rangeText(o.minHumidity, o.maxHumidity, '%') : ''].filter(Boolean).join(' · ')}
                   </Typography>
                 </Box>
                 <ChevronRightIcon sx={{ color: 'text.secondary' }} />

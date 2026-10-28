@@ -82,15 +82,44 @@ namespace Kumashaurma.API.Controllers
                 .Select(s => s.Parent != null ? s.Parent.Name + " · " + s.Name : s.Name)
                 .OrderBy(n => n)
                 .ToListAsync();
+            // Последние значения «запоминаемых» граф — чтобы не вводить вид жира, средство и комиссию каждый раз
+            var lastValues = new Dictionary<string, JsonObject>();
+            foreach (var j in HaccpJournals.All.Where(j => j.Fields.Any(f => f.Remember)))
+            {
+                var data = await _context.HaccpEntries.AsNoTracking()
+                    .Where(e => e.Journal == j.Key && !e.IsAnnulled)
+                    .OrderByDescending(e => e.CreatedAt).Select(e => e.Data).FirstOrDefaultAsync();
+                if (data == null || JsonNode.Parse(data) is not JsonObject values) continue;
+                var keep = new JsonObject();
+                foreach (var f in j.Fields.Where(f => f.Remember))
+                    if (values[f.Key] is JsonNode v) keep[f.Key] = v.DeepClone();
+                if (keep.Count > 0) lastValues[j.Key] = keep;
+            }
+
             return Ok(new
             {
                 canManage = User.HasPermission(Permissions.HaccpManage),
                 journals = HaccpJournals.All,
+                schedule = await HaccpSchedule.LoadAsync(_context),
+                lastValues,
                 objects = await _context.HaccpObjects.AsNoTracking().OrderBy(o => o.Kind).ThenBy(o => o.SortOrder).ThenBy(o => o.Name).ToListAsync(),
                 staff = await _context.HaccpStaff.AsNoTracking().OrderByDescending(s => s.IsActive).ThenBy(s => s.FullName).ToListAsync(),
                 dishes,
                 editWindowHours = HaccpService.OwnEditWindow.TotalHours
             });
+        }
+
+        // PUT: api/haccp/schedule — график проверок {"fridge": ["09:00","18:00"], …}; пустой список — журнал без напоминаний
+        [HttpPut("schedule")]
+        [HasPermission(Permissions.HaccpManage)]
+        public async Task<IActionResult> SaveSchedule([FromBody] Dictionary<string, string[]> schedule)
+        {
+            var current = await HaccpSchedule.LoadAsync(_context);
+            var (valid, error) = HaccpSchedule.Validate(schedule);
+            if (error != null) return BadRequest(new { message = error });
+            foreach (var (k, v) in valid) current[k] = v;
+            await HaccpSchedule.SaveAsync(_context, current, User.GetUserId());
+            return Ok(current);
         }
 
         // GET: api/haccp/today — что нужно заполнить сегодня

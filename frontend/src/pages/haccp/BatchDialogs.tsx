@@ -5,9 +5,10 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import {
-  createHaccpEntries, fetchHaccpReceipts, todayMsk, fmtMsk, useInvalidateHaccp,
-  type HaccpMeta, type HaccpReceipt, type EntryInput,
+  createHaccpEntries, fetchHaccpReceipts, todayMsk, fmtMsk, useInvalidateHaccp, predictDeviations, rangeText,
+  type HaccpMeta, type HaccpReceipt, type EntryInput, type HaccpJournal, type Values,
 } from '../../api/haccp';
+import { FieldInput } from './EntryDialog';
 import { apiError, fmtQty, UNIT_LABELS, type StockUnit } from '../../api/inventory';
 import { tokens } from '../../theme';
 
@@ -257,6 +258,100 @@ export const PerishableReceiptDialog: React.FC<{ open: boolean; presetReceiptId?
         <Button variant="contained" color="secondary" size="large" onClick={submit} disabled={busy || !receipt || chosen.length === 0}
           startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
           Записать · {chosen.length}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+// ============ Все холодильники / склады / точки — одним экраном ============
+
+interface ObjRow { values: Values; corrective: string }
+
+/** Замеры по всему оборудованию журнала за один заход: в каждой строке — только сами показания */
+export const MultiObjectDialog: React.FC<{ open: boolean; meta: HaccpMeta; journal: HaccpJournal; onClose: () => void }> = ({ open, meta, journal, onClose }) => {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  const invalidate = useInvalidateHaccp();
+  const objects = meta.objects.filter(o => o.kind === journal.objectKind && o.isActive);
+  const fields = journal.fields.filter(f => f.required);
+  const [rows, setRows] = React.useState<Record<number, ObjRow>>({});
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState('');
+
+  React.useEffect(() => {
+    if (!open) return;
+    setError('');
+    const remembered = meta.lastValues?.[journal.key] ?? {};
+    setRows(Object.fromEntries(objects.map(o => [o.id, { values: { ...remembered }, corrective: '' }])));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const set = (id: number, patch: Partial<ObjRow>) => setRows(r => ({ ...r, [id]: { ...r[id], ...patch } }));
+  const filled = objects.filter(o => fields.every(f => {
+    const v = rows[o.id]?.values[f.key];
+    return v !== undefined && v !== null && v !== '';
+  }));
+
+  const submit = async () => {
+    setError('');
+    if (filled.length === 0) { setError('Внесите показания хотя бы по одному'); return; }
+    const missing = filled.find(o => predictDeviations(journal, rows[o.id].values, o, null).length > 0 && !rows[o.id].corrective.trim());
+    if (missing) { setError(`«${missing.name}»: отклонение — опишите, что сделали`); return; }
+    setBusy(true);
+    try {
+      await createHaccpEntries(filled.map(o => ({
+        journal: journal.key,
+        objectId: o.id,
+        values: rows[o.id].values,
+        correctiveAction: rows[o.id].corrective.trim() || null,
+      })));
+      await invalidate();
+      onClose();
+    } catch (e) {
+      setError(apiError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={() => !busy && onClose()} fullScreen={fullScreen} maxWidth="sm" fullWidth>
+      <DialogHead title={`${journal.short}: все разом`} subtitle={journal.title} onClose={onClose} busy={busy} />
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {objects.length === 0 && <Alert severity="warning">Добавьте оборудование во вкладке «Настройка»</Alert>}
+        <Typography variant="body2" color="text.secondary">Внесите показания по каждому. Пустые строки не сохраняются.</Typography>
+        {objects.map(o => {
+          const r = rows[o.id];
+          if (!r) return null;
+          const dev = predictDeviations(journal, r.values, o, null);
+          return (
+            <Box key={o.id} sx={{ borderTop: '1px solid', borderColor: 'divider', py: 1.25, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, flexWrap: 'wrap' }}>
+                <Typography sx={{ fontWeight: 700 }}>{o.name}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {[o.location, rangeText(o.minValue, o.maxValue) && `норма ${rangeText(o.minValue, o.maxValue)}`].filter(Boolean).join(' · ')}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(fields.length, 2)}, minmax(0, 1fr))`, gap: 1 }}>
+                {fields.map(f => (
+                  <FieldInput key={f.key} field={f} value={r.values[f.key]} compact dishes={meta.dishes}
+                    onChange={v => set(o.id, { values: { ...r.values, [f.key]: v } })}
+                    bad={predictDeviations({ ...journal, key: '', usesStaff: false, fields: [f] }, r.values, o, null).length > 0} />
+                ))}
+              </Box>
+              {dev.length > 0 && (
+                <TextField size="small" label="Отклонение — что сделали *" value={r.corrective} onChange={e => set(o.id, { corrective: e.target.value })}
+                  error placeholder="Продукты перенесены, вызван мастер, повторный замер через 30 минут" helperText={dev.join('; ')} />
+              )}
+            </Box>
+          );
+        })}
+        {error && <Alert severity="error">{error}</Alert>}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button variant="contained" color="secondary" size="large" onClick={submit} disabled={busy || filled.length === 0}
+          startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>
+          Записать · {filled.length}
         </Button>
       </DialogActions>
     </Dialog>

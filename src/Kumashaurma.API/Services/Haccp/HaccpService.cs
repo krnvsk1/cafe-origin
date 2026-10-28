@@ -183,10 +183,19 @@ namespace Kumashaurma.API.Services.Haccp
 
         // ================= Сегодня =================
 
-        public record TodayTask(string Journal, string Title, int? ObjectId, string? ObjectName, int Expected, int Done, string Status, string? Hint);
+        /// <param name="Expected">Сколько записей нужно за день по графику</param>
+        /// <param name="Due">Сколько из них уже должно быть сделано (время наступило)</param>
+        /// <param name="Status">done — всё за день; ok — сделано всё, что уже наступило; partial / todo — есть просроченные; upcoming — время ещё не пришло</param>
+        public record TodayTask(string Journal, string Title, int? ObjectId, string? ObjectName, int Expected, int Due, int Done, string Status,
+            string? Next, string? Hint);
         public record StaffAlert(int StaffId, string FullName, string What, DateTime Until, bool Expired);
         public record ReceiptTask(int StockDocumentId, string? Number, DateTime Date, string? Supplier, int Lines);
         public record Today(DateTime Date, List<TodayTask> Tasks, List<StaffAlert> Staff, List<ReceiptTask> Receipts, int Deviations);
+
+        public static string TaskStatus(int done, int due, int expected) =>
+            done >= expected ? "done"
+            : done >= due ? (due == 0 ? "upcoming" : "ok")
+            : done > 0 ? "partial" : "todo";
 
         public async Task<Today> TodayAsync(DateTime nowUtc)
         {
@@ -199,10 +208,15 @@ namespace Kumashaurma.API.Services.Haccp
             var objects = await _context.HaccpObjects.AsNoTracking().Where(o => o.IsActive)
                 .OrderBy(o => o.SortOrder).ThenBy(o => o.Name).ToListAsync();
             var staff = await _context.HaccpStaff.AsNoTracking().Where(s => s.IsActive).OrderBy(s => s.FullName).ToListAsync();
+            var schedule = await HaccpSchedule.LoadAsync(_context);
 
             var tasks = new List<TodayTask>();
             foreach (var j in HaccpJournals.All)
             {
+                var times = schedule.GetValueOrDefault(j.Key) ?? Array.Empty<string>();
+                if (times.Length == 0 || j.Frequency == "per_receipt") continue; // журнал вне графика — без напоминаний
+                var due = HaccpSchedule.DueCount(times, nowUtc);
+                var next = HaccpSchedule.Next(times, nowUtc);
                 var jEntries = entries.Where(e => e.Journal == j.Key).ToList();
                 switch (j.Frequency)
                 {
@@ -210,24 +224,24 @@ namespace Kumashaurma.API.Services.Haccp
                         foreach (var o in objects.Where(o => o.Kind == j.ObjectKind))
                         {
                             var done = jEntries.Count(e => e.ObjectId == o.Id);
-                            var expected = Math.Max(1, o.ChecksPerDay);
-                            tasks.Add(new TodayTask(j.Key, j.Short, o.Id, o.Name, expected, done, Status(done, expected),
+                            tasks.Add(new TodayTask(j.Key, j.Short, o.Id, o.Name, times.Length, due, done, TaskStatus(done, due, times.Length), next,
                                 o.MinValue.HasValue || o.MaxValue.HasValue ? $"норма {HaccpJournals.Range(o.MinValue, o.MaxValue, "°C")}" : null));
                         }
                         break;
                     case "per_staff":
                         if (staff.Count > 0)
                         {
-                            var done = jEntries.Select(e => e.StaffId).Distinct().Count();
+                            var marked = jEntries.Select(e => e.StaffId).Distinct().Count();
                             // Не все выходят каждый день: достаточно отметить тех, кто на смене
-                            tasks.Add(new TodayTask(j.Key, j.Short, null, null, 1, done, done > 0 ? "done" : "todo",
-                                $"отмечено {done} из {staff.Count} — отметьте всех, кто вышел на смену"));
+                            var done = marked > 0 ? 1 : 0;
+                            tasks.Add(new TodayTask(j.Key, j.Short, null, null, 1, Math.Min(due, 1), done, TaskStatus(done, Math.Min(due, 1), 1), next,
+                                $"отмечено {marked} из {staff.Count} — отметьте всех, кто вышел на смену"));
                         }
                         break;
                     case "daily":
                     {
                         var done = jEntries.Count;
-                        tasks.Add(new TodayTask(j.Key, j.Short, null, null, 1, done, done > 0 ? "done" : "todo", null));
+                        tasks.Add(new TodayTask(j.Key, j.Short, null, null, times.Length, due, done, TaskStatus(done, due, times.Length), next, null));
                         break;
                     }
                 }
@@ -261,8 +275,6 @@ namespace Kumashaurma.API.Services.Haccp
 
             return new Today(today, tasks, alerts.OrderBy(a => a.Until).ToList(), receipts, entries.Count(e => e.HasDeviation));
         }
-
-        private static string Status(int done, int expected) => done >= expected ? "done" : done > 0 ? "partial" : "todo";
 
         // ================= Выгрузка =================
 
