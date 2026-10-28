@@ -1,11 +1,12 @@
 import * as React from 'react';
 import {
-  Box, Typography, CircularProgress, TextField, InputAdornment, ToggleButtonGroup, ToggleButton, LinearProgress,
+  Box, Typography, CircularProgress, TextField, InputAdornment, ToggleButtonGroup, ToggleButton, LinearProgress, Button,
 } from '@mui/material';
-import { Search as SearchIcon, RestaurantMenuOutlined as DishIcon, ChevronRight as ChevronRightIcon } from '@mui/icons-material';
+import { Search as SearchIcon, RestaurantMenuOutlined as DishIcon, ChevronRight as ChevronRightIcon, CloudDownloadOutlined as ImportIcon } from '@mui/icons-material';
 import { useDishes, fmtMoney, type DishRow, type AddonRow, type TechCardTarget } from '../../api/inventory';
 import { tokens } from '../../theme';
 import { Panel, ListRow, ListHeader, EmptyState, Pill, FoodCost } from './ui';
+import IikoImportDialog from './IikoImportDialog';
 
 interface Props {
   onOpenCard: (target: TechCardTarget, id: number) => void;
@@ -23,6 +24,7 @@ const DishesTab: React.FC<Props> = ({ onOpenCard }) => {
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState<Filter>('all');
   const [section, setSection] = React.useState<'dishes' | 'addons'>('dishes');
+  const [iikoOpen, setIikoOpen] = React.useState(false);
 
   const q = search.trim().toLowerCase();
   const match = (r: { name: string; category: string; techCard: string; foodCostPercent: number | null }) =>
@@ -119,7 +121,12 @@ const DishesTab: React.FC<Props> = ({ onOpenCard }) => {
           <ToggleButton value="none">Без техкарты</ToggleButton>
           <ToggleButton value="expensive">Фудкост &gt; 40 %</ToggleButton>
         </ToggleButtonGroup>
+        <Button size="small" startIcon={<ImportIcon />} onClick={() => setIikoOpen(true)} sx={{ bgcolor: 'background.paper' }}>
+          Импорт из iiko
+        </Button>
       </Box>
+
+      <IikoImportDialog open={iikoOpen} onClose={() => setIikoOpen(false)} />
 
       {section === 'dishes' ? (
         groups.length === 0 ? (

@@ -25,7 +25,10 @@ export interface KitchenOrderItem {
 }
 
 export interface KitchenTechCardLine {
-  stockItemId: number;
+  stockItemId: number | null;
+  /** Блюдо в составе (unit = 'portion', gross — доля порции) */
+  dishId?: number | null;
+  isDish?: boolean;
   name: string;
   unit: string;
   isSemi: boolean;
