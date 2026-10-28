@@ -64,6 +64,7 @@ import AdminStopListPage from './pages/AdminStopListPage';
 import AdminReviewsPage from './pages/AdminReviewsPage';
 import KitchenPage from './pages/KitchenPage';
 import HaccpPage from './pages/haccp/HaccpPage';
+import HaccpReminder from './components/HaccpReminder';
 import CourierPage from './pages/CourierPage';
 import AdminDeliveryZonesPage from './pages/AdminDeliveryZonesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
@@ -368,6 +369,9 @@ function App() {
                 </Box>
               </Box>
             </Drawer>
+
+            {/* Не заполненные сегодня журналы ХАССП — висит на любой странице у тех, кто их ведёт */}
+            <HaccpReminder />
 
             <Container
               maxWidth={false}

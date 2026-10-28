@@ -145,11 +145,13 @@ const KEY = 'haccp';
 export const useHaccpMeta = () =>
   useQuery<HaccpMeta>({ queryKey: [KEY, 'meta'], queryFn: () => apiClient.get('/api/haccp/meta').then(r => r.data) });
 
-export const useHaccpToday = () =>
+export const useHaccpToday = (enabled = true) =>
   useQuery<HaccpToday>({
     queryKey: [KEY, 'today'],
     queryFn: () => apiClient.get('/api/haccp/today').then(r => r.data),
     refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    enabled,
   });
 
 export const useHaccpEntries = (journal: string | null, from: string, to: string, objectId: number | null, deviationsOnly: boolean) =>
