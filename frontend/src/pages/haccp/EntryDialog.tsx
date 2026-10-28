@@ -182,7 +182,10 @@ const EntryDialog: React.FC<Props> = ({ open, meta, journal, entry, presetObject
   const staff = staffList.find(s => s.id === staffId) ?? null;
   const deviations = predictDeviations(journal, values, obj, staff);
 
-  const isBad = (f: HaccpField) => predictDeviations({ ...journal, fields: [f] }, values, obj, null).length > 0;
+  // Подсветка конкретной графы: только её собственная проверка (без общих — срок годности, медкнижка)
+  const isBad = (f: HaccpField) =>
+    predictDeviations({ ...journal, key: '', usesStaff: false, fields: [f] }, values, obj, null).length > 0
+    || (journal.key === 'perishable' && f.key === 'sellBy' && deviations.includes('Срок реализации истёк'));
 
   const submit = async () => {
     setError('');
