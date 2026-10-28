@@ -34,6 +34,9 @@ namespace Kumashaurma.API.Authorization
 
         public const string Finance = "finance";
 
+        public const string Haccp = "haccp";
+        public const string HaccpManage = "haccp.manage";
+
         public const string UsersView = "users.view";
         public const string UsersRoles = "users.roles";
         public const string Roles = "roles";
@@ -67,6 +70,9 @@ namespace Kumashaurma.API.Authorization
             new(TechCards, "Склад", "Техкарты", "Создавать и менять технологические карты"),
             new(Chz, "Склад", "Честный знак", "Выводить из оборота маркированный товар (подпись своим сертификатом КЭП)"),
 
+            new(Haccp, "Журналы ХАССП", "Журналы ХАССП", "Заполнять и смотреть журналы: здоровье сотрудников, температура холодильников, бракераж, фритюр, уборка, контрольные точки; печать и выгрузка"),
+            new(HaccpManage, "Журналы ХАССП", "Журналы ХАССП: управление", "Оборудование и нормы, контрольные точки, сотрудники и медкнижки, исправление чужих и старых записей"),
+
             new(Finance, "Финансы", "Платежи поставщикам", "Предстоящие платежи по накладным СБИС: суммы, сроки, реквизиты, отметка об оплате"),
 
             new(UsersView, "Сотрудники и доступ", "Пользователи", "Список пользователей и их данные"),
@@ -83,7 +89,7 @@ namespace Kumashaurma.API.Authorization
             ["manager"] = new[]
             {
                 Dashboard, Analytics, OrdersView, OrdersManage, Pos, Kitchen, Delivery, CouriersAssign,
-                Menu, StopList, Zones, PromoCodes, Reviews, Points, UsersView, InventoryView
+                Menu, StopList, Zones, PromoCodes, Reviews, Points, UsersView, InventoryView, Haccp, HaccpManage
             },
             ["courier"] = new[] { OrdersView, Delivery },
             ["user"] = Array.Empty<string>(),

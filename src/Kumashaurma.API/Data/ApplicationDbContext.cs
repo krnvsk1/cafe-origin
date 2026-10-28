@@ -59,6 +59,12 @@ namespace Kumashaurma.API.Data
         // Честный знак
         public DbSet<ChzDocument> ChzDocuments { get; set; } = null!;
         public DbSet<EdoDocument> EdoDocuments { get; set; } = null!;
+
+        // Журналы ХАССП
+        public DbSet<HaccpObject> HaccpObjects { get; set; } = null!;
+        public DbSet<HaccpStaff> HaccpStaff { get; set; } = null!;
+        public DbSet<HaccpEntry> HaccpEntries { get; set; } = null!;
+        public DbSet<HaccpEntryRevision> HaccpEntryRevisions { get; set; } = null!;
         public DbSet<EdoItemMapping> EdoItemMappings { get; set; } = null!;
 
         // ЕГАИС
@@ -403,6 +409,26 @@ namespace Kumashaurma.API.Data
             });
 
             modelBuilder.Entity<StockItem>(entity => entity.HasIndex(e => e.EgaisAlcCode));
+
+            modelBuilder.Entity<HaccpObject>(entity => entity.HasIndex(e => new { e.Kind, e.IsActive }));
+
+            modelBuilder.Entity<HaccpEntry>(entity =>
+            {
+                entity.HasIndex(e => new { e.Journal, e.OccurredAt });
+                entity.HasIndex(e => e.ObjectId);
+                entity.HasIndex(e => e.StaffId);
+                entity.HasIndex(e => e.StockDocumentId);
+                // Записи журнала не удаляются вместе с оборудованием или сотрудником
+                entity.HasOne(e => e.Object).WithMany().HasForeignKey(e => e.ObjectId).OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Staff).WithMany().HasForeignKey(e => e.StaffId).OnDelete(DeleteBehavior.Restrict);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            });
+
+            modelBuilder.Entity<HaccpEntryRevision>(entity =>
+            {
+                entity.HasIndex(e => e.EntryId);
+                entity.HasOne(e => e.Entry).WithMany().HasForeignKey(e => e.EntryId).OnDelete(DeleteBehavior.Cascade);
+            });
 
             modelBuilder.Entity<EdoDocument>(entity =>
             {
