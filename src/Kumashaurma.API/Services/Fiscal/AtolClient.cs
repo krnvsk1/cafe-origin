@@ -22,6 +22,8 @@ namespace Kumashaurma.API.Services.Fiscal
         public string? CashierInn { get; set; }
         /// <summary>Отправлять копию чека на телефон гостя, если он указан</summary>
         public bool SendToCustomer { get; set; } = true;
+        /// <summary>Свой текст сверху и снизу чека, QR-код</summary>
+        public ReceiptLayout Layout { get; set; } = ReceiptLayout.Default();
     }
 
     /// <summary>Настройки онлайн-кассы в app_settings (ключ fiscal)</summary>

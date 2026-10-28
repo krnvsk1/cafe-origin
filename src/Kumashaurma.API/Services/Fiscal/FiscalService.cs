@@ -63,7 +63,7 @@ namespace Kumashaurma.API.Services.Fiscal
                 var lines = await ReceiptLines.LoadAsync(_context, order, ct);
                 var cashier = await CashierNameAsync(userId, ct);
                 var contact = o.SendToCustomer ? Controllers.PosController.NormalizePhone(order.Phone) : null;
-                var task = FiscalTasks.Receipt(kind, o, lines, order.PaymentMethod, cashier, contact);
+                var task = FiscalTasks.Receipt(kind, o, lines, order.PaymentMethod, cashier, contact, Vars(order.Id, order.DeliveryType, cashier, DateTime.UtcNow));
 
                 var receipt = new FiscalReceipt
                 {
@@ -92,6 +92,41 @@ namespace Kumashaurma.API.Services.Fiscal
                 else
                     _logger.LogWarning("Чек {Kind} по заказу #{OrderId} не пробит: {Error}", kind, order.Id, receipt.Error);
                 return receipt;
+            }
+            finally { DeviceLock.Release(); }
+        }
+
+        /// <summary>Подстановки для своего текста в чеке</summary>
+        public static Dictionary<string, string> Vars(int orderId, string deliveryType, string cashier, DateTime utc)
+        {
+            var msk = utc.AddHours(3);
+            return new()
+            {
+                ["order"] = orderId.ToString(),
+                ["type"] = deliveryType switch { "В зале" => "в зале", "Самовывоз" => "с собой", _ => "доставка" },
+                ["cashier"] = cashier,
+                ["date"] = msk.ToString("dd.MM.yyyy"),
+                ["time"] = msk.ToString("HH:mm"),
+            };
+        }
+
+        /// <summary>Напечатать образец оформления нефискальным документом</summary>
+        public async Task PrintSampleAsync(ReceiptLayout layout, int? userId, CancellationToken ct)
+        {
+            var o = await _settings.GetAsync();
+            if (!o.Enabled) throw new FiscalException("Онлайн-касса выключена");
+            var cashier = await CashierNameAsync(userId, ct);
+            var lines = new List<ReceiptLine>
+            {
+                new("Шаурма классическая + Сыр", 350, 2, 700, false),
+                new("Морс клюквенный", 120, 1, 120, false),
+            };
+            await DeviceLock.WaitAsync(ct);
+            try
+            {
+                var r = await _atol.RunAsync(o, Guid.NewGuid().ToString(), FiscalTasks.Sample(o, layout, lines, Vars(128, "В зале", cashier, DateTime.UtcNow)), ct);
+                if (r.Pending) throw new FiscalException("Касса не закончила печать — проверьте её");
+                if (!r.Ready) throw new FiscalException(r.Error ?? "Касса отказала");
             }
             finally { DeviceLock.Release(); }
         }

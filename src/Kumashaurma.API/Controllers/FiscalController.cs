@@ -54,6 +54,7 @@ namespace Kumashaurma.API.Controllers
             return Ok(new
             {
                 o.Enabled, o.Url, o.TaxationType, o.Vat, o.PaymentObject, o.CashierInn, o.SendToCustomer,
+                layout = o.Layout ?? ReceiptLayout.Default(),
                 shiftState, shiftNumber, shiftError,
                 failedReceipts = failed
             });
@@ -67,8 +68,43 @@ namespace Kumashaurma.API.Controllers
             var o = Map(r);
             var error = Validate(o);
             if (error != null) return BadRequest(new { message = error });
+            o.Layout = (await _settings.GetAsync()).Layout ?? ReceiptLayout.Default();
             await _settings.SaveAsync(o, User.GetUserId());
             return await Status();
+        }
+
+        // PUT: api/fiscal/layout — свой текст и QR-код в чеке
+        [HttpPut("layout")]
+        [HasPermission(Permissions.Settings)]
+        public async Task<IActionResult> SaveLayout([FromBody] ReceiptLayout layout)
+        {
+            var l = layout.Normalized();
+            var error = l.Validate();
+            if (error != null) return BadRequest(new { message = error });
+            var cur = await _settings.GetAsync();
+            var o = new FiscalOptions
+            {
+                Enabled = cur.Enabled, Url = cur.Url, TaxationType = cur.TaxationType, Vat = cur.Vat,
+                PaymentObject = cur.PaymentObject, CashierInn = cur.CashierInn, SendToCustomer = cur.SendToCustomer, Layout = l
+            };
+            await _settings.SaveAsync(o, User.GetUserId());
+            return await Status();
+        }
+
+        // POST: api/fiscal/layout/sample — напечатать образец (нефискальный документ, в ФН не попадает)
+        [HttpPost("layout/sample")]
+        [HasPermission(Permissions.Settings)]
+        public async Task<IActionResult> Sample([FromBody] ReceiptLayout layout)
+        {
+            var l = layout.Normalized();
+            var error = l.Validate();
+            if (error != null) return BadRequest(new { message = error });
+            try
+            {
+                await _fiscal.PrintSampleAsync(l, User.GetUserId(), HttpContext.RequestAborted);
+                return Ok(new { ok = true });
+            }
+            catch (FiscalException ex) { return BadRequest(new { message = ex.Message }); }
         }
 
         // POST: api/fiscal/settings/test — спросить у кассы состояние смены (без сохранения)

@@ -11,7 +11,22 @@ export interface FiscalSettings {
   sendToCustomer: boolean;
 }
 
+export interface LayoutLine {
+  text: string;
+  align: 'left' | 'center' | 'right';
+  large: boolean;
+}
+
+/** Свой текст сверху/снизу чека и QR-код; обязательные реквизиты печатает касса */
+export interface ReceiptLayout {
+  width: 32 | 42 | 48;
+  header: LayoutLine[];
+  footer: LayoutLine[];
+  qr: string | null;
+}
+
 export interface FiscalState extends FiscalSettings {
+  layout: ReceiptLayout;
   shiftState: 'opened' | 'closed' | 'expired' | string | null;
   shiftNumber: number | null;
   shiftError: string | null;
@@ -80,3 +95,23 @@ export const fiscalSell = (orderId: number) =>
 
 export const fiscalReturn = (orderId: number) =>
   apiClient.post<FiscalReceiptResult>(`/api/fiscal/orders/${orderId}/return`).then(r => r.data);
+
+export const useSaveReceiptLayout = () => {
+  const qc = useQueryClient();
+  return useMutation<FiscalState, Error, ReceiptLayout>({
+    mutationFn: (data) => apiClient.put('/api/fiscal/layout', data).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['fiscal'] }),
+  });
+};
+
+export const printReceiptSample = (layout: ReceiptLayout) =>
+  apiClient.post('/api/fiscal/layout/sample', layout).then(r => r.data);
+
+/** Подстановки в своём тексте чека */
+export const LAYOUT_VARS: { key: string; label: string; sample: string }[] = [
+  { key: '{order}', label: 'номер заказа', sample: '128' },
+  { key: '{type}', label: 'в зале / с собой / доставка', sample: 'в зале' },
+  { key: '{cashier}', label: 'кассир', sample: 'Иванова Анна' },
+  { key: '{date}', label: 'дата', sample: '28.10.2026' },
+  { key: '{time}', label: 'время', sample: '21:45' },
+];

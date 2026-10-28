@@ -90,5 +90,35 @@ namespace Kumashaurma.Tests
             FiscalService.Apply(receipt, wait);
             Assert.Equal(FiscalStatuses.Processing, receipt.Status);
         }
+    
+        [Fact]
+        public void Layout_AddsPreAndPostItemsWithPlaceholders()
+        {
+            var o = new FiscalOptions
+            {
+                Layout = new ReceiptLayout
+                {
+                    Header = new() { new LayoutLine { Text = "Заказ № {order} · {type}", Align = "center", Large = true } },
+                    Footer = new() { new LayoutLine { Text = "Кассир {cashier}", Align = "left" } },
+                    Qr = "https://kumashaurma.ru/review?o={order}"
+                }
+            };
+            var lines = ReceiptLines.Build(new[] { Item("Шаурма", 300, 1) }, 0, 300);
+            var vars = FiscalService.Vars(42, "Самовывоз", "Иванов", new DateTime(2026, 10, 28, 18, 0, 0, DateTimeKind.Utc));
+            var task = FiscalTasks.Receipt(FiscalKinds.Sell, o, lines, "cash", "Иванов", null, vars);
+            Assert.Equal("Заказ № 42 · с собой", (string?)task["preItems"]![0]!["text"]);
+            Assert.True((bool)task["preItems"]![0]!["doubleWidth"]!);
+            Assert.Equal("Кассир Иванов", (string?)task["postItems"]![0]!["text"]);
+            Assert.Equal("barcode", (string?)task["postItems"]![1]!["type"]);
+            Assert.Equal("https://kumashaurma.ru/review?o=42", (string?)task["postItems"]![1]!["barcode"]);
+        }
+
+        [Fact]
+        public void Layout_Validates()
+        {
+            Assert.Null(ReceiptLayout.Default().Validate());
+            Assert.NotNull(new ReceiptLayout { Width = 50 }.Validate());
+            Assert.NotNull(new ReceiptLayout { Header = new() { new LayoutLine { Text = new string('x', 70) } } }.Validate());
+        }
     }
 }

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Box, Typography, Button, CircularProgress } from '@mui/material';
 import { useLocation } from 'react-router-dom';
 import {
-  CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon, RemoveCircleOutline as OffIcon, SettingsOutlined as SettingsIcon,
+  ReceiptLongOutlined as ReceiptIcon, CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon, RemoveCircleOutline as OffIcon, SettingsOutlined as SettingsIcon,
 } from '@mui/icons-material';
 import { useEgaisState } from '../api/egais';
 import { useChzState } from '../api/chz';
@@ -15,6 +15,7 @@ import EgaisSettingsDialog from './inventory/EgaisSettingsDialog';
 import ChzSettingsDialog from './inventory/ChzSettingsDialog';
 import EdoSettingsDialog from './inventory/EdoSettingsDialog';
 import FiscalSettingsDialog from './inventory/FiscalSettingsDialog';
+import ReceiptLayoutDialog from './inventory/ReceiptLayoutDialog';
 
 type Status = 'ok' | 'error' | 'off';
 
@@ -33,7 +34,8 @@ const Card: React.FC<{
   error?: string | null;
   loading?: boolean;
   onSetup: () => void;
-}> = ({ id, title, purpose, status, statusText, details, error, loading, onSetup }) => (
+  extra?: React.ReactNode;
+}> = ({ id, title, purpose, status, statusText, details, error, loading, onSetup, extra }) => (
   <Panel sx={{ scrollMarginTop: 96 }}>
     <Box id={id} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
       {loading ? <CircularProgress size={28} sx={{ m: 0.25 }} /> : <StatusIcon status={status} />}
@@ -50,9 +52,12 @@ const Card: React.FC<{
           </>
         )}
       </Box>
-      <Button variant={status === 'off' ? 'contained' : 'outlined'} color="secondary" startIcon={<SettingsIcon />} onClick={onSetup}>
-        {status === 'off' ? 'Подключить' : 'Настроить'}
-      </Button>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Button variant={status === 'off' ? 'contained' : 'outlined'} color="secondary" startIcon={<SettingsIcon />} onClick={onSetup}>
+          {status === 'off' ? 'Подключить' : 'Настроить'}
+        </Button>
+        {extra}
+      </Box>
     </Box>
   </Panel>
 );
@@ -64,7 +69,7 @@ const IntegrationsPage: React.FC = () => {
   const { data: chz, isLoading: chzLoading } = useChzState();
   const { data: edo, isLoading: edoLoading } = useEdoState();
   const { data: fiscal, isLoading: fiscalLoading } = useFiscalState(true);
-  const [open, setOpen] = React.useState<'egais' | 'chz' | 'sbis' | 'kkt' | null>(null);
+  const [open, setOpen] = React.useState<'egais' | 'chz' | 'sbis' | 'kkt' | 'layout' | null>(null);
 
   // Переход из вкладки склада: /admin/integrations#chz — прокручиваем к нужной карточке
   React.useEffect(() => {
@@ -153,10 +158,14 @@ const IntegrationsPage: React.FC = () => {
         ] : undefined}
         error={fiscal?.enabled ? fiscal.shiftError : null}
         onSetup={() => setOpen('kkt')}
+        extra={fiscal && (
+          <Button variant="outlined" color="secondary" startIcon={<ReceiptIcon />} onClick={() => setOpen('layout')}>Вид чека</Button>
+        )}
       />
 
       <EgaisSettingsDialog open={open === 'egais'} onClose={() => setOpen(null)} />
       <ChzSettingsDialog open={open === 'chz'} onClose={() => setOpen(null)} />
+      {fiscal && <ReceiptLayoutDialog open={open === 'layout'} state={fiscal} onClose={() => setOpen(null)} />}
       {fiscal && <FiscalSettingsDialog open={open === 'kkt'} state={fiscal} onClose={() => setOpen(null)} />}
       {edo && <EdoSettingsDialog open={open === 'sbis'} state={edo} onClose={() => setOpen(null)} />}
     </Box>

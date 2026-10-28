@@ -12,7 +12,7 @@ namespace Kumashaurma.API.Services.Fiscal
         /// <summary>Чек прихода (sell) или возврата прихода (sellReturn)</summary>
         public static JsonObject Receipt(
             string kind, FiscalOptions o, IReadOnlyList<ReceiptLine> lines, string paymentMethod,
-            string cashierName, string? clientContact)
+            string cashierName, string? clientContact, IReadOnlyDictionary<string, string>? vars = null)
         {
             var items = new JsonArray();
             foreach (var l in lines)
@@ -46,8 +46,37 @@ namespace Kumashaurma.API.Services.Fiscal
             };
             if (!string.IsNullOrWhiteSpace(clientContact))
                 task["clientInfo"] = new JsonObject { ["emailOrPhone"] = clientContact };
+
+            // Свой текст до и после фискальной части (печатается, в ФН и ОФД не уходит)
+            var layout = o.Layout ?? ReceiptLayout.Default();
+            var v = vars ?? new Dictionary<string, string>();
+            var pre = ReceiptLayout.Items(layout.Header, v);
+            var post = ReceiptLayout.Items(layout.Footer, v, layout.Qr);
+            if (pre.Count > 0) task["preItems"] = pre;
+            if (post.Count > 0) task["postItems"] = post;
             return task;
         }
+
+        /// <summary>Нефискальный документ — образец оформления (в ФН не записывается)</summary>
+        public static JsonObject Sample(FiscalOptions o, ReceiptLayout layout, IReadOnlyList<ReceiptLine> lines, IReadOnlyDictionary<string, string> vars)
+        {
+            var items = ReceiptLayout.Items(layout.Header, vars);
+            var w = layout.Width;
+            items.Add(Text(new string('-', w)));
+            items.Add(Text("ОБРАЗЕЦ — НЕ ЯВЛЯЕТСЯ ЧЕКОМ", "center"));
+            foreach (var l in lines)
+            {
+                items.Add(Text(l.Name));
+                items.Add(Text($"{l.Quantity:0.###} x {l.Price:0.00} = {l.Amount:0.00}", "right"));
+            }
+            items.Add(Text($"ИТОГ {lines.Sum(l => l.Amount):0.00}", "right"));
+            items.Add(Text(new string('-', w)));
+            foreach (var i in ReceiptLayout.Items(layout.Footer, vars, layout.Qr)) items.Add(i!.DeepClone());
+            return new JsonObject { ["type"] = "nonFiscal", ["items"] = items };
+        }
+
+        private static JsonObject Text(string text, string align = "left") =>
+            new() { ["type"] = "text", ["text"] = text, ["alignment"] = align };
 
         /// <summary>openShift, closeShift, reportX</summary>
         public static JsonObject Shift(string type, FiscalOptions o, string cashierName) =>
