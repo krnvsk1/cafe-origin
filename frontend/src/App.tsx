@@ -18,6 +18,7 @@ import {
   Block as BlockIcon,
   RateReview as ReviewsIcon,
   SoupKitchen as KitchenIcon,
+  FactCheckOutlined as HaccpIcon,
   DeliveryDining as DeliveryIcon,
   Map as MapIcon,
   Insights as InsightsIcon,
@@ -62,6 +63,7 @@ import PointsPage from './pages/PointsPage';
 import AdminStopListPage from './pages/AdminStopListPage';
 import AdminReviewsPage from './pages/AdminReviewsPage';
 import KitchenPage from './pages/KitchenPage';
+import HaccpPage from './pages/haccp/HaccpPage';
 import CourierPage from './pages/CourierPage';
 import AdminDeliveryZonesPage from './pages/AdminDeliveryZonesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
@@ -194,6 +196,7 @@ function App() {
   const staffLinks = ([
     { text: 'Касса', icon: <PosIcon />, path: '/pos', perms: [P.Pos], group: 'Смена', hint: 'Заказы у стойки: в зале и с собой' },
     { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', perms: [P.Kitchen], group: 'Смена', hint: 'Новые заказы, приготовление, техкарты' },
+    { text: 'Журналы ХАССП', icon: <HaccpIcon />, path: '/haccp', perms: [P.Haccp, P.HaccpManage], group: 'Смена', hint: 'Холодильники, осмотр смены, бракераж, уборка' },
     { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', perms: [P.Delivery, P.CouriersAssign], group: 'Смена', hint: 'Заказы курьеров и маршруты' },
     { text: 'Товары', icon: <ProductsIcon />, path: '/admin/menu', perms: [P.Menu], group: 'Меню', hint: 'Карточки, варианты и добавки' },
     { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', perms: [P.Menu], group: 'Меню', hint: 'Новая позиция в меню' },
@@ -389,6 +392,9 @@ function App() {
                 {can(P.Analytics) && <Route path="/admin/analytics" element={<AnalyticsPage />} />}
                 {can(P.Pos) && <Route path="/pos" element={<PosPage />} />}
                 {can(P.Kitchen) && <Route path="/kitchen" element={<KitchenPage />} />}
+                {can(P.Haccp, P.HaccpManage) && <Route path="/haccp" element={<HaccpPage />} />}
+                {can(P.Haccp, P.HaccpManage) && <Route path="/haccp/:section" element={<HaccpPage />} />}
+                {can(P.Haccp, P.HaccpManage) && <Route path="/haccp/:section/:key" element={<HaccpPage />} />}
                 {can(P.Delivery, P.CouriersAssign) && <Route path="/courier" element={<CourierPage />} />}
                 {can(P.Menu) && <Route path="/admin/menu" element={<AdminMenuPage />} />}
                 {can(P.Menu) && <Route path="/admin/create" element={<CreateMenuItemPage />} />}
