@@ -59,6 +59,7 @@ namespace Kumashaurma.API.Data
         // Честный знак
         public DbSet<ChzDocument> ChzDocuments { get; set; } = null!;
         public DbSet<EdoDocument> EdoDocuments { get; set; } = null!;
+        public DbSet<MercuryDocument> MercuryDocuments { get; set; } = null!;
 
         // Журналы ХАССП
         public DbSet<HaccpObject> HaccpObjects { get; set; } = null!;
@@ -436,6 +437,13 @@ namespace Kumashaurma.API.Data
             {
                 entity.HasIndex(e => e.EntryId);
                 entity.HasOne(e => e.Entry).WithMany().HasForeignKey(e => e.EntryId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<MercuryDocument>(entity =>
+            {
+                entity.HasIndex(e => e.Uuid).IsUnique();
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.IssueDate);
             });
 
             modelBuilder.Entity<EdoDocument>(entity =>
