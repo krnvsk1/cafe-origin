@@ -1185,6 +1185,114 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("haccp_staff");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.MercuryDocument", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ApplicationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("application_id");
+
+                    b.Property<string>("ConsignorName")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("consignor_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("error");
+
+                    b.Property<string>("ExpiryDate")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("expiry_date");
+
+                    b.Property<DateTime?>("IssueDate")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("issue_date");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<int?>("ProcessedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("processed_by_user_id");
+
+                    b.Property<string>("ProductName")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("product_name");
+
+                    b.Property<string>("ProductionDate")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("production_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StockEntryGuid")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("stock_entry_guid");
+
+                    b.Property<string>("UnitName")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("unit_name");
+
+                    b.Property<string>("Uuid")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("uuid");
+
+                    b.Property<string>("VetStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("vet_status");
+
+                    b.Property<decimal>("Volume")
+                        .HasColumnType("decimal(14,3)")
+                        .HasColumnName("volume");
+
+                    b.Property<string>("Waybill")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("waybill");
+
+                    b.Property<string>("Xml")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("xml");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IssueDate");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("Uuid")
+                        .IsUnique();
+
+                    b.ToTable("mercury_documents");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.Order", b =>
                 {
                     b.Property<int>("Id")

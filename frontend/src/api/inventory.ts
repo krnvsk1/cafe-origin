@@ -325,9 +325,10 @@ export const toDateInput = (iso?: string | null) => {
 
 const KEY = 'inventory';
 
-export const useInventorySummary = () =>
+export const useInventorySummary = (opts: { enabled?: boolean } = {}) =>
   useQuery<InventorySummary>({
     queryKey: [KEY, 'summary'],
+    enabled: opts.enabled ?? true,
     queryFn: () => apiClient.get('/api/inventory/summary').then(r => r.data),
   });
 

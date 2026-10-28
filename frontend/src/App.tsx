@@ -27,6 +27,14 @@ import {
   LightModeOutlined as LightModeIcon,
   ShoppingBagOutlined as ShoppingBagIcon,
   Inventory2Outlined as InventoryIcon,
+  DescriptionOutlined as DocumentsIcon,
+  MarkEmailReadOutlined as EdoIcon,
+  MenuBookOutlined as TechCardsIcon,
+  AssessmentOutlined as ReportsIcon,
+  LiquorOutlined as EgaisIcon,
+  PetsOutlined as MercuryIcon,
+  QrCode2Outlined as ChzIcon,
+  LocalShippingOutlined as SuppliersIcon,
   AdminPanelSettingsOutlined as RolesIcon,
   PointOfSaleOutlined as PosIcon,
   AppsRounded as AppsIcon,
@@ -70,7 +78,8 @@ import IntegrationsPage from './pages/IntegrationsPage';
 import CourierPage from './pages/CourierPage';
 import AdminDeliveryZonesPage from './pages/AdminDeliveryZonesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
-import InventoryPage from './pages/inventory/InventoryPage';
+import InventoryPage, { LegacyInventoryRedirect } from './pages/inventory/InventoryPage';
+import { INVENTORY_SECTIONS } from './pages/inventory/sections';
 import RolesPage from './pages/RolesPage';
 import PosPage from './pages/PosPage';
 import FinancePage from './pages/finance/FinancePage';
@@ -210,9 +219,17 @@ function App() {
     { text: 'Отзывы', icon: <ReviewsIcon />, path: '/admin/reviews', perms: [P.Reviews], group: 'Продажи и маркетинг', hint: 'Оценки и ответы гостям' },
     { text: 'Зоны доставки', icon: <MapIcon />, path: '/admin/zones', perms: [P.Zones], group: 'Продажи и маркетинг', hint: 'Где возим и за сколько' },
     { text: 'Платежи поставщикам', icon: <FinanceIcon />, path: '/admin/finance', perms: [P.Finance], group: 'Финансы', hint: 'Что и когда оплатить по накладным СБИС' },
-    { text: 'Склад', icon: <InventoryIcon />, path: '/admin/inventory', perms: [P.InventoryView, P.TechCards, P.Chz], group: 'Склад', hint: 'Остатки, накладные, ЕГАИС, Честный знак' },
+    { text: 'Поставщики', icon: <SuppliersIcon />, path: '/admin/suppliers', perms: [P.InventoryView], group: 'Финансы', hint: 'Справочник поставщиков для приходов' },
+    { text: 'Остатки', icon: <InventoryIcon />, path: '/admin/stock', perms: [P.InventoryView], group: 'Склад', hint: 'Что есть на складе, номенклатура' },
+    { text: 'Документы', icon: <DocumentsIcon />, path: '/admin/documents', perms: [P.InventoryView], group: 'Склад', hint: 'Приходы, списания, инвентаризация' },
+    { text: 'Накладные СБИС', icon: <EdoIcon />, path: '/admin/edo', perms: [P.InventoryView], group: 'Склад', hint: 'Входящие УПД от поставщиков' },
+    { text: 'Техкарты', icon: <TechCardsIcon />, path: '/admin/techcards', perms: [P.InventoryView, P.TechCards], group: 'Склад', hint: 'Блюда и полуфабрикаты, себестоимость' },
+    { text: 'Отчёты склада', icon: <ReportsIcon />, path: '/admin/stock-reports', perms: [P.InventoryView], group: 'Склад', hint: 'Движение товаров и себестоимость' },
+    { text: 'ЕГАИС', icon: <EgaisIcon />, path: '/admin/egais', perms: [P.InventoryView], group: 'Госсистемы', hint: 'Алкоголь: накладные и акты' },
+    { text: 'Меркурий', icon: <MercuryIcon />, path: '/admin/mercury', perms: [P.InventoryView], group: 'Госсистемы', hint: 'Ветсертификаты: гашение ВСД' },
+    { text: 'Честный знак', icon: <ChzIcon />, path: '/admin/chz', perms: [P.Chz], group: 'Госсистемы', hint: 'Маркировка: вывод из оборота' },
     { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', perms: [P.UsersView, P.UsersRoles], group: 'Команда', hint: 'Гости и сотрудники' },
-    { text: 'Настройка интеграций', icon: <IntegrationsIcon />, path: '/admin/integrations', perms: [P.Settings], group: 'Команда', hint: 'Касса АТОЛ, ЕГАИС, Честный знак, СБИС' },
+    { text: 'Настройка интеграций', icon: <IntegrationsIcon />, path: '/admin/integrations', perms: [P.Settings], group: 'Команда', hint: 'Касса АТОЛ, ЕГАИС, Честный знак, Меркурий, СБИС' },
     { text: 'Роли и доступы', icon: <RolesIcon />, path: '/admin/roles', perms: [P.Roles], group: 'Команда', hint: 'Что доступно каждой роли' },
   ] as (ControlLink & { perms: string[] })[])
     .filter(link => isAuthenticated && can(...link.perms));
@@ -410,8 +427,12 @@ function App() {
                 {can(P.Zones) && <Route path="/admin/zones" element={<AdminDeliveryZonesPage />} />}
                 {can(P.PromoCodes) && <Route path="/admin/promocodes" element={<AdminPromoCodesPage />} />}
                 {can(P.Reviews) && <Route path="/admin/reviews" element={<AdminReviewsPage />} />}
-                {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory" element={<InventoryPage />} />}
-                {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory/:tab" element={<InventoryPage />} />}
+                {INVENTORY_SECTIONS.filter(s => can(...s.perms)).flatMap(s => [
+                  <Route key={s.key} path={s.base} element={<InventoryPage key={s.key} section={s.key} />} />,
+                  <Route key={`${s.key}-tab`} path={`${s.base}/:tab`} element={<InventoryPage key={s.key} section={s.key} />} />,
+                ])}
+                {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory" element={<LegacyInventoryRedirect />} />}
+                {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory/:tab" element={<LegacyInventoryRedirect />} />}
                 {can(P.Finance) && <Route path="/admin/finance" element={<FinancePage />} />}
                 {can(P.Settings) && <Route path="/admin/integrations" element={<IntegrationsPage />} />}
                 {can(P.UsersView, P.UsersRoles) && <Route path="/admin/users" element={<UsersPage />} />}

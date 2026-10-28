@@ -204,6 +204,12 @@ builder.Services.AddSingleton<Kumashaurma.API.Services.Chz.ChzSettingsProvider>(
 builder.Services.AddHttpClient<Kumashaurma.API.Services.Chz.ChzClient>(client => client.Timeout = TimeSpan.FromSeconds(60));
 builder.Services.AddScoped<Kumashaurma.API.Services.Chz.ChzService>();
 
+// ФГИС «Меркурий» (Ветис.API): входящие ВСД и гашение — настраивается в «Настройке интеграций»
+builder.Services.AddSingleton<Kumashaurma.API.Services.Mercury.MercurySettingsProvider>();
+builder.Services.AddHttpClient<Kumashaurma.API.Services.Mercury.VetisClient>(client => client.Timeout = TimeSpan.FromSeconds(60));
+builder.Services.AddScoped<Kumashaurma.API.Services.Mercury.MercuryService>();
+builder.Services.AddHostedService<Kumashaurma.API.Services.Mercury.MercurySyncWorker>();
+
 // Журналы ХАССП и СанПиН
 builder.Services.AddScoped<Kumashaurma.API.Services.Haccp.HaccpService>();
 

@@ -148,7 +148,7 @@ const EdoDocumentDialog: React.FC<{ id: number | null; onClose: () => void; onOp
   const toChz = () => {
     try { sessionStorage.setItem(CHZ_PREFILL_KEY, JSON.stringify({ codes: allCodes, comment: `УПД № ${doc?.number ?? ''} ${doc?.supplierName ?? ''}`.trim() })); } catch { /* ignore */ }
     onClose();
-    navigate('/admin/inventory/chz');
+    navigate('/admin/chz');
   };
 
   const s = doc ? EDO_STATUS[doc.status] : null;
