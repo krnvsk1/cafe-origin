@@ -57,7 +57,7 @@ export const FloorView: React.FC<{ plan: FloorPlan; tables: WaiterTable[]; highl
   const byId = new Map(tables.map(t => [t.id, t]));
   return (
     <Box sx={{ position: 'relative', width: '100%', aspectRatio: `${plan.width} / ${plan.height}`, bgcolor: 'background.paper', borderRadius: '16px',
-      border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+      border: '1px solid', borderColor: 'divider', overflow: 'visible', mb: 2.5 }}>
       {plan.walls.map(w => (
         <Box key={w.id} sx={{ position: 'absolute', left: `${(w.x / plan.width) * 100}%`, top: `${(w.y / plan.height) * 100}%`,
           width: `${(w.w / plan.width) * 100}%`, height: `${(w.h / plan.height) * 100}%`, borderRadius: w.kind === 'plant' ? '50%' : '3px',
@@ -71,20 +71,27 @@ export const FloorView: React.FC<{ plan: FloorPlan; tables: WaiterTable[]; highl
         const mine = cs.some(c => c.isMine);
         const color = cs.length === 0 ? theme.palette.divider : ready ? tokens.herb : mine ? tokens.saffron : theme.palette.text.secondary;
         const dim = highlightMine && !mine;
+        const caption = cs.length === 0 ? null : cs.every(c => c.hidden) ? (cs[0].waiter ?? 'занят') : money(cs.reduce((x, c) => x + c.total, 0));
         return (
-          <Box key={pt.tableId} component="button" type="button" onClick={() => onTap(t)}
-            sx={{ position: 'absolute', left: `${(pt.x / plan.width) * 100}%`, top: `${(pt.y / plan.height) * 100}%`,
-              width: `${(pt.w / plan.width) * 100}%`, height: `${(pt.h / plan.height) * 100}%`,
-              borderRadius: pt.shape === 'round' ? '50%' : '10px', border: '2px solid', borderColor: color, p: 0,
-              bgcolor: cs.length ? alpha(color, 0.18) : 'background.default', color: 'text.primary', font: 'inherit', cursor: 'pointer',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: dim ? 0.35 : 1, overflow: 'hidden' }}>
-            <Typography sx={{ fontWeight: 800, fontSize: { xs: '0.85rem', sm: '1.1rem' }, lineHeight: 1 }}>{t.name}</Typography>
-            {cs.length > 0 && (
-              <Typography sx={{ fontSize: { xs: '0.6rem', sm: '0.75rem' }, fontWeight: 700, lineHeight: 1.1 }} noWrap>
-                {cs.every(c => c.hidden) ? (cs[0].waiter ?? 'занят') : money(cs.reduce((x, c) => x + c.total, 0))}
+          <React.Fragment key={pt.tableId}>
+            <Box component="button" type="button" onClick={() => onTap(t)} aria-label={`Стол ${t.name}${caption ? `, ${caption}` : ''}`}
+              sx={{ position: 'absolute', left: `${(pt.x / plan.width) * 100}%`, top: `${(pt.y / plan.height) * 100}%`,
+                width: `${(pt.w / plan.width) * 100}%`, height: `${(pt.h / plan.height) * 100}%`,
+                borderRadius: pt.shape === 'round' ? '50%' : '10px', border: '2px solid', borderColor: color, p: 0,
+                bgcolor: cs.length ? alpha(color, 0.18) : 'background.default', color: 'text.primary', font: 'inherit', cursor: 'pointer',
+                display: 'grid', placeItems: 'center', opacity: dim ? 0.35 : 1, overflow: 'hidden' }}>
+              <Typography sx={{ fontWeight: 800, fontSize: { xs: '0.85rem', sm: '1.1rem' }, lineHeight: 1 }}>{t.name}</Typography>
+            </Box>
+            {/* Сумма — под столом, чтобы не теснить номер */}
+            {caption && (
+              <Typography onClick={() => onTap(t)} noWrap
+                sx={{ position: 'absolute', left: `${((pt.x + pt.w / 2) / plan.width) * 100}%`, top: `calc(${((pt.y + pt.h) / plan.height) * 100}% + 2px)`,
+                  transform: 'translateX(-50%)', fontSize: { xs: '0.65rem', sm: '0.8rem' }, fontWeight: 700, lineHeight: 1.2, cursor: 'pointer',
+                  color: ready ? tokens.herb : 'text.secondary', opacity: dim ? 0.35 : 1, pointerEvents: 'auto' }}>
+                {caption}
               </Typography>
             )}
-          </Box>
+          </React.Fragment>
         );
       })}
     </Box>
