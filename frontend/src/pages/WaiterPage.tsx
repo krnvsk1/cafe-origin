@@ -662,8 +662,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
             )}
             {/* Отданные гостю блюда — вниз подачи, сверху то, что ещё нужно нести */}
             {[...o.items].sort((x, y) => Number(x.servedQuantity >= x.quantity) - Number(y.servedQuantity >= y.quantity)).map(i => (
-              <Box key={i.id} onClick={() => isOpen && !cancelled && i.quantity - i.pendingVoid > 0 && setVoiding(i)}
-                sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25, cursor: isOpen && !cancelled ? 'pointer' : 'default', borderRadius: 1, '&:active': { bgcolor: 'action.hover' } }}>
+              <Box key={i.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25 }}>
                 <ItemState ready={i.readyQuantity} served={i.servedQuantity} qty={i.quantity} cancelled={cancelled} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ fontSize: '0.95rem', textDecoration: cancelled ? 'line-through' : 'none' }}>
@@ -683,9 +682,14 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
                 )}
                 {isOpen && !cancelled && i.readyQuantity > i.servedQuantity && (
                   <Button size="small" variant="contained" color="success" disabled={serve.isPending} sx={{ minWidth: 0, px: 1.25, py: 0.25 }}
-                    onClick={e => { e.stopPropagation(); serveItem(i.id, null); }}>
+                    onClick={() => serveItem(i.id, null)}>
                     Отдать{i.readyQuantity - i.servedQuantity > 1 ? ` ${i.readyQuantity - i.servedQuantity}` : ''}
                   </Button>
+                )}
+                {isOpen && !cancelled && i.quantity - i.pendingVoid > 0 && (
+                  <IconButton size="small" onClick={() => setVoiding(i)} aria-label={`Убрать из счёта: ${i.name}`} sx={{ color: 'text.secondary' }}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
                 )}
               </Box>
             ))}
