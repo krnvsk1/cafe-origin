@@ -1,4 +1,4 @@
-/* Service worker: уведомления сотрудникам (официанту — «блюдо готово») */
+/* Service worker: уведомления сотрудникам (официанту — «блюдо готово») · v2 */
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 
@@ -23,9 +23,16 @@ self.addEventListener('notificationclick', event => {
   const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const client = windows.find(c => c.url.startsWith(self.location.origin));
+    // Сначала — вкладка, где уже открыт экран официанта, иначе любая вкладка сайта
+    const ours = windows.filter(c => new URL(c.url).origin === self.location.origin);
+    const client = ours.find(c => new URL(c.url).pathname.startsWith('/waiter')) || ours[0];
     if (client) {
-      await client.focus();
+      // Переходим по адресу прямо во вкладке: надёжнее, чем просить страницу перейти самой
+      try {
+        const moved = await client.navigate(url);
+        if (moved) { await moved.focus(); return; }
+      } catch { /* вкладка не под этим service worker — ниже запасной путь */ }
+      try { await client.focus(); } catch { /* ignore */ }
       client.postMessage({ type: 'open', url });
       return;
     }

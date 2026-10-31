@@ -57,6 +57,8 @@ export const usePushNotifications = () => {
       if (b) { if (alive) setState(b); return; }
       try {
         const reg = await navigator.serviceWorker.getRegistration('/');
+        // Подтянуть свежую версию service worker, если она вышла
+        reg?.update().catch(() => undefined);
         const sub = reg ? await reg.pushManager.getSubscription() : null;
         if (sub && Notification.permission === 'granted') {
           // Подписка этого телефона привязывается к тому, кто сейчас вошёл
