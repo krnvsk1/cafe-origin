@@ -80,22 +80,12 @@ namespace Kumashaurma.API.Services
             return v;
         }
 
-        /// <summary>Решение кухни: списать продукты, не списывать или отказать</summary>
+        /// <summary>Решение кухни: списать продукты или нет. Отказать в отмене кухня не может</summary>
         public async Task ResolveAsync(int voidId, string decision, int? userId)
         {
             var v = await _context.OrderItemVoids.FirstOrDefaultAsync(x => x.Id == voidId) ?? throw new VoidException("Запрос не найден");
             if (v.Status != VoidStatuses.Pending) throw new VoidException("Запрос уже обработан");
-            if (decision == "reject")
-            {
-                v.Status = VoidStatuses.Rejected;
-                v.ResolvedAt = DateTime.UtcNow;
-                v.ResolvedByUserId = userId;
-                await _context.SaveChangesAsync();
-                var order = await _context.Orders.AsNoTracking().FirstAsync(o => o.Id == v.OrderId);
-                _events.Publish(new OrderEvent("updated", order.Id, order.UserId, order.Status, null, DateTime.UtcNow));
-                return;
-            }
-            if (decision is not ("writeoff" or "keep")) throw new VoidException("Решение: writeoff, keep или reject");
+            if (decision is not ("writeoff" or "keep")) throw new VoidException("Решение: writeoff (списать) или keep (без списания)");
             await ApplyAsync(v, writeOff: decision == "writeoff", resolvedBy: userId);
         }
 

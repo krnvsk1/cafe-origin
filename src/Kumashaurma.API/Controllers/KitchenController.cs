@@ -133,7 +133,7 @@ namespace Kumashaurma.API.Controllers
 
         public class VoidDecision
         {
-            /// <summary>writeoff — списать продукты, keep — без списания, reject — отказать</summary>
+            /// <summary>writeoff — списать продукты, keep — без списания</summary>
             public string Decision { get; set; } = string.Empty;
         }
 

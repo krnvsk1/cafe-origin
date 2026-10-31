@@ -22,6 +22,7 @@ namespace Kumashaurma.API.Controllers
         private readonly IOrderStatusService _statusService;
         private readonly IOrderEventBus _events;
         private readonly IPaymentService _payments;
+        private readonly IPermissionService _permissions;
 
         public OrdersController(
             ApplicationDbContext context,
@@ -29,9 +30,11 @@ namespace Kumashaurma.API.Controllers
             IOptions<RestaurantOptions> restaurant,
             IOrderStatusService statusService,
             IOrderEventBus events,
-            IPaymentService payments)
+            IPaymentService payments,
+            IPermissionService permissions)
         {
             _payments = payments;
+            _permissions = permissions;
             _context = context;
             _logger = logger;
             _restaurant = restaurant.Value;
@@ -695,6 +698,14 @@ namespace Kumashaurma.API.Controllers
 
                 if (string.IsNullOrEmpty(request.Status))
                     return BadRequest(new { Message = "Укажите статус" });
+
+                // Отменить заказ может только тот, кто управляет заказами или кассой — не кухня и не курьер
+                if (request.Status == OrderStatuses.Cancelled && order.Status != OrderStatuses.Cancelled)
+                {
+                    var perms = await _permissions.GetPermissionsAsync(User.FindAll(System.Security.Claims.ClaimTypes.Role).Select(c => c.Value));
+                    if (!perms.Contains(Permissions.OrdersManage) && !perms.Contains(Permissions.Pos))
+                        return StatusCode(403, new { Message = "Отменить заказ может только администратор или кассир" });
+                }
 
                 if (!await _statusService.ChangeStatusAsync(order, request.Status))
                     return BadRequest(new { Message = $"Неизвестный статус: {request.Status}" });

@@ -212,8 +212,6 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
               onClick={() => resolveVoid.mutate({ id: v.id, decision: 'writeoff' })}>Убрать, списать продукты</Button>
             <Button size="small" variant="outlined" color="error" disabled={resolveVoid.isPending}
               onClick={() => resolveVoid.mutate({ id: v.id, decision: 'keep' })}>Убрать без списания</Button>
-            <Button size="small" color="inherit" disabled={resolveVoid.isPending}
-              onClick={() => resolveVoid.mutate({ id: v.id, decision: 'reject' })}>Отказать</Button>
           </Box>
         </Alert>
       ))}
@@ -221,13 +219,6 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
       <Divider sx={{ my: 1 }} />
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }} noWrap>{order.customerName}</Typography>
-        {(order.status === 'Новый' || order.status === 'Принят') && (status === 'Новый' || accepted) && (
-          <Button size="small" color="error" onClick={() => {
-            if (window.confirm(`Отменить заказ #${order.id}?`)) setStatus.mutate({ id: order.id, status: 'Отменён' });
-          }}>
-            Отменить
-          </Button>
-        )}
         {next && (
           <Button variant="contained" size="large" disabled={busy} onClick={() => advance(next.status)}>
             {next.label}
