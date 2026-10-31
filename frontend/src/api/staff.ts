@@ -31,6 +31,11 @@ export interface KitchenStation {
 }
 
 export interface KitchenOrderItem {
+  /** id позиции заказа */
+  id: number;
+  /** Сколько штук уже готово и сколько отдано (блюда отдаются по мере готовности) */
+  readyQuantity: number;
+  servedQuantity: number;
   shawarmaId: number;
   /** Кухня блюда (метка из меню) */
   stationId: number;
@@ -113,6 +118,18 @@ export const useRenameStation = () => {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['kitchen-stations'] });
       queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+    },
+  });
+};
+
+/** Отметка по блюду: готово (+1 / все) или отдано; delta −1 — отменить */
+export const useKitchenItem = () => {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, { itemId: number; action: 'ready' | 'served'; delta: number | null }>({
+    mutationFn: ({ itemId, action, delta }) => apiClient.post(`/api/kitchen/items/${itemId}/${action}`, { delta }).then(res => res.data),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
     },
   });
 };

@@ -1454,6 +1454,39 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("order_item_addons");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.OrderItemKitchenState", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("OrderItemId")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_item_id");
+
+                    b.Property<int>("ReadyQuantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("ready_quantity");
+
+                    b.Property<int>("ServedQuantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("served_quantity");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderItemId")
+                        .IsUnique();
+
+                    b.ToTable("order_item_kitchen_states");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.OrderReview", b =>
                 {
                     b.Property<int>("Id")
@@ -2713,6 +2746,15 @@ namespace Kumashaurma.API.Migrations
                         .IsRequired();
 
                     b.Navigation("OrderItem");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.OrderItemKitchenState", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.OrderItem", null)
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Kumashaurma.API.Models.OrderReview", b =>

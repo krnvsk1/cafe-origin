@@ -11,7 +11,7 @@ import {
   MenuBookOutlined as RecipeIcon,
   Check as CheckIcon,
 } from '@mui/icons-material';
-import { useKitchenOrders, useSetOrderStatus, useKitchenStations, useSetStationStatus } from '../api/staff';
+import { useKitchenOrders, useSetOrderStatus, useKitchenStations, useSetStationStatus, useKitchenItem } from '../api/staff';
 import type { KitchenOrder, KitchenOrderItem } from '../api/staff';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
 import {
@@ -55,7 +55,8 @@ const statusFor = (order: KitchenOrder, stationId: number | null): OrderStatus =
 const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: number | null; onRecipe: (item: KitchenOrderItem) => void }> = ({ order, now, stationId, onRecipe }) => {
   const setStatus = useSetOrderStatus();
   const setStation = useSetStationStatus();
-  const busy = setStatus.isPending || setStation.isPending;
+  const itemMark = useKitchenItem();
+  const busy = setStatus.isPending || setStation.isPending || itemMark.isPending;
   const status = statusFor(order, stationId);
   // now обновляется раз в 30 с — заказ, пришедший между тиками, «моложе» now; без ограничения было «-1 мин»
   const minutes = Math.max(0, Math.floor((now - new Date(order.createdAt).getTime()) / 60000));
@@ -85,26 +86,64 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
   const items = stationId == null ? order.items : order.items.filter(i => i.stationId === stationId);
   const otherItems = stationId == null ? [] : order.items.filter(i => i.stationId !== stationId);
 
-  const renderItem = (item: KitchenOrderItem, idx: number) => (
-    <Box key={idx} sx={{ mb: 0.75 }}>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-        <Typography fontWeight={700} sx={{ fontSize: '1.05rem', flex: 1 }}>
-          {item.quantity} × {item.name}
-        </Typography>
-        {/* Техкарта — по запросу повара, чтобы не загромождать карточку */}
-        <Tooltip title="Техкарта">
-          <IconButton size="small" onClick={() => onRecipe(item)} aria-label={`Техкарта: ${item.name}`} sx={{ mt: -0.25, color: 'text.secondary' }}>
-            <RecipeIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+  // Отметки по блюдам — после того как заказ приняли
+  const canMark = status !== 'Новый';
+  const renderItem = (item: KitchenOrderItem, idx: number) => {
+    const ready = item.readyQuantity;
+    const served = item.servedQuantity;
+    const toServe = ready - served;
+    const done = served >= item.quantity;
+    const allReady = ready >= item.quantity;
+    return (
+      <Box key={idx} sx={{ mb: 0.75, opacity: done ? 0.45 : 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+          <Typography fontWeight={700} sx={{ fontSize: '1.05rem', flex: 1, textDecoration: done ? 'line-through' : 'none' }}>
+            {item.quantity} × {item.name}
+          </Typography>
+          {/* Техкарта — по запросу повара, чтобы не загромождать карточку */}
+          <Tooltip title="Техкарта">
+            <IconButton size="small" onClick={() => onRecipe(item)} aria-label={`Техкарта: ${item.name}`} sx={{ mt: -0.25, color: 'text.secondary' }}>
+              <RecipeIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+        {item.addons.length > 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ pl: 2 }}>
+            + {item.addons.map(a => (a.quantity > 1 ? `${a.addonName} ×${a.quantity}` : a.addonName)).join(', ')}
+          </Typography>
+        )}
+        {canMark && !done && (
+          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center', mt: 0.5, pl: 2 }}>
+            {ready > 0 && (
+              <Tooltip title="Нажмите, чтобы снять одну отметку «готово»">
+                <Chip size="small" color="success" variant="outlined" icon={<CheckIcon />}
+                  label={item.quantity > 1 ? `готово ${ready}/${item.quantity}` : 'готово'}
+                  onClick={() => ready > served && itemMark.mutate({ itemId: item.id, action: 'ready', delta: -1 })} />
+              </Tooltip>
+            )}
+            {served > 0 && <Chip size="small" label={`отдано ${served}`} />}
+            {!allReady && (
+              <Button size="small" variant="outlined" color="success" disabled={busy}
+                onClick={() => itemMark.mutate({ itemId: item.id, action: 'ready', delta: item.quantity > 1 ? 1 : null })}>
+                {item.quantity > 1 ? '+1 готово' : 'Готово'}
+              </Button>
+            )}
+            {!allReady && item.quantity - ready > 1 && (
+              <Button size="small" color="success" disabled={busy} onClick={() => itemMark.mutate({ itemId: item.id, action: 'ready', delta: null })}>
+                все готовы
+              </Button>
+            )}
+            {toServe > 0 && isPickup && (
+              <Button size="small" variant="contained" color="success" disabled={busy}
+                onClick={() => itemMark.mutate({ itemId: item.id, action: 'served', delta: null })}>
+                Отдать{toServe > 1 ? ` ${toServe}` : ''}
+              </Button>
+            )}
+          </Box>
+        )}
       </Box>
-      {item.addons.length > 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ pl: 2 }}>
-          + {item.addons.map(a => (a.quantity > 1 ? `${a.addonName} ×${a.quantity}` : a.addonName)).join(', ')}
-        </Typography>
-      )}
-    </Box>
-  );
+    );
+  };
 
   return (
     <Paper

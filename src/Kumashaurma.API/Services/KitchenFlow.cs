@@ -45,6 +45,26 @@ namespace Kumashaurma.API.Services
             return current < 0 || target <= current ? orderStatus : FromRank(target);
         }
 
+        /// <summary>
+        /// Статус части заказа на кухне с учётом готовности блюд: все блюда кухни готовы — «Готов»,
+        /// часть готова — как минимум «Готовится».
+        /// </summary>
+        public static string Effective(string? stationStatus, string orderStatus, int itemsTotal, int itemsReady)
+        {
+            var baseStatus = Effective(stationStatus, orderStatus);
+            if (itemsTotal > 0 && itemsReady >= itemsTotal) return OrderStatuses.Ready;
+            if (itemsReady > 0 && Rank(baseStatus) < 2) return OrderStatuses.Preparing;
+            return baseStatus;
+        }
+
+        /// <summary>Сколько можно отметить: готово — от 0 до количества, отдано — от 0 до готового</summary>
+        public static (int Ready, int Served) Clamp(int quantity, int ready, int served)
+        {
+            ready = Math.Clamp(ready, 0, quantity);
+            served = Math.Clamp(served, 0, ready);
+            return (ready, served);
+        }
+
         /// <summary>Кухня позиции: своя у блюда, иначе у карточки, иначе кухня по умолчанию</summary>
         public static int StationFor(int? own, int? parent, int defaultStation) => own ?? parent ?? defaultStation;
     }

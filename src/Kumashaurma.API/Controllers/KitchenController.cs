@@ -48,6 +48,12 @@ namespace Kumashaurma.API.Controllers
             public string Status { get; set; } = string.Empty;
         }
 
+        public class ItemCountRequest
+        {
+            /// <summary>На сколько штук изменить: +1 — ещё одна готова/отдана, −1 — отменить отметку; null — все</summary>
+            public int? Delta { get; set; }
+        }
+
         /// <summary>Кухни по порядку; при первом обращении заводятся «Горячая кухня» и «Мангал»</summary>
         private async Task<List<KitchenStation>> StationsAsync()
         {
@@ -107,15 +113,99 @@ namespace Kumashaurma.API.Controllers
             row.Status = r.Status;
             row.UpdatedAt = DateTime.UtcNow;
             row.UpdatedByUserId = User.GetUserId();
-            await _context.SaveChangesAsync();
 
-            var effective = involved.Select(sid => KitchenFlow.Effective(rows.FirstOrDefault(x => x.StationId == sid)?.Status, order.Status)).ToList();
-            var overall = KitchenFlow.Overall(effective, order.Status);
-            if (overall != order.Status)
-                await _statusService.ChangeStatusAsync(order, overall);
-            else
-                _events.Publish(new OrderEvent("updated", order.Id, order.UserId, order.Status, null, DateTime.UtcNow));
+            // «Готово» на кухне — все её блюда готовы
+            if (r.Status == OrderStatuses.Ready)
+            {
+                var stationItems = order.OrderItems.Where(i => itemStations.GetValueOrDefault(i.ShawarmaId, stations[0].Id) == stationId).ToList();
+                var states = await StatesAsync(stationItems.Select(i => i.Id));
+                foreach (var i in stationItems)
+                {
+                    var st = State(states, i.Id);
+                    st.ReadyQuantity = i.Quantity;
+                    st.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            await _context.SaveChangesAsync();
+            await RecalcAsync(order);
             return Ok(new { order.Id, order.Status });
+        }
+
+        // POST: api/kitchen/items/{itemId}/ready — блюдо (или ещё одна штука) готово; Delta −1 — отменить
+        [HttpPost("items/{itemId:int}/ready")]
+        [HasPermission(Permissions.Kitchen)]
+        public Task<IActionResult> ItemReady(int itemId, [FromBody] ItemCountRequest r) => ChangeItemAsync(itemId, r.Delta, served: false);
+
+        // POST: api/kitchen/items/{itemId}/served — блюдо отдано гостю (по мере готовности)
+        [HttpPost("items/{itemId:int}/served")]
+        [HasPermission(Permissions.Kitchen)]
+        public Task<IActionResult> ItemServed(int itemId, [FromBody] ItemCountRequest r) => ChangeItemAsync(itemId, r.Delta, served: true);
+
+        private async Task<IActionResult> ChangeItemAsync(int itemId, int? delta, bool served)
+        {
+            var item = await _context.OrderItems.FirstOrDefaultAsync(i => i.Id == itemId);
+            if (item == null) return NotFound(new { message = "Позиция не найдена" });
+            var order = await _context.Orders.Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == item.OrderId);
+            if (order == null || KitchenFlow.Rank(order.Status) < 0) return BadRequest(new { message = "Заказ уже закрыт" });
+
+            var states = await StatesAsync(new[] { itemId });
+            var st = State(states, itemId);
+            var (ready, servedQty) = served
+                ? KitchenFlow.Clamp(item.Quantity, st.ReadyQuantity, delta.HasValue ? st.ServedQuantity + delta.Value : st.ReadyQuantity)
+                : KitchenFlow.Clamp(item.Quantity, delta.HasValue ? st.ReadyQuantity + delta.Value : item.Quantity, st.ServedQuantity);
+            st.ReadyQuantity = ready;
+            st.ServedQuantity = servedQty;
+            st.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            await RecalcAsync(order);
+            return Ok(new { order.Id, order.Status, readyQuantity = ready, servedQuantity = servedQty });
+        }
+
+        private async Task<Dictionary<int, OrderItemKitchenState>> StatesAsync(IEnumerable<int> itemIds)
+        {
+            var ids = itemIds.ToList();
+            return await _context.OrderItemKitchenStates.Where(x => ids.Contains(x.OrderItemId)).ToDictionaryAsync(x => x.OrderItemId);
+        }
+
+        private OrderItemKitchenState State(Dictionary<int, OrderItemKitchenState> states, int itemId)
+        {
+            if (states.TryGetValue(itemId, out var st)) return st;
+            st = new OrderItemKitchenState { OrderItemId = itemId };
+            _context.OrderItemKitchenStates.Add(st);
+            states[itemId] = st;
+            return st;
+        }
+
+        /// <summary>
+        /// Общий статус заказа по кухням и готовности блюд: все готовы — «Готов»; самовывоз и в зале,
+        /// где всё уже отдано, — «Выполнен». Остальным экранам сообщаем об изменении.
+        /// </summary>
+        private async Task RecalcAsync(Order order)
+        {
+            var stations = await StationsAsync();
+            var def = stations[0].Id;
+            var itemStations = await ItemStationsAsync(order.OrderItems.Select(i => i.ShawarmaId), def);
+            var marks = await _context.OrderStationStatuses.AsNoTracking().Where(x => x.OrderId == order.Id).ToDictionaryAsync(x => x.StationId, x => x.Status);
+            var ids = order.OrderItems.Select(i => i.Id).ToList();
+            var states = await _context.OrderItemKitchenStates.AsNoTracking()
+                .Where(x => ids.Contains(x.OrderItemId)).ToDictionaryAsync(x => x.OrderItemId);
+
+            var effective = order.OrderItems
+                .GroupBy(i => itemStations.GetValueOrDefault(i.ShawarmaId, def))
+                .Select(g => KitchenFlow.Effective(marks.GetValueOrDefault(g.Key), order.Status,
+                    g.Sum(i => i.Quantity), g.Sum(i => Math.Min(i.Quantity, states.GetValueOrDefault(i.Id)?.ReadyQuantity ?? 0))))
+                .ToList();
+            var overall = KitchenFlow.Overall(effective, order.Status);
+            var changed = false;
+            if (overall != order.Status)
+                changed = await _statusService.ChangeStatusAsync(order, overall);
+
+            var allServed = order.OrderItems.Count > 0 && order.OrderItems.All(i => (states.GetValueOrDefault(i.Id)?.ServedQuantity ?? 0) >= i.Quantity);
+            if (allServed && order.Status == OrderStatuses.Ready && order.DeliveryType != "Доставка")
+                changed = await _statusService.ChangeStatusAsync(order, OrderStatuses.Completed) || changed;
+
+            if (!changed)
+                _events.Publish(new OrderEvent("updated", order.Id, order.UserId, order.Status, null, DateTime.UtcNow));
         }
 
         /// <summary>Кухня каждого блюда: своя метка, иначе метка карточки, иначе кухня по умолчанию</summary>
@@ -153,6 +243,11 @@ namespace Kumashaurma.API.Controllers
             var orderIds = orders.Select(o => o.Id).ToList();
             var marks = (await _context.OrderStationStatuses.AsNoTracking().Where(x => orderIds.Contains(x.OrderId)).ToListAsync())
                 .ToDictionary(x => (x.OrderId, x.StationId), x => x.Status);
+            var itemIds = orders.SelectMany(o => o.OrderItems).Select(i => i.Id).ToList();
+            var itemStates = await _context.OrderItemKitchenStates.AsNoTracking().Where(x => itemIds.Contains(x.OrderItemId))
+                .ToDictionaryAsync(x => x.OrderItemId);
+            int ReadyOf(OrderItem i) => Math.Min(i.Quantity, itemStates.GetValueOrDefault(i.Id)?.ReadyQuantity ?? 0);
+            int ServedOf(OrderItem i) => Math.Min(ReadyOf(i), itemStates.GetValueOrDefault(i.Id)?.ServedQuantity ?? 0);
             int StationOf(int shawarmaId) => itemStations.GetValueOrDefault(shawarmaId, defaultStation);
 
             var nowUtc = DateTime.UtcNow;
@@ -165,7 +260,9 @@ namespace Kumashaurma.API.Controllers
                     {
                         Id = id,
                         Name = names.GetValueOrDefault(id, "Кухня"),
-                        Status = KitchenFlow.Effective(marks.GetValueOrDefault((o.Id, id)), o.Status)
+                        Status = KitchenFlow.Effective(marks.GetValueOrDefault((o.Id, id)), o.Status,
+                            o.OrderItems.Where(i => StationOf(i.ShawarmaId) == id).Sum(i => i.Quantity),
+                            o.OrderItems.Where(i => StationOf(i.ShawarmaId) == id).Sum(ReadyOf))
                     }).ToList();
                 return new
                 {
@@ -182,8 +279,11 @@ namespace Kumashaurma.API.Controllers
                     // Заказ ко времени, до которого ещё далеко — показывается в колонке «Позже»
                     IsLater = scheduledUtc.HasValue && scheduledUtc.Value > nowUtc.AddMinutes(ScheduledLeadMinutes) && o.Status == OrderStatuses.New,
                     Stations = orderStations,
-                    Items = o.OrderItems.Select(i => new
+                    Items = o.OrderItems.OrderBy(i => i.Id).Select(i => new
                     {
+                        i.Id,
+                        ReadyQuantity = ReadyOf(i),
+                        ServedQuantity = ServedOf(i),
                         i.ShawarmaId,
                         StationId = StationOf(i.ShawarmaId),
                         i.Name,

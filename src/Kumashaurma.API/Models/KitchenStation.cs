@@ -48,4 +48,29 @@ namespace Kumashaurma.API.Models
         [Column("updated_by_user_id")]
         public int? UpdatedByUserId { get; set; }
     }
+
+    /// <summary>
+    /// Готовность позиции заказа на кухне: сколько штук уже готово и сколько отдано гостю.
+    /// Блюда отдаются по мере готовности, а не всем заказом сразу.
+    /// </summary>
+    [Table("order_item_kitchen_states")]
+    public class OrderItemKitchenState
+    {
+        [Key]
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        [Column("id")]
+        public int Id { get; set; }
+
+        [Column("order_item_id")]
+        public int OrderItemId { get; set; }
+
+        [Column("ready_quantity")]
+        public int ReadyQuantity { get; set; }
+
+        [Column("served_quantity")]
+        public int ServedQuantity { get; set; }
+
+        [Column("updated_at")]
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    }
 }

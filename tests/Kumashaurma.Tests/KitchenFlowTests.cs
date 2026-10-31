@@ -41,5 +41,21 @@ namespace Kumashaurma.Tests
             Assert.Equal(1, KitchenFlow.StationFor(null, 1, 5));
             Assert.Equal(5, KitchenFlow.StationFor(null, null, 5));
         }
+    
+        [Fact]
+        public void Effective_ByItems_PartlyReadyIsPreparing_AllReadyIsReady()
+        {
+            Assert.Equal(OrderStatuses.Preparing, KitchenFlow.Effective(OrderStatuses.Accepted, OrderStatuses.Accepted, 3, 1));
+            Assert.Equal(OrderStatuses.Ready, KitchenFlow.Effective(OrderStatuses.Preparing, OrderStatuses.Preparing, 3, 3));
+            Assert.Equal(OrderStatuses.Accepted, KitchenFlow.Effective(OrderStatuses.Accepted, OrderStatuses.New, 2, 0));
+        }
+
+        [Fact]
+        public void Clamp_ServedNeverExceedsReady()
+        {
+            Assert.Equal((2, 1), KitchenFlow.Clamp(2, 5, 1));
+            Assert.Equal((1, 1), KitchenFlow.Clamp(2, 1, 3));
+            Assert.Equal((0, 0), KitchenFlow.Clamp(2, -1, 0));
+        }
     }
 }
