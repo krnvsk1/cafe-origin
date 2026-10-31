@@ -660,7 +660,8 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
                 Отдать всё готовое
               </Button>
             )}
-            {o.items.map(i => (
+            {/* Отданные гостю блюда — вниз подачи, сверху то, что ещё нужно нести */}
+            {[...o.items].sort((x, y) => Number(x.servedQuantity >= x.quantity) - Number(y.servedQuantity >= y.quantity)).map(i => (
               <Box key={i.id} onClick={() => isOpen && !cancelled && i.quantity - i.pendingVoid > 0 && setVoiding(i)}
                 sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25, cursor: isOpen && !cancelled ? 'pointer' : 'default', borderRadius: 1, '&:active': { bgcolor: 'action.hover' } }}>
                 <ItemState ready={i.readyQuantity} served={i.servedQuantity} qty={i.quantity} cancelled={cancelled} />

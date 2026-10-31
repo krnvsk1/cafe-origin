@@ -262,7 +262,12 @@ const KitchenPage: React.FC = () => {
     try { if (id == null) localStorage.removeItem(STATION_KEY); else localStorage.setItem(STATION_KEY, String(id)); } catch { /* ignore */ }
   };
   // На экране кухни — только заказы, где есть её блюда
-  const visible = (orders ?? []).filter(o => station == null || o.stations.some(s => s.id === station));
+  // На экране своей кухни заказ уходит из «Готовых», когда все её блюда готовы и отданы; на «Все кухни» — остаётся
+  const stationDone = (o: KitchenOrder) => {
+    const mine = o.items.filter(i => i.stationId === station);
+    return mine.length > 0 && mine.every(i => i.servedQuantity >= i.quantity);
+  };
+  const visible = (orders ?? []).filter(o => station == null || (o.stations.some(s => s.id === station) && !stationDone(o)));
 
   // Живые события только обновляют список; звук зависит от того, что в «Новых» (так он есть, даже если заказ пришёл опросом)
   useEventStream('/api/events/orders', invalidate);
