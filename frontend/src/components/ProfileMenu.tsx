@@ -22,6 +22,7 @@ import { useAuthStore } from '../store/authStore';
 import TelegramConnectDialog from './TelegramConnectDialog';
 import { Telegram as TelegramIcon } from '@mui/icons-material';
 import { staffHomePath } from '../auth/permissions';
+import { detachPushSubscription } from '../api/push';
 
 interface ProfileMenuProps {
   onLoginClick: () => void;
@@ -42,7 +43,8 @@ export default function ProfileMenu({ onLoginClick }: ProfileMenuProps) {
     setAnchorEl(null);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await detachPushSubscription();
     logout();
     handleClose();
     navigate('/');

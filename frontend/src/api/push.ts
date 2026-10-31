@@ -31,6 +31,21 @@ const registration = () => navigator.serviceWorker.register('/sw.js').then(() =>
 
 const saveSubscription = (sub: PushSubscription) => apiClient.post('/api/push/subscribe', sub.toJSON());
 
+/**
+ * Выход из аккаунта: этот браузер больше не получает уведомления прежнего сотрудника.
+ * Иначе после входа под другим (например, поваром) уведомления официанта продолжат приходить сюда.
+ */
+export const detachPushSubscription = async () => {
+  try {
+    if (!('serviceWorker' in navigator)) return;
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (!sub) return;
+    await apiClient.post('/api/push/unsubscribe', { endpoint: sub.endpoint }).catch(() => undefined);
+    await sub.unsubscribe();
+  } catch { /* не мешаем выйти */ }
+};
+
 export const usePushNotifications = () => {
   const [state, setState] = React.useState<PushState>('loading');
   const [busy, setBusy] = React.useState(false);

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import {
   AppBar, Toolbar, Typography, Button, Box, Container,
   ThemeProvider, CssBaseline,
@@ -104,6 +104,29 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+
+const STAFF_PREFIXES = ['/waiter', '/kitchen', '/pos', '/courier', '/haccp', '/admin'];
+
+/**
+ * Неизвестный адрес — на главную. Но раздел для сотрудников, куда у текущего входа нет доступа
+ * (например, уведомление официанта открыли под поваром), объясняем, а не молча уводим на главную.
+ */
+const NotFoundRoute: React.FC = () => {
+  const { pathname } = useLocation();
+  const user = useAuthStore(s => s.user);
+  if (!STAFF_PREFIXES.some(p => pathname === p || pathname.startsWith(`${p}/`))) return <Navigate to="/" replace />;
+  return (
+    <Box sx={{ maxWidth: 480, mx: 'auto', py: 6, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      <Typography variant="h5" sx={{ fontWeight: 800 }}>Нет доступа к этому разделу</Typography>
+      <Typography color="text.secondary">
+        {user
+          ? `Сейчас вы вошли как ${[user.firstName, user.lastName].filter(Boolean).join(' ') || user.phone || 'другой сотрудник'}. Выйдите и войдите под сотрудником, у которого есть доступ.`
+          : 'Войдите под своим аккаунтом сотрудника.'}
+      </Typography>
+    </Box>
+  );
+};
 
 function App() {
   const totalItems = useTotalItems();
@@ -456,7 +479,7 @@ function App() {
                 {can(P.UsersView, P.UsersRoles) && <Route path="/admin/users" element={<UsersPage />} />}
                 {can(P.Roles) && <Route path="/admin/roles" element={<RolesPage />} />}
 
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<NotFoundRoute />} />
               </Routes>
             </Container>
 
