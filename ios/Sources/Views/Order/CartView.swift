@@ -88,7 +88,7 @@ struct CartView: View {
                     .font(.headline)
                     .foregroundColor(.primary)
 
-                Text("Добавьте шаурму из меню")
+                Text("Добавьте блюда из меню")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -352,7 +352,7 @@ struct CartItemRow: View {
 
     var body: some View {
         NavigationLink {
-            ProductDetailView(shawarma: item.shawarma)
+            ProductDetailView(dish: item.dish)
         } label: {
             HStack(spacing: 14) {
                 // Thumbnail
@@ -360,7 +360,7 @@ struct CartItemRow: View {
 
                 // Info + price
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.shawarma.name)
+                    Text(item.dish.name)
                         .font(.subheadline)
                         .fontWeight(.semibold)
                         .lineLimit(1)
@@ -419,7 +419,7 @@ struct CartItemRow: View {
 
     @ViewBuilder
     private var productThumbnail: some View {
-        if let imagePath = item.shawarma.primaryImage,
+        if let imagePath = item.dish.primaryImage,
            let url = APIClient.shared.getImageURL(imagePath) {
             AsyncImage(url: url) { phase in
                 switch phase {
@@ -604,7 +604,7 @@ struct OrderSheetView: View {
 
             ForEach(cartService.items) { item in
                 HStack {
-                    Text("\u{00B7} \(item.shawarma.name)")
+                    Text("\u{00B7} \(item.dish.name)")
                         .font(.subheadline)
                         .lineLimit(1)
                     Spacer()

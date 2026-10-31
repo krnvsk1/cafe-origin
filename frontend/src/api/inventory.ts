@@ -207,7 +207,7 @@ export interface SalesReport {
   from: string;
   to: string;
   rows: {
-    shawarmaId: number;
+    dishId: number;
     name: string;
     quantity: number;
     revenue: number;

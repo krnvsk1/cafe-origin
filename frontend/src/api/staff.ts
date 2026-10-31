@@ -41,7 +41,7 @@ export interface KitchenOrderItem {
   /** Сколько штук уже готово и сколько отдано (блюда отдаются по мере готовности) */
   readyQuantity: number;
   servedQuantity: number;
-  shawarmaId: number;
+  dishId: number;
   /** Кухня блюда (метка из меню) */
   stationId: number;
   name: string;
@@ -82,9 +82,9 @@ export interface KitchenTechCardResponse {
 /** Техкарта блюда и выбранных добавок для повара (без себестоимости); грузится только когда окно открыто */
 export const useKitchenTechCard = (item: KitchenOrderItem | null) =>
   useQuery<KitchenTechCardResponse>({
-    queryKey: ['kitchen-techcard', item?.shawarmaId, item?.addons.map(a => a.addonId).join(',')],
+    queryKey: ['kitchen-techcard', item?.dishId, item?.addons.map(a => a.addonId).join(',')],
     queryFn: () => apiClient
-      .get(`/api/kitchen/techcard/${item!.shawarmaId}`, { params: { addons: item!.addons.map(a => a.addonId).join(',') || undefined } })
+      .get(`/api/kitchen/techcard/${item!.dishId}`, { params: { addons: item!.addons.map(a => a.addonId).join(',') || undefined } })
       .then(res => res.data),
     enabled: !!item,
     staleTime: 5 * 60 * 1000,

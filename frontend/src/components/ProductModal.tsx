@@ -19,16 +19,16 @@ import {
   Remove as RemoveIcon,
   Check as CheckIcon,
 } from '@mui/icons-material';
-import type { Shawarma, Addon, SelectedAddon, AddonCategory } from '../types';
-import { useShawarmaAddons } from '../hooks/useAddons';
+import type { Dish, Addon, SelectedAddon, AddonCategory } from '../types';
+import { useDishAddons } from '../hooks/useAddons';
 import { resolveMediaUrl } from '../utils/media';
 import { tokens } from '../theme';
 
 interface ProductModalProps {
   open: boolean;
   onClose: () => void;
-  product: Shawarma | null;
-  onAddToCart: (product: Shawarma, quantity: number, selectedAddons: SelectedAddon[], instructions: string, selectedChild?: Shawarma) => void;
+  product: Dish | null;
+  onAddToCart: (product: Dish, quantity: number, selectedAddons: SelectedAddon[], instructions: string, selectedChild?: Dish) => void;
 }
 
 // Выбор одной опции: явно одна (maxSelections = 1)
@@ -47,7 +47,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ open, onClose, product, onA
   // Выбранные добавки по группам: id группы → список
   const [selected, setSelected] = useState<Map<number, SelectedAddon[]>>(new Map());
   const [instructions, setInstructions] = useState('');
-  const [selectedChild, setSelectedChild] = useState<Shawarma | null>(null);
+  const [selectedChild, setSelectedChild] = useState<Dish | null>(null);
   const [missing, setMissing] = useState<number[]>([]);
   const [added, setAdded] = useState(false);
   const groupRefs = useRef(new Map<number, HTMLElement>());
@@ -74,7 +74,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ open, onClose, product, onA
 
   // Добавки зависят от варианта
   const activeProductId = selectedChild?.id ?? product?.id ?? 0;
-  const { data: addonCategories = [], isLoading: addonsLoading } = useShawarmaAddons(open ? activeProductId : undefined);
+  const { data: addonCategories = [], isLoading: addonsLoading } = useDishAddons(open ? activeProductId : undefined);
 
   // При смене варианта добавки сбрасываются (у разных вариантов могут быть разные добавки)
   useEffect(() => {
@@ -192,7 +192,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ open, onClose, product, onA
           {imageUrl ? (
             <Box component="img" src={imageUrl} alt={product.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
-            <Typography aria-hidden sx={{ fontSize: 120 }}>🌯</Typography>
+            <Typography aria-hidden sx={{ fontSize: 120 }}>🍽️</Typography>
           )}
         </Box>
 

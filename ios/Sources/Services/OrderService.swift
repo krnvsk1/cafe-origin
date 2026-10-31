@@ -27,8 +27,8 @@ final class OrderService: ObservableObject {
 
         let items = validItems.map { item in
             CreateOrderItem(
-                shawarmaId: item.orderShawarmaId,
-                name: item.selectedChild?.name ?? item.shawarma.name,
+                dishId: item.orderDishId,
+                name: item.selectedChild?.name ?? item.dish.name,
                 quantity: item.quantity,
                 variantId: item.selectedChild?.id,
                 variantName: item.selectedChild?.name,

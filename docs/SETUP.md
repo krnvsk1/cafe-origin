@@ -6,14 +6,14 @@
 ## Перед первым запуском
 
 ```bash
-cd src/Kumashaurma.API
+cd src/Cafe.API
 dotnet build
 dotnet ef migrations has-pending-model-changes   # должно сказать, что изменений нет
 dotnet ef database update                        # или просто запустите API — миграции применятся сами
 ```
 
 Если `has-pending-model-changes` найдёт расхождения (снапшот модели правился вручную, а ещё раньше
-в нём расходился уникальный индекс `shawarmas`), создайте выравнивающую миграцию:
+в нём расходился уникальный индекс `dishes`), создайте выравнивающую миграцию:
 `dotnet ef migrations add SyncModelSnapshot` — и проверьте её содержимое перед применением.
 
 ## Заведение — `Restaurant`

@@ -3,7 +3,7 @@ import { apiClient } from './client';
 import type { FiscalReceiptResult } from './fiscal';
 
 export interface PosOrderInput {
-  items: { shawarmaId: number; quantity: number; addons: { addonId: number; quantity: number }[]; comment?: string }[];
+  items: { dishId: number; quantity: number; addons: { addonId: number; quantity: number }[]; comment?: string }[];
   orderType: 'В зале' | 'Самовывоз';
   paymentMethod: 'cash' | 'card';
   cashReceived?: number | null;

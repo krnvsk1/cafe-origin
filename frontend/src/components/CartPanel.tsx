@@ -73,7 +73,7 @@ const CartPanel: React.FC = () => {
         <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
           <BagIcon sx={{ fontSize: 48, opacity: 0.4 }} />
           <Typography sx={{ mt: 1, fontWeight: 600, color: 'text.primary' }}>Здесь пока пусто</Typography>
-          <Typography variant="body2">Добавьте шаурму из меню — она появится здесь</Typography>
+          <Typography variant="body2">Добавьте блюда из меню — они появятся здесь</Typography>
         </Box>
       ) : (
         <>

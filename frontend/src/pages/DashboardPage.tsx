@@ -14,9 +14,9 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import { useShawarmas, useOrders, useOrderStats } from '../api/hooks';
+import { useDishes, useOrders, useOrderStats } from '../api/hooks';
 import { getStatusColor } from '../utils/statusColors';
-import type { Order, Shawarma } from '../types';
+import type { Order, Dish } from '../types';
 
 // Компонент для карточки статистики
 const StatCard: React.FC<{
@@ -103,7 +103,7 @@ const RecentOrderRow: React.FC<{ order: Order }> = ({ order }) => {
 };
 
 // Компонент для популярных товаров
-const PopularItems: React.FC<{ orders: Order[]; shawarmas?: Shawarma[] }> = ({ orders }) => {
+const PopularItems: React.FC<{ orders: Order[]; dishes?: Dish[] }> = ({ orders }) => {
   const theme = useTheme();
   
   const itemStats = React.useMemo(() => {
@@ -111,12 +111,12 @@ const PopularItems: React.FC<{ orders: Order[]; shawarmas?: Shawarma[] }> = ({ o
     
     orders.forEach(order => {
       order.orderItems?.forEach(item => {
-        const current = stats.get(item.shawarmaId) || {
+        const current = stats.get(item.dishId) || {
           name: item.name,
           quantity: 0,
           revenue: 0
         };
-        stats.set(item.shawarmaId, {
+        stats.set(item.dishId, {
           name: item.name,
           quantity: current.quantity + item.quantity,
           revenue: current.revenue + item.subtotal
@@ -172,11 +172,11 @@ const PopularItems: React.FC<{ orders: Order[]; shawarmas?: Shawarma[] }> = ({ o
 
 const DashboardPage: React.FC = () => {
   const { 
-    data: shawarmas = [], 
-    isLoading: shawarmasLoading, 
-    error: shawarmasError,
-    refetch: refetchShawarmas 
-  } = useShawarmas();
+    data: dishes = [], 
+    isLoading: dishesLoading, 
+    error: dishesError,
+    refetch: refetchDishes 
+  } = useDishes();
   
   const { 
     data: orders = [], 
@@ -197,17 +197,17 @@ const DashboardPage: React.FC = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refetchShawarmas(), refetchOrders(), refetchStats()]);
+    await Promise.all([refetchDishes(), refetchOrders(), refetchStats()]);
     setRefreshing(false);
   };
 
-  const loading = shawarmasLoading || ordersLoading || statsLoading || refreshing;
-  const error = shawarmasError || ordersError || statsError;
+  const loading = dishesLoading || ordersLoading || statsLoading || refreshing;
+  const error = dishesError || ordersError || statsError;
 
   // Статистика вычисляется на основе данных с бэкенда + локальные вычисления
   const stats = React.useMemo(() => {
-    const totalShawarmas = shawarmas.length;
-    const availableShawarmas = shawarmas.filter(s => s.isAvailable).length;
+    const totalDishes = dishes.length;
+    const availableDishes = dishes.filter(s => s.isAvailable).length;
     
     // Активные заказы (Новый, Принят или Готовится) - вычисляем локально
     const activeOrders = orders.filter(o => 
@@ -229,8 +229,8 @@ const DashboardPage: React.FC = () => {
     const averageOrderValue = orderStats?.averageOrderValue ?? (totalOrders > 0 ? totalRevenue / totalOrders : 0);
 
     return {
-      totalShawarmas,
-      availableShawarmas,
+      totalDishes,
+      availableDishes,
       totalOrders,
       activeOrders,
       totalRevenue,
@@ -238,7 +238,7 @@ const DashboardPage: React.FC = () => {
       todayRevenue,
       averageOrderValue
     };
-  }, [shawarmas, orders, orderStats]);
+  }, [dishes, orders, orderStats]);
 
   const recentOrders = orders
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -268,7 +268,7 @@ const DashboardPage: React.FC = () => {
             Панель управления
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Обзор вашего бизнеса шаурмы
+            Обзор работы заведения
           </Typography>
         </Box>
         <Button
@@ -285,7 +285,7 @@ const DashboardPage: React.FC = () => {
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
             title="В меню"
-            value={`${stats.availableShawarmas}/${stats.totalShawarmas}`}
+            value={`${stats.availableDishes}/${stats.totalDishes}`}
             icon={<RestaurantIcon />}
             color="#1976d2"
             subtitle="Доступно / Всего"
@@ -375,7 +375,7 @@ const DashboardPage: React.FC = () => {
                   <LinearProgress />
                 </Box>
               ) : orders.length > 0 ? (
-                <PopularItems orders={orders} shawarmas={shawarmas} />
+                <PopularItems orders={orders} dishes={dishes} />
               ) : (
                 <Typography color="text.secondary" align="center" sx={{ py: 3 }}>
                   Нет данных о продажах

@@ -241,40 +241,40 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Menu
 
     func getCategories() async throws -> [String] {
-        try await performRequest(path: "/shawarma/categories")
+        try await performRequest(path: "/dishes/categories")
     }
 
-    func getMenu() async throws -> [Shawarma] {
-        try await performRequest(path: "/shawarma")
+    func getMenu() async throws -> [Dish] {
+        try await performRequest(path: "/dishes")
     }
 
-    func getShawarma(id: Int) async throws -> Shawarma {
-        try await performRequest(path: "/shawarma/\(id)")
+    func getDish(id: Int) async throws -> Dish {
+        try await performRequest(path: "/dishes/\(id)")
     }
 
-    func getShawarmaAddons(shawarmaId: Int) async throws -> [AddonCategory] {
-        try await performRequest(path: "/addons/shawarma/\(shawarmaId)")
+    func getDishAddons(dishId: Int) async throws -> [AddonCategory] {
+        try await performRequest(path: "/addons/dish/\(dishId)")
     }
 
     // MARK: - Admin: Menu CRUD
 
-    func createShawarma(request: CreateShawarmaRequest) async throws -> Shawarma {
-        try await performRequest(path: "/shawarma", method: "POST", body: request)
+    func createDish(request: CreateDishRequest) async throws -> Dish {
+        try await performRequest(path: "/dishes", method: "POST", body: request)
     }
 
-    func updateShawarma(id: Int, request: UpdateShawarmaRequest) async throws -> Shawarma {
-        try await performRequest(path: "/shawarma/\(id)", method: "PUT", body: request)
+    func updateDish(id: Int, request: UpdateDishRequest) async throws -> Dish {
+        try await performRequest(path: "/dishes/\(id)", method: "PUT", body: request)
     }
 
-    func deleteShawarma(id: Int) async throws {
-        let _: APIResponse<EmptyResponse> = try await performRequest(path: "/shawarma/\(id)", method: "DELETE")
+    func deleteDish(id: Int) async throws {
+        let _: APIResponse<EmptyResponse> = try await performRequest(path: "/dishes/\(id)", method: "DELETE")
     }
 
-    func updateShawarmaAvailability(id: Int, isAvailable: Bool) async throws {
+    func updateDishAvailability(id: Int, isAvailable: Bool) async throws {
         struct AvailabilityRequest: Encodable {
             let isAvailable: Bool
         }
-        let _: APIResponse<Shawarma> = try await performRequest(path: "/shawarma/\(id)", method: "PUT", body: AvailabilityRequest(isAvailable: isAvailable))
+        let _: APIResponse<Dish> = try await performRequest(path: "/dishes/\(id)", method: "PUT", body: AvailabilityRequest(isAvailable: isAvailable))
     }
 
     // MARK: - Images
@@ -284,11 +284,11 @@ final class APIClient: @unchecked Sendable {
         return URL(string: base + filePath)
     }
 
-    func getShawarmaImages(shawarmaId: Int) async throws -> [ImageInfo] {
-        try await performRequest(path: "/image/shawarma/\(shawarmaId)")
+    func getDishImages(dishId: Int) async throws -> [ImageInfo] {
+        try await performRequest(path: "/image/dish/\(dishId)")
     }
 
-    func uploadImage(shawarmaId: Int, imageData: Data, fileName: String) async throws -> ImageUploadResponse {
+    func uploadImage(dishId: Int, imageData: Data, fileName: String) async throws -> ImageUploadResponse {
         let boundary = UUID().uuidString
         let contentType = "multipart/form-data; boundary=\(boundary)"
 
@@ -301,7 +301,7 @@ final class APIClient: @unchecked Sendable {
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
         let (data, response) = try await rawRequest(
-            path: "/image/upload/\(shawarmaId)",
+            path: "/image/upload/\(dishId)",
             method: "POST",
             body: body,
             contentType: contentType
@@ -458,20 +458,20 @@ final class APIClient: @unchecked Sendable {
         }
     }
 
-    func linkAddonToShawarma(request: LinkAddonRequest) async throws {
+    func linkAddonToDish(request: LinkAddonRequest) async throws {
         let _: APIResponse<EmptyResponse> = try await performRequest(
-            path: "/addons/link-to-shawarma",
+            path: "/addons/link-to-dish",
             method: "POST",
             body: request
         )
     }
 
-    func unlinkAddonFromShawarma(shawarmaId: Int, addonId: Int) async throws {
+    func unlinkAddonFromDish(dishId: Int, addonId: Int) async throws {
         let (data, response) = try await rawRequest(
-            path: "/addons/unlink-from-shawarma",
+            path: "/addons/unlink-from-dish",
             method: "DELETE",
             queryItems: [
-                URLQueryItem(name: "shawarmaId", value: "\(shawarmaId)"),
+                URLQueryItem(name: "dishId", value: "\(dishId)"),
                 URLQueryItem(name: "addonId", value: "\(addonId)")
             ]
         )

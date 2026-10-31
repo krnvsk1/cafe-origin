@@ -13,7 +13,7 @@ export const getAccessToken = (): string | null => {
   let token = localStorage.getItem('token');
 
   if (!token) {
-    const authStorage = localStorage.getItem('kumashaurma-auth');
+    const authStorage = localStorage.getItem('cafe-auth');
     if (authStorage) {
       try {
         const authData = JSON.parse(authStorage);
@@ -72,7 +72,7 @@ export const refreshAccessToken = (): Promise<string | null> => {
 
 const forceLogout = () => {
   localStorage.removeItem('token');
-  localStorage.removeItem('kumashaurma-auth'); // Очищаем и Zustand storage
+  localStorage.removeItem('cafe-auth'); // Очищаем и Zustand storage
   // Мы не можем напрямую вызвать useAuthStore.getState().logout() здесь — App слушает событие и выходит сам
   window.dispatchEvent(new Event('auth-unauthorized'));
 };

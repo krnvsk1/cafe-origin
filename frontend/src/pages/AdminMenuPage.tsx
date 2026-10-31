@@ -51,7 +51,7 @@ import {
   Search as SearchIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
-import { useShawarmas, useDeleteShawarma, useUpdateShawarmaAvailability } from '../api/hooks';
+import { useDishes, useDeleteDish, useUpdateDishAvailability } from '../api/hooks';
 import { KitchenStationSelect, KitchenStationsButton } from '../components/KitchenStationControls';
 import { useKitchenStations } from '../api/staff';
 import { 
@@ -62,7 +62,7 @@ import {
   useCreateAddon,
   useUpdateAddon,
   useDeleteAddon,
-  useLinkAddonToShawarma
+  useLinkAddonToDish
 } from '../hooks/useAddons';
 import type { AddonCategory, Addon } from '../types';
 import MenuImportButton from '../components/MenuImportButton';
@@ -109,8 +109,8 @@ const AdminMenuPage: React.FC = () => {
   // Новый диалог для привязки группы к товару
   const [linkCategoryDialog, setLinkCategoryDialog] = useState<{
     open: boolean;
-    shawarmaId?: number;
-    shawarmaName?: string;
+    dishId?: number;
+    dishName?: string;
   }>({ open: false });
 
   const [snackbar, setSnackbar] = useState({
@@ -120,13 +120,13 @@ const AdminMenuPage: React.FC = () => {
   });
 
   // Хуки для данных
-  const { data: shawarmas = [] } = useShawarmas();
+  const { data: dishes = [] } = useDishes();
   const [expandedParent, setExpandedParent] = useState<number | null>(null);
 
   // Разделяем на родителей и дочерние
   const parents = useMemo(() => 
-    shawarmas.filter(s => !s.parentId),
-    [shawarmas]
+    dishes.filter(s => !s.parentId),
+    [dishes]
   );
   const { data: categories = [] } = useAddonCategories();
   const { data: stations = [] } = useKitchenStations();
@@ -142,7 +142,7 @@ const AdminMenuPage: React.FC = () => {
     [parents],
   );
   const shownParents = useMemo(() => parents.filter(p => {
-    const kids = shawarmas.filter(s => s.parentId === p.id);
+    const kids = dishes.filter(s => s.parentId === p.id);
     const items = kids.length ? kids : [p];
     if (q && ![p, ...kids].some(x => x.name.toLowerCase().includes(q) || (x.description ?? '').toLowerCase().includes(q))) return false;
     if (section !== 'all' && (section === '' ? !!p.category : p.category !== section)) return false;
@@ -154,7 +154,7 @@ const AdminMenuPage: React.FC = () => {
       if (![p, ...kids].some(x => of(x) === station)) return false;
     }
     return true;
-  }), [parents, shawarmas, q, section, stock, station, stations]);
+  }), [parents, dishes, q, section, stock, station, stations]);
   const shownCategories = useMemo(() => !q ? categories : categories
     .map(c => (c.name.toLowerCase().includes(q) ? c : { ...c, addons: c.addons.filter(a => a.name.toLowerCase().includes(q)) }))
     .filter(c => c.name.toLowerCase().includes(q) || c.addons.length > 0), [categories, q]);
@@ -162,8 +162,8 @@ const AdminMenuPage: React.FC = () => {
   const resetFilters = () => { setSearch(''); setSection('all'); setStock('all'); setStation('all'); };
   
   // Мутации
-  const deleteProduct = useDeleteShawarma();
-  const updateAvailability = useUpdateShawarmaAvailability();
+  const deleteProduct = useDeleteDish();
+  const updateAvailability = useUpdateDishAvailability();
   
   const createCategory = useCreateAddonCategory();
   const updateCategory = useUpdateAddonCategory();
@@ -171,7 +171,7 @@ const AdminMenuPage: React.FC = () => {
   const createAddon = useCreateAddon();
   const updateAddon = useUpdateAddon();
   const deleteAddon = useDeleteAddon();
-  const linkAddon = useLinkAddonToShawarma();
+  const linkAddon = useLinkAddonToDish();
 
   const showMessage = (message: string, severity: 'success' | 'error') => {
     setSnackbar({ open: true, message, severity });
@@ -258,7 +258,7 @@ const AdminMenuPage: React.FC = () => {
   };
 
   // Привязка группы добавок к товару
-  const handleLinkCategoryToShawarma = async (categoryId: number, shawarmaId: number) => {
+  const handleLinkCategoryToDish = async (categoryId: number, dishId: number) => {
     try {
       // Получаем все добавки из этой группы
       const category = categories.find(c => c.id === categoryId);
@@ -269,7 +269,7 @@ const AdminMenuPage: React.FC = () => {
       for (const addon of category.addons) {
         await linkAddon.mutateAsync({
           addonId: addon.id,
-          shawarmaId,
+          dishId,
           isDefault: false,
           maxQuantity: 1
         });
@@ -303,7 +303,7 @@ const AdminMenuPage: React.FC = () => {
 
   // Массовое переключение доступности всех детей родителя
   const handleToggleAllChildren = (parentId: number, isAvailable: boolean) => {
-    shawarmas
+    dishes
       .filter(s => s.parentId === parentId)
       .forEach(child => {
         updateAvailability.mutate({ id: child.id, isAvailable });
@@ -392,7 +392,7 @@ const AdminMenuPage: React.FC = () => {
         <TabPanel value={tabValue} index={0}>
           <Grid container spacing={2}>
             {shownParents.map((parent) => {
-              const children = shawarmas.filter(s => s.parentId === parent.id);
+              const children = dishes.filter(s => s.parentId === parent.id);
               const isExpanded = expandedParent === parent.id;
               const availableCount = children.filter(c => c.isAvailable).length;
               const minPrice = children.length > 0
@@ -502,8 +502,8 @@ const AdminMenuPage: React.FC = () => {
                             size="small"
                             onClick={() => setLinkCategoryDialog({
                               open: true,
-                              shawarmaId: parent.id,
-                              shawarmaName: parent.name
+                              dishId: parent.id,
+                              dishName: parent.name
                             })}
                             color="primary"
                             sx={{ mx: 0.5 }}
@@ -729,10 +729,10 @@ const AdminMenuPage: React.FC = () => {
       <LinkCategoryDialog
         open={linkCategoryDialog.open}
         onClose={() => setLinkCategoryDialog({ open: false })}
-        shawarmaId={linkCategoryDialog.shawarmaId}
-        shawarmaName={linkCategoryDialog.shawarmaName}
+        dishId={linkCategoryDialog.dishId}
+        dishName={linkCategoryDialog.dishName}
         categories={categories}
-        onLink={handleLinkCategoryToShawarma}
+        onLink={handleLinkCategoryToDish}
         loading={linkAddon.isPending}
       />
 
@@ -1016,18 +1016,18 @@ const AddonDialog: React.FC<{
 const LinkCategoryDialog: React.FC<{
   open: boolean;
   onClose: () => void;
-  shawarmaId?: number;
-  shawarmaName?: string;
+  dishId?: number;
+  dishName?: string;
   categories: AddonCategory[];
-  onLink: (categoryId: number, shawarmaId: number) => void;
+  onLink: (categoryId: number, dishId: number) => void;
   loading: boolean;
-}> = ({ open, onClose, shawarmaId, shawarmaName, categories, onLink, loading }) => {
+}> = ({ open, onClose, dishId, dishName, categories, onLink, loading }) => {
   const [selectedCategory, setSelectedCategory] = useState<number | ''>('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (shawarmaId && selectedCategory) {
-      onLink(selectedCategory as number, shawarmaId);
+    if (dishId && selectedCategory) {
+      onLink(selectedCategory as number, dishId);
       onClose();
     }
   };
@@ -1036,7 +1036,7 @@ const LinkCategoryDialog: React.FC<{
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <form onSubmit={handleSubmit}>
         <DialogTitle>
-          Привязать группу добавок к товару "{shawarmaName}"
+          Привязать группу добавок к товару "{dishName}"
         </DialogTitle>
         <DialogContent>
           <FormControl fullWidth margin="normal">

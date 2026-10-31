@@ -1,23 +1,22 @@
 import Foundation
 
-// MARK: - Shawarma
+// MARK: - Dish
 
-struct Shawarma: Codable, Identifiable, Sendable, Hashable {
+struct Dish: Codable, Identifiable, Sendable, Hashable {
     let id: Int
     let name: String
     let price: Double
     let description: String
     let category: String
     let isSpicy: Bool
-    let hasCheese: Bool
     let isAvailable: Bool
     let isPromo: Bool
     let createdAt: String?
     let updatedAt: String?
-    let images: [ShawarmaImage]?
+    let images: [DishImage]?
     let parentId: Int?
     let isCard: Bool?
-    let children: [Shawarma]?
+    let children: [Dish]?
     let sortOrder: Int?
 
     var primaryImage: String? {
@@ -41,7 +40,7 @@ struct Shawarma: Codable, Identifiable, Sendable, Hashable {
     }
 
     /// Available children (nil for child items)
-    var availableChildren: [Shawarma]? {
+    var availableChildren: [Dish]? {
         guard isParentCard else { return nil }
         return children?.filter { $0.isAvailable }
     }
@@ -50,7 +49,7 @@ struct Shawarma: Codable, Identifiable, Sendable, Hashable {
         hasher.combine(id)
     }
 
-    static func == (lhs: Shawarma, rhs: Shawarma) -> Bool {
+    static func == (lhs: Dish, rhs: Dish) -> Bool {
         lhs.id == rhs.id
     }
 
@@ -64,24 +63,23 @@ struct Shawarma: Codable, Identifiable, Sendable, Hashable {
         description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
         category = try container.decodeIfPresent(String.self, forKey: .category) ?? ""
         isSpicy = try container.decodeIfPresent(Bool.self, forKey: .isSpicy) ?? false
-        hasCheese = try container.decodeIfPresent(Bool.self, forKey: .hasCheese) ?? false
         isAvailable = try container.decodeIfPresent(Bool.self, forKey: .isAvailable) ?? true
         isPromo = try container.decodeIfPresent(Bool.self, forKey: .isPromo) ?? false
         createdAt = try? container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try? container.decodeIfPresent(String.self, forKey: .updatedAt)
-        images = try? container.decodeIfPresent([ShawarmaImage].self, forKey: .images)
+        images = try? container.decodeIfPresent([DishImage].self, forKey: .images)
         parentId = try? container.decodeIfPresent(Int.self, forKey: .parentId)
         isCard = try? container.decodeIfPresent(Bool.self, forKey: .isCard)
-        children = try? container.decodeIfPresent([Shawarma].self, forKey: .children)
+        children = try? container.decodeIfPresent([Dish].self, forKey: .children)
         sortOrder = try? container.decodeIfPresent(Int.self, forKey: .sortOrder)
     }
 }
 
-// MARK: - ShawarmaImage
+// MARK: - DishImage
 
-struct ShawarmaImage: Codable, Identifiable, Sendable {
+struct DishImage: Codable, Identifiable, Sendable {
     let id: Int
-    let shawarmaId: Int?
+    let dishId: Int?
     let fileName: String
     let filePath: String
     let isPrimary: Bool
@@ -198,7 +196,7 @@ struct Order: Codable, Identifiable, Sendable {
 struct OrderItem: Codable, Identifiable, Sendable {
     let id: Int
     let orderId: Int?
-    let shawarmaId: Int?
+    let dishId: Int?
     let name: String
     let quantity: Int
     let price: Double
@@ -245,16 +243,16 @@ enum OrderStatus: String, Sendable {
 
 struct CartItem: Identifiable, Sendable, Codable {
     let id: UUID
-    let shawarma: Shawarma          // Parent card
+    let dish: Dish          // Parent card
     let quantity: Int
-    let selectedChild: Shawarma?    // Selected child product (variant)
+    let selectedChild: Dish?    // Selected child product (variant)
     let selectedAddons: [SelectedAddon]
     let unitPrice: Double
     let totalPrice: Double
 
     /// Display name for the cart row
     var displayName: String {
-        selectedChild?.name ?? shawarma.name
+        selectedChild?.name ?? dish.name
     }
 
     /// Variant name for display
@@ -264,29 +262,29 @@ struct CartItem: Identifiable, Sendable, Codable {
 
     /// Valid item: parent card must have a selected child
     var isValid: Bool {
-        if shawarma.isParentCard && shawarma.availableChildren != nil {
+        if dish.isParentCard && dish.availableChildren != nil {
             return selectedChild != nil
         }
         return true
     }
 
-    /// The shawarma ID to send to the backend (child if selected, parent otherwise)
-    var orderShawarmaId: Int {
-        selectedChild?.id ?? shawarma.id
+    /// The dish ID to send to the backend (child if selected, parent otherwise)
+    var orderDishId: Int {
+        selectedChild?.id ?? dish.id
     }
 
     init(
-        shawarma: Shawarma,
+        dish: Dish,
         quantity: Int,
-        selectedChild: Shawarma? = nil,
+        selectedChild: Dish? = nil,
         selectedAddons: [SelectedAddon] = []
     ) {
         self.id = UUID()
-        self.shawarma = shawarma
+        self.dish = dish
         self.quantity = quantity
         self.selectedChild = selectedChild
         self.selectedAddons = selectedAddons
-        self.unitPrice = selectedChild?.price ?? shawarma.displayPrice
+        self.unitPrice = selectedChild?.price ?? dish.displayPrice
         let addonsPrice = selectedAddons.reduce(0.0) { $0 + $1.price * Double($1.quantity) }
         self.totalPrice = (unitPrice + addonsPrice) * Double(quantity)
     }
@@ -295,11 +293,11 @@ struct CartItem: Identifiable, Sendable, Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
-        shawarma = try container.decode(Shawarma.self, forKey: .shawarma)
+        dish = try container.decode(Dish.self, forKey: .dish)
         quantity = try container.decodeIfPresent(Int.self, forKey: .quantity) ?? 1
-        selectedChild = try? container.decodeIfPresent(Shawarma.self, forKey: .selectedChild)
+        selectedChild = try? container.decodeIfPresent(Dish.self, forKey: .selectedChild)
         selectedAddons = try container.decodeIfPresent([SelectedAddon].self, forKey: .selectedAddons) ?? []
-        unitPrice = try container.decodeIfPresent(Double.self, forKey: .unitPrice) ?? (selectedChild?.price ?? shawarma.displayPrice)
+        unitPrice = try container.decodeIfPresent(Double.self, forKey: .unitPrice) ?? (selectedChild?.price ?? dish.displayPrice)
         totalPrice = try container.decodeIfPresent(Double.self, forKey: .totalPrice) ?? 0
     }
 }
@@ -389,7 +387,7 @@ struct CreateOrderRequest: Encodable {
 }
 
 struct CreateOrderItem: Encodable {
-    let shawarmaId: Int
+    let dishId: Int
     let name: String
     let quantity: Int
     let variantId: Int?
@@ -402,25 +400,23 @@ struct CreateOrderAddon: Encodable {
     let quantity: Int
 }
 
-// MARK: - Admin: Shawarma CRUD DTOs
+// MARK: - Admin: Dish CRUD DTOs
 
-struct CreateShawarmaRequest: Encodable {
+struct CreateDishRequest: Encodable {
     let name: String
     let price: Double?
     let description: String?
     let isSpicy: Bool?
-    let hasCheese: Bool?
     let isAvailable: Bool?
     let isPromo: Bool?
     let parentId: Int?
 }
 
-struct UpdateShawarmaRequest: Encodable {
+struct UpdateDishRequest: Encodable {
     let name: String?
     let price: Double?
     let description: String?
     let isSpicy: Bool?
-    let hasCheese: Bool?
     let isAvailable: Bool?
     let isPromo: Bool?
 }
@@ -496,7 +492,7 @@ struct UpdateAddonRequest: Encodable {
 }
 
 struct LinkAddonRequest: Encodable {
-    let shawarmaId: Int
+    let dishId: Int
     let addonId: Int
     let customPrice: Double?
     let isDefault: Bool?

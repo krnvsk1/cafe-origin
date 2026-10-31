@@ -38,17 +38,17 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import ReactCrop, { type Crop, type PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import {
-  useShawarma,
-  useCreateShawarma,
-  useUpdateShawarma,
-  useDeleteShawarma,
-  useShawarmas,
+  useDish,
+  useCreateDish,
+  useUpdateDish,
+  useDeleteDish,
+  useDishes,
   useMenuSections,
   useUploadImage,
-  useShawarmaImages,
+  useDishImages,
   useDeleteImage,
 } from '../api/hooks';
-import type { CreateShawarmaDto, Shawarma, ShawarmaImage } from '../types';
+import type { CreateDishDto, Dish, DishImage } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import MenuItemCard, { BADGES } from '../components/MenuItemCard';
 import { tokens } from '../theme';
@@ -129,10 +129,10 @@ const SettingRow: React.FC<{
   </Box>
 );
 
-const BADGE_OPTIONS: { value: CreateShawarmaDto['badge']; label: string; color?: string }[] = [
+const BADGE_OPTIONS: { value: CreateDishDto['badge']; label: string; color?: string }[] = [
   { value: null, label: 'Без метки' },
   ...Object.entries(BADGES).map(([value, b]) => ({
-    value: value as CreateShawarmaDto['badge'],
+    value: value as CreateDishDto['badge'],
     label: b.label,
     color: b.color,
   })),
@@ -162,35 +162,34 @@ const CreateMenuItemPage: React.FC = () => {
   const [cropProcessing, setCropProcessing] = React.useState(false);
 
   const uploadImage = useUploadImage();
-  const { data: images = [], refetch: refetchImages } = useShawarmaImages(numericId);
+  const { data: images = [], refetch: refetchImages } = useDishImages(numericId);
   const deleteImage = useDeleteImage();
 
   // Данные товара
-  const { data: allShawarmas = [] } = useShawarmas();
+  const { data: allDishes = [] } = useDishes();
   const parentCards = React.useMemo(
-    () => allShawarmas.filter(s => (s.parentId === null || s.parentId === undefined) && s.id !== numericId),
-    [allShawarmas, numericId]
+    () => allDishes.filter(s => (s.parentId === null || s.parentId === undefined) && s.id !== numericId),
+    [allDishes, numericId]
   );
   const variants = React.useMemo(
-    () => (isEditMode ? allShawarmas.filter(s => s.parentId === numericId) : []),
-    [allShawarmas, isEditMode, numericId]
+    () => (isEditMode ? allDishes.filter(s => s.parentId === numericId) : []),
+    [allDishes, isEditMode, numericId]
   );
   const { data: menuSections = [] } = useMenuSections();
-  const { data: existingShawarma, isLoading: isLoadingShawarma } = useShawarma(isEditMode ? numericId : 0);
-  const createShawarma = useCreateShawarma();
-  const updateShawarma = useUpdateShawarma();
-  const deleteShawarma = useDeleteShawarma();
+  const { data: existingDish, isLoading: isLoadingDish } = useDish(isEditMode ? numericId : 0);
+  const createDish = useCreateDish();
+  const updateDish = useUpdateDish();
+  const deleteDish = useDeleteDish();
 
   const [searchParams] = useSearchParams();
   const urlParentId = searchParams.get('parentId');
 
   const [kind, setKind] = React.useState<Kind>(urlParentId ? 'variant' : 'card');
-  const [formData, setFormData] = React.useState<CreateShawarmaDto>({
+  const [formData, setFormData] = React.useState<CreateDishDto>({
     name: '',
     price: 0,
     description: '',
     isSpicy: false,
-    hasCheese: false,
     isAvailable: true,
     parentId: urlParentId ? Number(urlParentId) : null,
     category: '',
@@ -209,22 +208,21 @@ const CreateMenuItemPage: React.FC = () => {
 
   // Заполняем форму при редактировании
   React.useEffect(() => {
-    if (existingShawarma) {
+    if (existingDish) {
       setFormData({
-        name: existingShawarma.name,
-        price: existingShawarma.price,
-        description: existingShawarma.description,
-        isSpicy: existingShawarma.isSpicy,
-        hasCheese: existingShawarma.hasCheese,
-        isAvailable: existingShawarma.isAvailable,
-        parentId: existingShawarma.parentId ?? null,
-        category: existingShawarma.category ?? '',
-        badge: existingShawarma.badge ?? null,
-        availableOrderTypes: existingShawarma.availableOrderTypes ?? null,
+        name: existingDish.name,
+        price: existingDish.price,
+        description: existingDish.description,
+        isSpicy: existingDish.isSpicy,
+        isAvailable: existingDish.isAvailable,
+        parentId: existingDish.parentId ?? null,
+        category: existingDish.category ?? '',
+        badge: existingDish.badge ?? null,
+        availableOrderTypes: existingDish.availableOrderTypes ?? null,
       });
-      setKind(existingShawarma.parentId ? 'variant' : 'card');
+      setKind(existingDish.parentId ? 'variant' : 'card');
     }
-  }, [existingShawarma]);
+  }, [existingDish]);
 
   // Переход между товарами без размонтирования — сбрасываем несохранённые фото и ошибки
   React.useEffect(() => {
@@ -233,13 +231,13 @@ const CreateMenuItemPage: React.FC = () => {
     setSaved(false);
   }, [id]);
 
-  const isPending = createShawarma.isPending || updateShawarma.isPending || deleteShawarma.isPending || saved;
+  const isPending = createDish.isPending || updateDish.isPending || deleteDish.isPending || saved;
 
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
     setSnackbar({ open: true, message, severity });
   };
 
-  const handleChange = <K extends keyof CreateShawarmaDto>(field: K, value: CreateShawarmaDto[K]) => {
+  const handleChange = <K extends keyof CreateDishDto>(field: K, value: CreateDishDto[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (field in errors) setErrors(prev => ({ ...prev, [field]: undefined }));
   };
@@ -408,12 +406,12 @@ const CreateMenuItemPage: React.FC = () => {
     }
   };
 
-  const uploadTempImages = async (shawarmaId: number) => {
+  const uploadTempImages = async (dishId: number) => {
     if (tempImages.length === 0) return;
     setUploading(true);
     try {
       for (const tempImage of tempImages) {
-        await uploadImage.mutateAsync({ shawarmaId, file: tempImage.file });
+        await uploadImage.mutateAsync({ dishId, file: tempImage.file });
       }
     } finally {
       setUploading(false);
@@ -423,7 +421,7 @@ const CreateMenuItemPage: React.FC = () => {
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
-    const payload: CreateShawarmaDto = {
+    const payload: CreateDishDto = {
       ...formData,
       name: formData.name.trim(),
       description: formData.description?.trim() ?? '',
@@ -439,11 +437,11 @@ const CreateMenuItemPage: React.FC = () => {
 
     try {
       if (isEditMode) {
-        await updateShawarma.mutateAsync({ id: numericId, ...payload });
+        await updateDish.mutateAsync({ id: numericId, ...payload });
         await uploadTempImages(numericId);
         showSnackbar(`«${payload.name}» сохранён`, 'success');
       } else {
-        const result = await createShawarma.mutateAsync(payload);
+        const result = await createDish.mutateAsync(payload);
         await uploadTempImages(result.id);
         showSnackbar(`«${result.name}» добавлен в меню`, 'success');
       }
@@ -457,7 +455,7 @@ const CreateMenuItemPage: React.FC = () => {
 
   const handleDelete = async () => {
     try {
-      await deleteShawarma.mutateAsync(numericId);
+      await deleteDish.mutateAsync(numericId);
       setConfirmDelete(false);
       showSnackbar('Товар удалён', 'success');
       setSaved(true);
@@ -468,7 +466,7 @@ const CreateMenuItemPage: React.FC = () => {
     }
   };
 
-  if (isLoadingShawarma) {
+  if (isLoadingDish) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', gap: 2 }}>
         <CircularProgress size={36} />
@@ -486,7 +484,7 @@ const CreateMenuItemPage: React.FC = () => {
       isPrimary: false,
       isNew: true,
     })),
-    ...images.map((image: ShawarmaImage) => ({
+    ...images.map((image: DishImage) => ({
       key: `img-${image.id}`,
       preview: resolveMediaUrl(image.filePath),
       onDelete: () => handleDeleteExistingImage(image.id),
@@ -502,13 +500,12 @@ const CreateMenuItemPage: React.FC = () => {
 
   const parentCard = parentCards.find(c => c.id === formData.parentId) ?? null;
 
-  const previewItem: Shawarma = {
+  const previewItem: Dish = {
     id: 0,
     name: formData.name.trim() || 'Название товара',
     price: formData.price || 0,
     description: formData.description || '',
     isSpicy: !!formData.isSpicy,
-    hasCheese: !!formData.hasCheese,
     isAvailable: formData.isAvailable ?? true,
     badge: formData.badge ?? null,
     category: formData.category,
@@ -570,9 +567,9 @@ const CreateMenuItemPage: React.FC = () => {
           <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.6rem', sm: '2rem' } }}>
             {title}
           </Typography>
-          {isEditMode && existingShawarma && (
+          {isEditMode && existingDish && (
             <Typography color="text.secondary" noWrap>
-              {kind === 'variant' && parentCard ? `${parentCard.name} · ` : ''}{existingShawarma.name}
+              {kind === 'variant' && parentCard ? `${parentCard.name} · ` : ''}{existingDish.name}
             </Typography>
           )}
         </Box>
@@ -776,14 +773,6 @@ const CreateMenuItemPage: React.FC = () => {
                 description="На карточке появится метка «Острое»"
                 checked={!!formData.isSpicy}
                 onChange={v => handleChange('isSpicy', v)}
-                disabled={isPending}
-              />
-              <Divider />
-              <SettingRow
-                title="С сыром"
-                description="Пометка для гостей, которые ищут блюда с сыром"
-                checked={!!formData.hasCheese}
-                onChange={v => handleChange('hasCheese', v)}
                 disabled={isPending}
               />
             </Box>
@@ -1072,7 +1061,7 @@ const CreateMenuItemPage: React.FC = () => {
                   <Box sx={{ width: 56, height: 56, borderRadius: '14px', overflow: 'hidden', bgcolor: t.surfaceMuted, flexShrink: 0, display: 'grid', placeItems: 'center' }}>
                     {parentCard.primaryImage || parentCard.images?.[0]
                       ? <Box component="img" src={resolveMediaUrl(parentCard.primaryImage || parentCard.images?.[0]?.filePath)} alt="" sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <Typography aria-hidden sx={{ fontSize: 28 }}>🌯</Typography>}
+                      : <Typography aria-hidden sx={{ fontSize: 28 }}>🍽️</Typography>}
                   </Box>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography sx={{ fontWeight: 600 }} noWrap>{parentCard.name}</Typography>
@@ -1115,7 +1104,7 @@ const CreateMenuItemPage: React.FC = () => {
       </Box>
 
       {/* Подтверждение удаления */}
-      <Dialog open={confirmDelete} onClose={() => !deleteShawarma.isPending && setConfirmDelete(false)} maxWidth="xs" fullWidth>
+      <Dialog open={confirmDelete} onClose={() => !deleteDish.isPending && setConfirmDelete(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Удалить «{formData.name}»?</DialogTitle>
         <DialogContent>
           <Typography color="text.secondary">
@@ -1125,15 +1114,15 @@ const CreateMenuItemPage: React.FC = () => {
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
-          <Button onClick={() => setConfirmDelete(false)} disabled={deleteShawarma.isPending} sx={{ color: 'text.secondary' }}>
+          <Button onClick={() => setConfirmDelete(false)} disabled={deleteDish.isPending} sx={{ color: 'text.secondary' }}>
             Отмена
           </Button>
           <Button
             variant="contained"
             color="error"
             onClick={handleDelete}
-            disabled={deleteShawarma.isPending}
-            startIcon={deleteShawarma.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}
+            disabled={deleteDish.isPending}
+            startIcon={deleteDish.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}
           >
             Удалить
           </Button>

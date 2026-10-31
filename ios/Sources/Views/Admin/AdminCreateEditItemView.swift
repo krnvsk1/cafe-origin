@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - Admin Create / Edit Item View
 
 struct AdminCreateEditItemView: View {
-    let shawarma: Shawarma?
-    let parentShawarma: Shawarma?  // Pre-set parent for creating a child
+    let dish: Dish?
+    let parentDish: Dish?  // Pre-set parent for creating a child
     let onSave: () -> Void
 
     // MARK: - Form State
@@ -13,7 +13,6 @@ struct AdminCreateEditItemView: View {
     @State private var priceText: String = ""
     @State private var description: String = ""
     @State private var isSpicy: Bool = false
-    @State private var hasCheese: Bool = false
     @State private var isAvailable: Bool = true
     @State private var isPromo: Bool = false
 
@@ -21,7 +20,7 @@ struct AdminCreateEditItemView: View {
 
     @State private var isChild: Bool = false
     @State private var selectedParentId: Int? = nil
-    @State private var parentCards: [Shawarma] = []
+    @State private var parentCards: [Dish] = []
 
     // MARK: - UI State
 
@@ -32,8 +31,8 @@ struct AdminCreateEditItemView: View {
 
     // MARK: - Computed
 
-    private var isEditing: Bool { shawarma != nil }
-    private var isCreatingChild: Bool { parentShawarma != nil && shawarma == nil }
+    private var isEditing: Bool { dish != nil }
+    private var isCreatingChild: Bool { parentDish != nil && dish == nil }
     private var screenTitle: String {
         if isCreatingChild { return "Новая позиция" }
         return isEditing ? "Редактировать" : "Новое блюдо"
@@ -51,9 +50,9 @@ struct AdminCreateEditItemView: View {
 
     // MARK: - Init
 
-    init(shawarma: Shawarma? = nil, parentShawarma: Shawarma? = nil, onSave: @escaping () -> Void) {
-        self.shawarma = shawarma
-        self.parentShawarma = parentShawarma
+    init(dish: Dish? = nil, parentDish: Dish? = nil, onSave: @escaping () -> Void) {
+        self.dish = dish
+        self.parentDish = parentDish
         self.onSave = onSave
     }
 
@@ -344,15 +343,6 @@ struct AdminCreateEditItemView: View {
                     title: "Острое",
                     isOn: $isSpicy
                 )
-
-                Divider()
-                    .padding(.leading, 44)
-
-                toggleRow(
-                    icon: "cheese",
-                    title: "С сыром",
-                    isOn: $hasCheese
-                )
             }
             .padding(.vertical, 4)
         }
@@ -431,20 +421,19 @@ struct AdminCreateEditItemView: View {
 
     private func prefillForm() {
         // If creating a child under a parent
-        if let parent = parentShawarma {
+        if let parent = parentDish {
             isChild = true
             selectedParentId = parent.id
             return
         }
 
-        guard let item = shawarma else { return }
+        guard let item = dish else { return }
         name = item.name
         priceText = item.price == floor(item.price)
             ? "\(Int(item.price))"
             : "\(item.price)"
         description = item.description
         isSpicy = item.isSpicy
-        hasCheese = item.hasCheese
         isAvailable = item.isAvailable
         isPromo = item.isPromo
 
@@ -497,35 +486,33 @@ struct AdminCreateEditItemView: View {
         errorMessage = ""
 
         do {
-            if let item = shawarma {
+            if let item = dish {
                 // Edit mode
-                let request = UpdateShawarmaRequest(
+                let request = UpdateDishRequest(
                     name: trimmedName,
                     price: price,
                     description: description.trimmingCharacters(in: .whitespaces).isEmpty
                         ? nil
                         : description.trimmingCharacters(in: .whitespaces),
                     isSpicy: isSpicy,
-                    hasCheese: hasCheese,
                     isAvailable: isAvailable,
                     isPromo: isPromo
                 )
-                _ = try await APIClient.shared.updateShawarma(id: item.id, request: request)
+                _ = try await APIClient.shared.updateDish(id: item.id, request: request)
             } else {
                 // Create mode
-                let request = CreateShawarmaRequest(
+                let request = CreateDishRequest(
                     name: trimmedName,
                     price: price,
                     description: description.trimmingCharacters(in: .whitespaces).isEmpty
                         ? nil
                         : description.trimmingCharacters(in: .whitespaces),
                     isSpicy: isSpicy,
-                    hasCheese: hasCheese,
                     isAvailable: isAvailable,
                     isPromo: isPromo,
                     parentId: isChildItem ? selectedParentId : nil
                 )
-                _ = try await APIClient.shared.createShawarma(request: request)
+                _ = try await APIClient.shared.createDish(request: request)
             }
 
             onSave()

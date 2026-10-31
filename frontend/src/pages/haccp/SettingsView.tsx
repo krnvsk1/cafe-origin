@@ -76,7 +76,7 @@ const ObjectDialog: React.FC<{ value: Partial<HaccpObject> & { kind: HaccpObject
       <DialogTitle>{value.id ? 'Изменить' : 'Добавить'}: {OBJECT_KINDS[kind].one.toLowerCase()}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
         <TextField label={ccp ? 'Контрольная точка' : 'Название'} value={f.name} onChange={e => setF({ ...f, name: e.target.value })} autoFocus
-          placeholder={ccp ? 'Жарка курицы для шаурмы — температура в толще' : kind === 'fridge' ? 'Холодильник для мяса' : ''} />
+          placeholder={ccp ? 'Жарка курицы — температура в толще' : kind === 'fridge' ? 'Холодильник для мяса' : ''} />
         {!ccp && <TextField label="Помещение" value={f.location} onChange={e => setF({ ...f, location: e.target.value })} placeholder="Горячий цех, склад…" />}
         {kind !== 'fryer' && (
           <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>

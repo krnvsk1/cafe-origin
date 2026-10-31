@@ -2,8 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from './client';
 import { saveOrderToken, getOrderToken } from '../utils/orderTokens';
 import type { 
-  Shawarma, 
-  CreateShawarmaDto,
+  Dish, 
+  CreateDishDto,
   Order, 
   CreateOrderDto, 
   UpdateOrderDto,
@@ -11,7 +11,7 @@ import type {
   OrderStats,
   HealthStatus,
   DashboardStats,
-  ShawarmaImage,
+  DishImage,
   User,
   UserDetail,
   AssignRoleDto,
@@ -26,86 +26,86 @@ import type {
   RestaurantSettings,
 } from '../types';
 
-// ==================== SHAWARMA HOOKS ====================
+// ==================== DISH HOOKS ====================
 
-export const useShawarmas = () => {
-  return useQuery<Shawarma[]>({
-    queryKey: ['shawarmas'],
-    queryFn: () => apiClient.get('/api/shawarma').then(res => res.data),
+export const useDishes = () => {
+  return useQuery<Dish[]>({
+    queryKey: ['dishes'],
+    queryFn: () => apiClient.get('/api/dishes').then(res => res.data),
     staleTime: 5 * 60 * 1000,
     retry: 2,
   });
 };
 
-export const useShawarma = (id: number) => {
-  return useQuery<Shawarma>({
-    queryKey: ['shawarma', id],
-    queryFn: () => apiClient.get(`/api/shawarma/${id}`).then(res => res.data),
+export const useDish = (id: number) => {
+  return useQuery<Dish>({
+    queryKey: ['dish', id],
+    queryFn: () => apiClient.get(`/api/dishes/${id}`).then(res => res.data),
     enabled: !!id,
   });
 };
 
-export const useCreateShawarma = () => {
+export const useCreateDish = () => {
   const queryClient = useQueryClient();
-  return useMutation<Shawarma, Error, CreateShawarmaDto>({
-    mutationFn: (data) => apiClient.post('/api/shawarma', data).then(res => res.data),
+  return useMutation<Dish, Error, CreateDishDto>({
+    mutationFn: (data) => apiClient.post('/api/dishes', data).then(res => res.data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
     },
   });
 };
 
-export const useUpdateShawarma = () => {
+export const useUpdateDish = () => {
   const queryClient = useQueryClient();
-  return useMutation<Shawarma, Error, Partial<Shawarma> & { id: number }>({
+  return useMutation<Dish, Error, Partial<Dish> & { id: number }>({
     mutationFn: ({ id, ...data }) => 
-      apiClient.put(`/api/shawarma/${id}`, data).then(res => res.data),
+      apiClient.put(`/api/dishes/${id}`, data).then(res => res.data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
-      queryClient.invalidateQueries({ queryKey: ['shawarma', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
+      queryClient.invalidateQueries({ queryKey: ['dish', variables.id] });
     },
   });
 };
 
-export const useDeleteShawarma = () => {
+export const useDeleteDish = () => {
   const queryClient = useQueryClient();
   return useMutation<void, Error, number>({
-    mutationFn: (id) => apiClient.delete(`/api/shawarma/${id}`).then(res => res.data),
+    mutationFn: (id) => apiClient.delete(`/api/dishes/${id}`).then(res => res.data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
     },
   });
 };
 
 // 👇 Новый хук для обновления только доступности
-export const useUpdateShawarmaAvailability = () => {
+export const useUpdateDishAvailability = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async ({ id, isAvailable }: { id: number; isAvailable: boolean }) => {
       // Сначала получаем текущий товар
-      const { data: shawarma } = await apiClient.get(`/api/shawarma/${id}`);
+      const { data: dish } = await apiClient.get(`/api/dishes/${id}`);
       // Обновляем только поле isAvailable
-      const updated = { ...shawarma, isAvailable };
-      await apiClient.put(`/api/shawarma/${id}`, updated);
+      const updated = { ...dish, isAvailable };
+      await apiClient.put(`/api/dishes/${id}`, updated);
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
-      queryClient.invalidateQueries({ queryKey: ['shawarma', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
+      queryClient.invalidateQueries({ queryKey: ['dish', variables.id] });
     },
   });
 };
 
 // 👇 Новый хук для обновления порядка сортировки
-export const useUpdateShawarmaOrder = () => {
+export const useUpdateDishOrder = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (items: { id: number; sortOrder: number }[]) => {
-      await apiClient.put('/api/shawarma/reorder', items);
+      await apiClient.put('/api/dishes/reorder', items);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
     },
   });
 };
@@ -114,8 +114,8 @@ export const useUpdateShawarmaOrder = () => {
 
 export const useCategories = () => {
   return useQuery<string[]>({
-    queryKey: ['shawarma-categories'],
-    queryFn: () => apiClient.get('/api/shawarma/categories').then(res => res.data),
+    queryKey: ['dish-categories'],
+    queryFn: () => apiClient.get('/api/dishes/categories').then(res => res.data),
     staleTime: 5 * 60 * 1000,
   });
 };
@@ -251,11 +251,11 @@ export const useUploadImage = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ shawarmaId, file }: { shawarmaId: number; file: File }) => {
+    mutationFn: async ({ dishId, file }: { dishId: number; file: File }) => {
       const formData = new FormData();
       formData.append('file', file);
       
-      const { data } = await apiClient.post(`/api/image/upload/${shawarmaId}`, formData, {
+      const { data } = await apiClient.post(`/api/image/upload/${dishId}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -263,20 +263,20 @@ export const useUploadImage = () => {
       return data;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['shawarma', variables.shawarmaId] });
-      queryClient.invalidateQueries({ queryKey: ['shawarma-images', variables.shawarmaId] });
+      queryClient.invalidateQueries({ queryKey: ['dish', variables.dishId] });
+      queryClient.invalidateQueries({ queryKey: ['dish-images', variables.dishId] });
     },
   });
 };
 
-export const useShawarmaImages = (shawarmaId: number) => {
+export const useDishImages = (dishId: number) => {
   return useQuery({
-    queryKey: ['shawarma-images', shawarmaId],
+    queryKey: ['dish-images', dishId],
     queryFn: async () => {
-      const { data } = await apiClient.get(`/api/image/shawarma/${shawarmaId}`);
-      return data as ShawarmaImage[];
+      const { data } = await apiClient.get(`/api/image/dish/${dishId}`);
+      return data as DishImage[];
     },
-    enabled: !!shawarmaId,
+    enabled: !!dishId,
   });
 };
 
@@ -288,23 +288,23 @@ export const useDeleteImage = () => {
       await apiClient.delete(`/api/image/${imageId}`);
     },
     onSuccess: (_) => {
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
     },
   });
 };
 
 // 👇 Оставил, но он используется только в старом MenuPage
 // Если везде убрали перетаскивание — можно удалить
-export const useReorderShawarmas = () => {
+export const useReorderDishes = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (items: { id: number; order: number }[]) => {
-      const response = await apiClient.put('/api/shawarma/reorder', items);
+      const response = await apiClient.put('/api/dishes/reorder', items);
       return response.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
     },
   });
 };
@@ -422,7 +422,7 @@ export const usePointsBalance = () => {
     queryFn: () => apiClient.get('/api/points/balance').then(res => ({
       balance: res.data.balance ?? res.data.Balance ?? 0
     })),
-    enabled: !!localStorage.getItem('token') || !!localStorage.getItem('kumashaurma-auth'),
+    enabled: !!localStorage.getItem('token') || !!localStorage.getItem('cafe-auth'),
     staleTime: 30 * 1000,
   });
 };
@@ -434,7 +434,7 @@ export const usePointsHistory = (page = 1, pageSize = 20) => {
       const { data } = await apiClient.get(`/api/points/history?page=${page}&pageSize=${pageSize}`);
       return data.transactions || data.Transactions || [];
     },
-    enabled: !!localStorage.getItem('token') || !!localStorage.getItem('kumashaurma-auth'),
+    enabled: !!localStorage.getItem('token') || !!localStorage.getItem('cafe-auth'),
     staleTime: 30 * 1000,
   });
 };
@@ -522,7 +522,7 @@ export const useStartPayment = () => {
 export const useMenuSections = () => {
   return useQuery<string[]>({
     queryKey: ['menu-sections'],
-    queryFn: () => apiClient.get('/api/shawarma/sections').then(res => res.data),
+    queryFn: () => apiClient.get('/api/dishes/sections').then(res => res.data),
     staleTime: 60 * 1000,
   });
 };

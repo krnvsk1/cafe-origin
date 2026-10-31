@@ -3,22 +3,22 @@ import SwiftUI
 // MARK: - Admin Menu View
 
 struct AdminMenuView: View {
-    @State private var shawarmas: [Shawarma] = []
+    @State private var dishes: [Dish] = []
     @State private var isLoading = true
     @State private var errorMessage: String = ""
     @State private var showCreateSheet = false
-    @State private var editingShawarma: Shawarma? = nil
-    @State private var shawarmaToDelete: Shawarma? = nil
+    @State private var editingDish: Dish? = nil
+    @State private var dishToDelete: Dish? = nil
 
     /// Parent cards (parentId == nil)
-    private var parents: [Shawarma] {
-        shawarmas.filter { $0.isParentCard }.sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
+    private var parents: [Dish] {
+        dishes.filter { $0.isParentCard }.sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
     }
 
     /// Child items that don't belong to any loaded parent (shouldn't happen, but safety)
-    private var orphanedChildren: [Shawarma] {
+    private var orphanedChildren: [Dish] {
         let parentIds = Set(parents.map(\.id))
-        return shawarmas.filter { $0.parentId != nil && !parentIds.contains($0.parentId ?? -1) }
+        return dishes.filter { $0.parentId != nil && !parentIds.contains($0.parentId ?? -1) }
     }
 
     var body: some View {
@@ -27,7 +27,7 @@ struct AdminMenuView: View {
                 Spacer()
                 ProgressView("Загрузка меню...")
                 Spacer()
-            } else if shawarmas.isEmpty {
+            } else if dishes.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
                     Image(systemName: "takeoutbag.and.cup.and.straw")
@@ -51,11 +51,11 @@ struct AdminMenuView: View {
                             let children = (parent.children ?? []).sorted { ($0.sortOrder ?? 0) < ($1.sortOrder ?? 0) }
                             ForEach(children) { child in
                                 NavigationLink {
-                                    AdminCreateEditItemView(shawarma: child) {
+                                    AdminCreateEditItemView(dish: child) {
                                         Task { await loadMenu() }
                                     }
                                 } label: {
-                                    AdminMenuItemRow(shawarma: child) { newValue in
+                                    AdminMenuItemRow(dish: child) { newValue in
                                         Task { await toggleAvailability(id: child.id, isAvailable: newValue) }
                                     }
                                 }
@@ -64,13 +64,13 @@ struct AdminMenuView: View {
                                 .listRowBackground(Color.clear)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button(role: .destructive) {
-                                        shawarmaToDelete = child
+                                        dishToDelete = child
                                     } label: {
                                         Label("Удалить", systemImage: "trash")
                                     }
 
                                     Button {
-                                        editingShawarma = child
+                                        editingDish = child
                                     } label: {
                                         Label("Изменить", systemImage: "pencil")
                                     }
@@ -80,7 +80,7 @@ struct AdminMenuView: View {
 
                             // "Add child" button
                             Button {
-                                editingShawarma = nil
+                                editingDish = nil
                                 showCreateChildSheet(for: parent)
                             } label: {
                                 HStack(spacing: 8) {
@@ -101,7 +101,7 @@ struct AdminMenuView: View {
                         } header: {
                             // Parent card header
                             NavigationLink {
-                                AdminCreateEditItemView(shawarma: parent) {
+                                AdminCreateEditItemView(dish: parent) {
                                     Task { await loadMenu() }
                                 }
                             } label: {
@@ -121,11 +121,11 @@ struct AdminMenuView: View {
                         Section {
                             ForEach(orphanedChildren) { child in
                                 NavigationLink {
-                                    AdminCreateEditItemView(shawarma: child) {
+                                    AdminCreateEditItemView(dish: child) {
                                         Task { await loadMenu() }
                                     }
                                 } label: {
-                                    AdminMenuItemRow(shawarma: child) { newValue in
+                                    AdminMenuItemRow(dish: child) { newValue in
                                         Task { await toggleAvailability(id: child.id, isAvailable: newValue) }
                                     }
                                 }
@@ -168,32 +168,32 @@ struct AdminMenuView: View {
         .refreshable { await loadMenu() }
         .sheet(isPresented: $showCreateSheet) {
             NavigationStack {
-                AdminCreateEditItemView(shawarma: nil) {
+                AdminCreateEditItemView(dish: nil) {
                     showCreateSheet = false
                     Task { await loadMenu() }
                 }
             }
         }
-        .sheet(item: $editingShawarma) { shawarma in
+        .sheet(item: $editingDish) { dish in
             NavigationStack {
-                AdminCreateEditItemView(shawarma: shawarma) {
-                    editingShawarma = nil
+                AdminCreateEditItemView(dish: dish) {
+                    editingDish = nil
                     Task { await loadMenu() }
                 }
             }
         }
         .alert("Удалить блюдо?", isPresented: Binding(
-            get: { shawarmaToDelete != nil },
-            set: { if !$0 { shawarmaToDelete = nil } }
+            get: { dishToDelete != nil },
+            set: { if !$0 { dishToDelete = nil } }
         )) {
-            Button("Отмена", role: .cancel) { shawarmaToDelete = nil }
+            Button("Отмена", role: .cancel) { dishToDelete = nil }
             Button("Удалить", role: .destructive) {
-                if let item = shawarmaToDelete {
-                    Task { await deleteShawarma(item) }
+                if let item = dishToDelete {
+                    Task { await deleteDish(item) }
                 }
             }
         } message: {
-            if let item = shawarmaToDelete {
+            if let item = dishToDelete {
                 let childCount = item.children?.count ?? 0
                 if childCount > 0 {
                     Text("«\(item.name)» и все её позиции (\(childCount) шт.) будут удалены")
@@ -206,36 +206,36 @@ struct AdminMenuView: View {
 
     // MARK: - Helpers
 
-    @State private var childParentForCreate: Shawarma? = nil
+    @State private var childParentForCreate: Dish? = nil
 
-    private func showCreateChildSheet(for parent: Shawarma) {
+    private func showCreateChildSheet(for parent: Dish) {
         childParentForCreate = parent
     }
 
     private func loadMenu() async {
         isLoading = true
         do {
-            shawarmas = try await APIClient.shared.getMenu()
+            dishes = try await APIClient.shared.getMenu()
         } catch {
             errorMessage = error.localizedDescription
-            shawarmas = []
+            dishes = []
         }
         isLoading = false
     }
 
     private func toggleAvailability(id: Int, isAvailable: Bool) async {
         do {
-            try await APIClient.shared.updateShawarmaAvailability(id: id, isAvailable: isAvailable)
+            try await APIClient.shared.updateDishAvailability(id: id, isAvailable: isAvailable)
             await loadMenu()
         } catch {
             await loadMenu()
         }
     }
 
-    private func deleteShawarma(_ shawarma: Shawarma) async {
+    private func deleteDish(_ dish: Dish) async {
         do {
-            try await APIClient.shared.deleteShawarma(id: shawarma.id)
-            shawarmaToDelete = nil
+            try await APIClient.shared.deleteDish(id: dish.id)
+            dishToDelete = nil
             await loadMenu()
         } catch {
             errorMessage = error.localizedDescription
@@ -246,7 +246,7 @@ struct AdminMenuView: View {
 // MARK: - Admin Parent Card Row
 
 struct AdminParentCardRow: View {
-    let parent: Shawarma
+    let parent: Dish
     let onToggle: (Bool) -> Void
 
     var body: some View {
@@ -342,14 +342,14 @@ struct AdminParentCardRow: View {
 // MARK: - Admin Menu Item Row
 
 struct AdminMenuItemRow: View {
-    let shawarma: Shawarma
+    let dish: Dish
     let onToggle: (Bool) -> Void
 
     var body: some View {
         HStack(spacing: 14) {
             // Thumbnail
             Group {
-                if let imagePath = shawarma.primaryImage,
+                if let imagePath = dish.primaryImage,
                    let url = APIClient.shared.getImageURL(imagePath) {
                     AsyncImage(url: url) { phase in
                         switch phase {
@@ -373,18 +373,18 @@ struct AdminMenuItemRow: View {
 
             // Info
             VStack(alignment: .leading, spacing: 4) {
-                Text(shawarma.name)
+                Text(dish.name)
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
-                    Text("\(Int(shawarma.price)) \u{20BD}")
+                    Text("\(Int(dish.price)) \u{20BD}")
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundColor(.appPrimary)
 
-                    if !shawarma.isAvailable {
+                    if !dish.isAvailable {
                         Text("Недоступен")
                             .font(.caption2)
                             .foregroundColor(.appError)
@@ -396,7 +396,7 @@ struct AdminMenuItemRow: View {
 
             // Availability toggle
             Toggle("", isOn: Binding(
-                get: { shawarma.isAvailable },
+                get: { dish.isAvailable },
                 set: { onToggle($0) }
             ))
             .labelsHidden()
@@ -406,6 +406,6 @@ struct AdminMenuItemRow: View {
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 1)
-        .opacity(shawarma.isAvailable ? 1.0 : 0.6)
+        .opacity(dish.isAvailable ? 1.0 : 0.6)
     }
 }

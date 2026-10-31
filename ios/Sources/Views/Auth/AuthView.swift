@@ -82,7 +82,7 @@ struct AuthView: View {
                     )
             }
 
-            Text("Кумашурма")
+            Text("Кафе")
                 .font(.appTitle)
 
             Text(headerSubtitle)

@@ -1,6 +1,6 @@
 // Токены гостевых заказов: позволяют следить за заказом без входа.
 // Хранятся только на этом устройстве.
-const KEY = 'kumashaurma-order-tokens';
+const KEY = 'cafe-order-tokens';
 
 const read = (): Record<string, string> => {
   try {

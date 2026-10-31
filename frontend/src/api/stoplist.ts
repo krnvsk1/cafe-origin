@@ -56,9 +56,9 @@ export const useSetAvailability = () => {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['stoplist'] });
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
       queryClient.invalidateQueries({ queryKey: ['addon-categories'] });
-      queryClient.invalidateQueries({ queryKey: ['shawarma-addons'] });
+      queryClient.invalidateQueries({ queryKey: ['dish-addons'] });
     },
   });
 };

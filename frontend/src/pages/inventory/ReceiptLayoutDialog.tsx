@@ -204,7 +204,7 @@ const ReceiptLayoutDialog: React.FC<{ open: boolean; state: FiscalState; onClose
           <LinesEditor title="Сверху чека" lines={layout.header} onChange={header => setLayout({ ...layout, header })} />
           <LinesEditor title="Внизу чека" lines={layout.footer} onChange={footer => setLayout({ ...layout, footer })} />
           <TextField label="QR-код внизу (ссылка)" value={layout.qr ?? ''} onChange={e => setLayout({ ...layout, qr: e.target.value || null })}
-            placeholder="https://kumashaurma.ru/review" helperText="Например, на отзыв, меню или Telegram; пусто — без QR" />
+            placeholder="https://cafe.example/review" helperText="Например, на отзыв, меню или Telegram; пусто — без QR" />
           <TextField select label="Ширина ленты" value={layout.width} onChange={e => setLayout({ ...layout, width: Number(e.target.value) as ReceiptLayout['width'] })}
             sx={{ maxWidth: 260 }}>
             <MenuItem value={32}>57 мм (32 символа)</MenuItem>

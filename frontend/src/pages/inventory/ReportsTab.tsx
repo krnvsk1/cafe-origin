@@ -89,7 +89,7 @@ const ReportsTab: React.FC = () => {
                   <Box sx={{ width: 90, textAlign: 'right' }}>Фудкост</Box>
                 </ListHeader>
                 {sales.data.rows.map(r => (
-                  <ListRow key={`${r.shawarmaId}-${r.name}`}>
+                  <ListRow key={`${r.dishId}-${r.name}`}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                         <Typography sx={{ fontWeight: 600 }}>{r.name}</Typography>

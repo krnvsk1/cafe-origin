@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
 import { useCartStore } from '../store/cartStore';
-import type { SelectedAddon, Shawarma } from '../types';
+import type { SelectedAddon, Dish } from '../types';
 
 interface ReorderAddon {
   addonId: number;
@@ -14,7 +14,7 @@ interface ReorderAddon {
 }
 
 interface ReorderItem {
-  shawarmaId: number;
+  dishId: number;
   cardId: number;
   name: string;
   quantity: number;
@@ -43,9 +43,9 @@ export const useRepeatOrder = () => {
     mutationFn: async (orderId) => {
       const [{ data }, menu] = await Promise.all([
         apiClient.get<{ orderId: number; items: ReorderItem[] }>(`/api/orders/${orderId}/reorder`),
-        queryClient.fetchQuery<Shawarma[]>({
-          queryKey: ['shawarmas'],
-          queryFn: () => apiClient.get('/api/shawarma').then(res => res.data),
+        queryClient.fetchQuery<Dish[]>({
+          queryKey: ['dishes'],
+          queryFn: () => apiClient.get('/api/dishes').then(res => res.data),
           staleTime: 60 * 1000,
         }),
       ]);
@@ -59,10 +59,10 @@ export const useRepeatOrder = () => {
           result.skipped.push(item.name);
           continue;
         }
-        const child = item.cardId !== item.shawarmaId
-          ? card.children?.find(c => c.id === item.shawarmaId)
+        const child = item.cardId !== item.dishId
+          ? card.children?.find(c => c.id === item.dishId)
           : undefined;
-        if (item.cardId !== item.shawarmaId && !child) {
+        if (item.cardId !== item.dishId && !child) {
           result.skipped.push(item.name);
           continue;
         }

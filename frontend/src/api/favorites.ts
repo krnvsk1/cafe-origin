@@ -14,18 +14,18 @@ export const useFavoriteIds = () => {
 
 export const useToggleFavorite = () => {
   const queryClient = useQueryClient();
-  return useMutation<unknown, Error, { shawarmaId: number; isFavorite: boolean }, { previous?: number[] }>({
-    mutationFn: ({ shawarmaId, isFavorite }) =>
+  return useMutation<unknown, Error, { dishId: number; isFavorite: boolean }, { previous?: number[] }>({
+    mutationFn: ({ dishId, isFavorite }) =>
       isFavorite
-        ? apiClient.post(`/api/favorites/${shawarmaId}`).then(res => res.data)
-        : apiClient.delete(`/api/favorites/${shawarmaId}`).then(res => res.data),
-    onMutate: async ({ shawarmaId, isFavorite }) => {
+        ? apiClient.post(`/api/favorites/${dishId}`).then(res => res.data)
+        : apiClient.delete(`/api/favorites/${dishId}`).then(res => res.data),
+    onMutate: async ({ dishId, isFavorite }) => {
       await queryClient.cancelQueries({ queryKey: ['favorites'] });
       const previous = queryClient.getQueryData<number[]>(['favorites']);
       const current = previous ?? [];
       queryClient.setQueryData<number[]>(
         ['favorites'],
-        isFavorite ? [shawarmaId, ...current.filter(id => id !== shawarmaId)] : current.filter(id => id !== shawarmaId)
+        isFavorite ? [dishId, ...current.filter(id => id !== dishId)] : current.filter(id => id !== dishId)
       );
       return { previous };
     },

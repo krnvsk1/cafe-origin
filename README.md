@@ -1,5 +1,5 @@
-# kumashaurma
-Сервис Кума Шаурма — доставка шаурмы с веб-интерфейсом
+# Cafe — сервис для кафе
+Сервис для кафе: меню и доставка, касса, официант, кухня, склад
 
 ## 🚀 Быстрый старт
 
@@ -12,7 +12,7 @@
 ### Запуск Backend
 
 ```bash
-cd src/Kumashaurma.API
+cd src/Cafe.API
 
 # Настройка подключения к БД в appsettings.json
 # Запуск миграций
@@ -71,14 +71,14 @@ AI Service будет доступен на `http://localhost:3001`
 ## 📁 Структура проекта
 
 ```
-kumashaurma/
+cafe/
 ├── src/
-│   ├── Kumashaurma.API/       # Backend API (ASP.NET Core)
+│   ├── Cafe.API/       # Backend API (ASP.NET Core)
 │   │   ├── Controllers/       # API контроллеры
 │   │   ├── Models/           # Модели данных
 │   │   ├── Services/         # Бизнес-логика
 │   │   └── Data/             # DbContext, миграции
-│   └── Kumashaurma.Core/     # Общая логика
+│   └── Cafe.Core/     # Общая логика
 ├── frontend/                  # Frontend (React + TypeScript)
 │   ├── src/
 │   │   ├── components/       # React компоненты
@@ -104,7 +104,7 @@ kumashaurma/
 ## 📋 Функционал
 
 - ✅ Каталог меню с категориями и изображениями
-- ✅ Система добавок к шаурме
+- ✅ Система добавок к блюдам
 - ✅ Корзина и оформление заказов
 - ✅ Авторизация с SMS-верификацией
 - ✅ Роли пользователей (admin, manager, user)
@@ -120,12 +120,12 @@ kumashaurma/
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Host=localhost;Port=5433;Database=kumashaurma_dev;Username=devuser;Password=dev123"
+    "DefaultConnection": "Host=localhost;Port=5433;Database=cafe_dev;Username=devuser;Password=dev123"
   },
   "JwtSettings": {
     "SecretKey": "your-secret-key",
-    "Issuer": "Kumashaurma",
-    "Audience": "KumashaurmaClient"
+    "Issuer": "Cafe",
+    "Audience": "CafeClient"
   }
 }
 ```
@@ -150,7 +150,7 @@ vercel --prod
 ### Backend (Railway/Render)
 ```bash
 # Docker build
-docker build -t kumashaurma-api ./src/Kumashaurma.API
+docker build -t cafe-api ./src/Cafe.API
 ```
 
 ## 📄 Лицензия

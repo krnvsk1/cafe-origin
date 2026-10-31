@@ -1,5 +1,5 @@
 // Код пригласившего друга из ссылки вида https://сайт/?ref=ABC123
-const KEY = 'kumashaurma-ref';
+const KEY = 'cafe-ref';
 
 export const captureReferralFromUrl = () => {
   try {

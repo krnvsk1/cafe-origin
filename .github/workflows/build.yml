@@ -18,25 +18,23 @@ jobs:
         with:
           dotnet-version: '9.0.x'
       - name: Restore
-        run: dotnet restore Kumashaurma.sln
+        run: dotnet restore Cafe.sln
       - name: Build
-        run: dotnet build Kumashaurma.sln --no-restore -c Release 2>&1 | tee build.txt; exit ${PIPESTATUS[0]}
+        run: dotnet build Cafe.sln --no-restore -c Release 2>&1 | tee build.txt; exit ${PIPESTATUS[0]}
       - name: Test
-        env:
-          KUMASHAURMA_LIVE_TEST: '1'
-        run: dotnet test Kumashaurma.sln --no-build -c Release --logger "console;verbosity=detailed" 2>&1 | tee test.txt; exit ${PIPESTATUS[0]}
+        run: dotnet test Cafe.sln --no-build -c Release --logger "console;verbosity=detailed" 2>&1 | tee test.txt; exit ${PIPESTATUS[0]}
       - name: Check EF model snapshot
         id: ef
         continue-on-error: true
         run: |
           dotnet tool install --global dotnet-ef --version 9.0.*
-          cd src/Kumashaurma.API
+          cd src/Cafe.API
           dotnet ef migrations has-pending-model-changes 2>&1 | tee ../../ef.txt; exit ${PIPESTATUS[0]}
       - name: Generate sync migration
         if: steps.ef.outcome == 'failure'
         continue-on-error: true
         run: |
-          cd src/Kumashaurma.API
+          cd src/Cafe.API
           NAME="AutoSync${GITHUB_RUN_NUMBER}"
           dotnet ef migrations add "$NAME" 2>&1 | tail -5
           { echo '## Generated migration'; echo '```'; cat Migrations/*_${NAME}.cs; echo '```';
@@ -70,11 +68,11 @@ jobs:
         env:
           POSTGRES_USER: devuser
           POSTGRES_PASSWORD: dev123
-          POSTGRES_DB: kumashaurma_ci
+          POSTGRES_DB: cafe_ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U devuser -d kumashaurma_ci"
+          --health-cmd "pg_isready -U devuser -d cafe_ci"
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
@@ -83,10 +81,10 @@ jobs:
           dotnet-version: '9.0.x'
       - name: Apply migrations to empty database
         env:
-          ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=kumashaurma_ci;Username=devuser;Password=dev123
+          ConnectionStrings__DefaultConnection: Host=localhost;Port=5432;Database=cafe_ci;Username=devuser;Password=dev123
         run: |
           dotnet tool install --global dotnet-ef --version 9.0.*
-          cd src/Kumashaurma.API
+          cd src/Cafe.API
           dotnet ef database update 2>&1 | tee ../../migrate.txt; exit ${PIPESTATUS[0]}
       - name: Publish report
         if: always()

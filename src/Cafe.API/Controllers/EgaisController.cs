@@ -1,0 +1,350 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Cafe.API.Authorization;
+using Cafe.API.Data;
+using Cafe.API.Extensions;
+using Cafe.API.Models;
+using Cafe.API.Services;
+using Cafe.API.Services.Egais;
+
+namespace Cafe.API.Controllers
+{
+    /// <summary>
+    /// ЕГАИС: входящие накладные на алкоголь (пиво) через УТМ, сопоставление со складом, акты приёмки
+    /// </summary>
+    [ApiController]
+    [Route("api/egais")]
+    // Статус и настройки нужны и на странице «Настройка интеграций» (право Settings)
+    [HasPermission(Permissions.InventoryView, Permissions.Settings)]
+    public class EgaisController : ControllerBase
+    {
+        private readonly ApplicationDbContext _context;
+        private readonly EgaisService _egais;
+        private readonly UtmClient _utm;
+        private readonly EgaisSettingsProvider _settings;
+
+        public EgaisController(ApplicationDbContext context, EgaisService egais, UtmClient utm, EgaisSettingsProvider settings)
+        {
+            _context = context;
+            _egais = egais;
+            _utm = utm;
+            _settings = settings;
+        }
+
+        private EgaisOptions _options => _settings.Current;
+        private static readonly TimeSpan StatusPingTimeout = TimeSpan.FromSeconds(2);
+
+        public class SettingsRequest
+        {
+            public bool Enabled { get; set; }
+            public string UtmUrl { get; set; } = "http://localhost:8080";
+            public string? FsrarId { get; set; }
+            public int AutoSyncMinutes { get; set; } = 10;
+            public bool DeleteProcessed { get; set; }
+            public bool SendActs { get; set; } = true;
+        }
+
+        public class TestRequest
+        {
+            public string UtmUrl { get; set; } = string.Empty;
+        }
+
+        // GET: api/egais/settings
+        [HttpGet("settings")]
+        [HasPermission(Permissions.Settings)]
+        public IActionResult GetSettings() => Ok(new
+        {
+            _options.Enabled,
+            _options.UtmUrl,
+            _options.FsrarId,
+            _options.AutoSyncMinutes,
+            _options.DeleteProcessed,
+            _options.SendActs,
+            savedInAdmin = _settings.FromDatabase,
+            updatedAt = _settings.UpdatedAt
+        });
+
+        // PUT: api/egais/settings — сохранить; действует сразу
+        [HttpPut("settings")]
+        [HasPermission(Permissions.Settings)]
+        public async Task<IActionResult> SaveSettings([FromBody] SettingsRequest request)
+        {
+            var options = new EgaisOptions
+            {
+                Enabled = request.Enabled,
+                UtmUrl = (request.UtmUrl ?? "").Trim().TrimEnd('/'),
+                FsrarId = (request.FsrarId ?? "").Trim(),
+                AutoSyncMinutes = request.AutoSyncMinutes,
+                DeleteProcessed = request.DeleteProcessed,
+                SendActs = request.SendActs
+            };
+            var error = EgaisSettingsProvider.Validate(options);
+            if (error != null) return BadRequest(new { message = error });
+
+            await _settings.SaveAsync(options, User.GetUserId());
+            return GetSettings();
+        }
+
+        // POST: api/egais/settings/test — проверить связь с УТМ по введённому адресу (без сохранения)
+        [HttpPost("settings/test")]
+        [HasPermission(Permissions.Settings)]
+        public async Task<IActionResult> Test([FromBody] TestRequest request)
+        {
+            var probe = new EgaisOptions { UtmUrl = request.UtmUrl ?? "" };
+            var error = EgaisSettingsProvider.Validate(probe);
+            if (error != null) return BadRequest(new { message = error });
+
+            var (ok, message) = await _utm.PingAsync(probe.UtmUrl, HttpContext.RequestAborted);
+            return Ok(new { ok, message = ok ? "УТМ отвечает" : message });
+        }
+
+        public class MappingRequest
+        {
+            public List<MappingLine> Lines { get; set; } = new();
+        }
+
+        public class MappingLine
+        {
+            public int LineId { get; set; }
+            public int? StockItemId { get; set; }
+        }
+
+        public class ActRequest
+        {
+            /// <summary>accept | reject | differences</summary>
+            public string Decision { get; set; } = "accept";
+            public string? Note { get; set; }
+            public List<ActLineRequest> Lines { get; set; } = new();
+        }
+
+        public class ActLineRequest
+        {
+            public int LineId { get; set; }
+            public decimal? RealQuantity { get; set; }
+        }
+
+        // GET: api/egais/status — настроен ли ЕГАИС и доступен ли УТМ
+        [HttpGet("status")]
+        public async Task<IActionResult> Status()
+        {
+            // Короткий таймаут: по статусу рисуется вкладка ЕГАИС, и недоступный УТМ не должен задерживать её на 8 секунд
+            var reachable = _options.Enabled && (await _utm.PingAsync(null, HttpContext.RequestAborted, StatusPingTimeout)).Ok;
+            var counts = await _context.EgaisDocuments.AsNoTracking()
+                .GroupBy(d => d.Status)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Key, x => x.Count);
+
+            return Ok(new
+            {
+                enabled = _options.Enabled,
+                configured = _options.Enabled && !string.IsNullOrWhiteSpace(_options.FsrarId),
+                utmUrl = _options.UtmUrl,
+                fsrarId = string.IsNullOrWhiteSpace(_options.FsrarId) ? null : _options.FsrarId,
+                reachable,
+                autoSyncMinutes = _options.AutoSyncMinutes,
+                sendActs = _options.SendActs,
+                deleteProcessed = _options.DeleteProcessed,
+                lastSyncAt = EgaisService.LastSyncAt,
+                detectedFsrarId = EgaisService.DetectedFsrarId,
+                lastSyncError = EgaisService.LastSyncError,
+                nextUnacceptedRequestAt = await _egais.NextQueryNattnAtAsync(HttpContext.RequestAborted),
+                toProcess = counts.GetValueOrDefault(EgaisStatuses.Ready) + counts.GetValueOrDefault(EgaisStatuses.Error),
+                awaitingRegId = counts.GetValueOrDefault(EgaisStatuses.AwaitingRegId),
+                awaitingTicket = counts.GetValueOrDefault(EgaisStatuses.ActSent)
+            });
+        }
+
+        // POST: api/egais/sync — забрать входящие из УТМ
+        [HttpPost("sync")]
+        [HasPermission(Permissions.InventoryManage)]
+        public async Task<IActionResult> Sync()
+        {
+            if (!_options.Enabled) return BadRequest(new { message = "ЕГАИС выключен — включите его в настройках" });
+            try
+            {
+                var r = await _egais.SyncAsync(HttpContext.RequestAborted);
+                return Ok(new { wayBills = r.WayBills, regInfos = r.RegInfos, tickets = r.Tickets, skipped = r.Skipped, errors = r.Errors, resendRequested = r.ResendRequested });
+            }
+            catch (EgaisException ex)
+            {
+                return StatusCode(502, new { message = ex.Message });
+            }
+        }
+
+        // POST: api/egais/request-unaccepted — запросить из ЕГАИС накладные без акта (если их забрала из УТМ другая программа)
+        [HttpPost("request-unaccepted")]
+        [HasPermission(Permissions.InventoryManage)]
+        public async Task<IActionResult> RequestUnaccepted()
+        {
+            if (!_options.Enabled) return BadRequest(new { message = "ЕГАИС выключен — включите его в настройках" });
+            try
+            {
+                await _egais.RequestUnacceptedAsync(HttpContext.RequestAborted);
+                return Ok(new { message = "Запрос отправлен. ЕГАИС пришлёт список за несколько минут — затем нажмите «Проверить входящие», и сервис сам запросит недостающие накладные." });
+            }
+            catch (EgaisException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (HttpRequestException)
+            {
+                return StatusCode(502, new { message = $"УТМ недоступен ({_options.UtmUrl})" });
+            }
+        }
+
+        // GET: api/egais/diagnostics — что лежит в очереди УТМ и что ЕГАИС ответил на запрос накладных без акта
+        [HttpGet("diagnostics")]
+        public async Task<IActionResult> Diagnostics()
+        {
+            List<object> inbox = new();
+            string? inboxError = null;
+            if (_options.Enabled)
+            {
+                try
+                {
+                    inbox = (await _utm.ListIncomingAsync(HttpContext.RequestAborted))
+                        .Select(r => (object)new { r.Type, r.Url, seen = EgaisService.IsSeen(r.Url) })
+                        .ToList();
+                }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or FormatException or System.Xml.XmlException)
+                {
+                    inboxError = ex.Message;
+                }
+            }
+
+            var known = await _context.EgaisDocuments.AsNoTracking()
+                .Select(d => new { d.WbRegId, d.Number, d.Status })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                lastNoAnswerAt = EgaisService.LastNoAnswerAt,
+                noAnswer = EgaisService.LastNoAnswer.Select(n => new
+                {
+                    n.WbRegId, n.Number, n.Date, n.ShipperFsrarId, n.Action,
+                    inService = known.Any(k => k.WbRegId == n.WbRegId || (n.Number != null && k.Number == n.Number))
+                }),
+                inbox,
+                inboxError,
+                lastSyncError = EgaisService.LastSyncError,
+                configuredFsrarId = _options.FsrarId,
+                detectedFsrarId = EgaisService.DetectedFsrarId,
+                rejections = EgaisService.RecentRejections
+            });
+        }
+
+        // GET: api/egais/documents?status=
+        [HttpGet("documents")]
+        public async Task<IActionResult> List([FromQuery] string? status)
+        {
+            var q = _context.EgaisDocuments.AsNoTracking().AsQueryable();
+            if (status == "active")
+                q = q.Where(d => d.Status == EgaisStatuses.AwaitingRegId || d.Status == EgaisStatuses.Ready
+                                 || d.Status == EgaisStatuses.ActSent || d.Status == EgaisStatuses.Error);
+            else if (!string.IsNullOrWhiteSpace(status))
+                q = q.Where(d => d.Status == status);
+
+            var docs = await q.OrderByDescending(d => d.Date).ThenByDescending(d => d.Id).Take(200)
+                .Select(d => new
+                {
+                    d.Id, d.Number, d.Date, d.ShipperName, d.ShipperInn, d.WbRegId, d.Status, d.ActDecision,
+                    d.ActSentAt, d.ResultComment, d.StockDocumentId, d.CreatedAt,
+                    linesCount = d.Lines.Count,
+                    unmapped = d.Lines.Count(l => l.StockItemId == null),
+                    total = d.Lines.Sum(l => l.Quantity * l.Price)
+                })
+                .ToListAsync();
+            return Ok(docs);
+        }
+
+        // GET: api/egais/documents/{id}
+        [HttpGet("documents/{id:int}")]
+        public async Task<IActionResult> Get(int id)
+        {
+            var d = await _context.EgaisDocuments.AsNoTracking()
+                .Include(x => x.Lines).ThenInclude(l => l.StockItem)
+                .FirstOrDefaultAsync(x => x.Id == id);
+            if (d == null) return NotFound(new { message = "Накладная не найдена" });
+
+            return Ok(new
+            {
+                d.Id, d.Number, d.Date, d.ShipperName, d.ShipperInn, d.ShipperFsrarId, d.WbRegId, d.Status,
+                d.ActNumber, d.ActDecision, d.ActNote, d.ActSentAt, d.ResultComment, d.ResultAt, d.StockDocumentId,
+                lines = d.Lines.OrderBy(l => l.Id).Select(l => new
+                {
+                    l.Id, l.Identity, l.ProductName, l.AlcCode, l.Capacity, l.AlcVolume, l.UnitType,
+                    l.Quantity, l.Price, l.InformF2RegId, l.RealQuantity, l.StockItemId,
+                    stockItemName = l.StockItem?.Name,
+                    stockUnit = l.StockItem?.Unit,
+                    // Сколько придёт на склад в его единицах
+                    stockQuantity = l.StockItem != null ? TryConvert(l, l.StockItem, l.RealQuantity ?? l.Quantity) : null,
+                    conversionError = l.StockItem != null ? ConversionError(l, l.StockItem) : null
+                })
+            });
+        }
+
+        // PUT: api/egais/documents/{id}/mapping — привязать строки к позициям склада
+        [HttpPut("documents/{id:int}/mapping")]
+        [HasPermission(Permissions.InventoryManage)]
+        public async Task<IActionResult> Mapping(int id, [FromBody] MappingRequest request)
+        {
+            try
+            {
+                await _egais.SaveMappingAsync(id, request.Lines.Select(l => (l.LineId, l.StockItemId)));
+                return await Get(id);
+            }
+            catch (EgaisException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // POST: api/egais/documents/{id}/act — принять / отказать / принять с расхождениями
+        [HttpPost("documents/{id:int}/act")]
+        [HasPermission(Permissions.InventoryManage)]
+        public async Task<IActionResult> Act(int id, [FromBody] ActRequest request)
+        {
+            var decision = request.Decision?.ToLowerInvariant() switch
+            {
+                "accept" => ActDecision.Accepted,
+                "reject" => ActDecision.Rejected,
+                "differences" => ActDecision.Differences,
+                _ => (ActDecision?)null
+            };
+            if (decision == null) return BadRequest(new { message = "Неизвестное решение" });
+            if (decision == ActDecision.Rejected && string.IsNullOrWhiteSpace(request.Note))
+                return BadRequest(new { message = "Укажите причину отказа" });
+
+            try
+            {
+                await _egais.SendActAsync(id, decision.Value, request.Note,
+                    request.Lines.Select(l => new ActLine(l.LineId, l.RealQuantity)).ToList(), User.GetUserId());
+                return await Get(id);
+            }
+            catch (EgaisException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InventoryException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (HttpRequestException)
+            {
+                return StatusCode(502, new { message = $"УТМ недоступен ({_options.UtmUrl})" });
+            }
+        }
+
+        private static decimal? TryConvert(EgaisDocumentLine l, StockItem item, decimal qty)
+        {
+            try { return Math.Round(EgaisService.ConvertToStockUnits(l, item, qty), 3); }
+            catch (EgaisException) { return null; }
+        }
+
+        private static string? ConversionError(EgaisDocumentLine l, StockItem item)
+        {
+            try { EgaisService.ConvertToStockUnits(l, item, 1); return null; }
+            catch (EgaisException ex) { return ex.Message; }
+        }
+    }
+}

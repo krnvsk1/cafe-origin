@@ -15,15 +15,15 @@ export const useAddonCategories = () => {
   });
 };
 
-export const useShawarmaAddons = (shawarmaId?: number) => {
+export const useDishAddons = (dishId?: number) => {
   return useQuery<AddonCategory[]>({
-    queryKey: ['shawarma-addons', shawarmaId],
+    queryKey: ['dish-addons', dishId],
     queryFn: async () => {
-      if (!shawarmaId) return [];
-      const { data } = await apiClient.get(`/api/addons/shawarma/${shawarmaId}`);
+      if (!dishId) return [];
+      const { data } = await apiClient.get(`/api/addons/dish/${dishId}`);
       return data;
     },
-    enabled: !!shawarmaId,
+    enabled: !!dishId,
     staleTime: 5 * 60 * 1000,
   });
 };
@@ -108,31 +108,31 @@ export const useDeleteAddon = () => {
   });
 };
 
-export const useLinkAddonToShawarma = () => {
+export const useLinkAddonToDish = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { 
-      shawarmaId: number; 
+      dishId: number; 
       addonId: number; 
       customPrice?: number;
       isDefault?: boolean;
       maxQuantity?: number;
-    }) => apiClient.post('/api/addons/link-to-shawarma', data).then(res => res.data),
+    }) => apiClient.post('/api/addons/link-to-dish', data).then(res => res.data),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['shawarma-addons', variables.shawarmaId] });
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
+      queryClient.invalidateQueries({ queryKey: ['dish-addons', variables.dishId] });
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
     },
   });
 };
 
-export const useUnlinkAddonFromShawarma = () => {
+export const useUnlinkAddonFromDish = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ shawarmaId, addonId }: { shawarmaId: number; addonId: number }) => 
-      apiClient.delete(`/api/addons/unlink-from-shawarma?shawarmaId=${shawarmaId}&addonId=${addonId}`),
+    mutationFn: ({ dishId, addonId }: { dishId: number; addonId: number }) => 
+      apiClient.delete(`/api/addons/unlink-from-dish?dishId=${dishId}&addonId=${addonId}`),
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['shawarma-addons', variables.shawarmaId] });
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
+      queryClient.invalidateQueries({ queryKey: ['dish-addons', variables.dishId] });
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
     },
   });
 };

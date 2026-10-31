@@ -6,18 +6,18 @@ import {
   SoupKitchen as KitchenIcon, ArrowUpward as UpIcon, ArrowDownward as DownIcon, DeleteOutline as DeleteIcon, Add as AddIcon,
 } from '@mui/icons-material';
 import { useKitchenStations, useRenameStation, useAddStation, useOrderStations, useDeleteStation } from '../api/staff';
-import { useUpdateShawarma } from '../api/hooks';
+import { useUpdateDish } from '../api/hooks';
 import { useAuthStore } from '../store/authStore';
 import { apiError } from '../api/inventory';
-import type { Shawarma } from '../types';
+import type { Dish } from '../types';
 
 /**
  * Метка кухни у блюда: на какую кухню (горячая, мангал…) оно уходит.
  * У варианта есть пункт «как у карточки» — тогда действует метка карточки.
  */
-export const KitchenStationSelect: React.FC<{ item: Shawarma; parent?: Shawarma | null; onError?: (text: string) => void }> = ({ item, parent, onError }) => {
+export const KitchenStationSelect: React.FC<{ item: Dish; parent?: Dish | null; onError?: (text: string) => void }> = ({ item, parent, onError }) => {
   const { data: stations = [] } = useKitchenStations();
-  const update = useUpdateShawarma();
+  const update = useUpdateDish();
   if (stations.length === 0) return null;
 
   const inherited = parent?.kitchenStationId ?? stations[0].id;
@@ -25,7 +25,7 @@ export const KitchenStationSelect: React.FC<{ item: Shawarma; parent?: Shawarma 
 
   const change = (value: number) => {
     update.mutate(
-      { id: item.id, kitchenStationId: value } as Partial<Shawarma> & { id: number },
+      { id: item.id, kitchenStationId: value } as Partial<Dish> & { id: number },
       { onError: e => onError?.(apiError(e)) },
     );
   };

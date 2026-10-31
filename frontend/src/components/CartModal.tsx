@@ -302,7 +302,7 @@ const CartModal: React.FC<CartModalProps> = ({
                         }}
                       />
                     ) : (
-                      <Typography sx={{ fontSize: '2rem' }}>🥙</Typography>
+                      <Typography sx={{ fontSize: '2rem' }}>🍽️</Typography>
                     )}
                   </Avatar>
                 </ListItemAvatar>

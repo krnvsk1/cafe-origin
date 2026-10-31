@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
   Button, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Alert,
-  FormControlLabel, Checkbox, LinearProgress, Box,
+  FormControlLabel, Checkbox, LinearProgress, Box, TextField,
 } from '@mui/material';
 import { CloudDownloadOutlined as ImportIcon } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -18,19 +18,23 @@ interface ImportResult {
   warnings: string[];
 }
 
-/** Кнопка «Импорт с kumashaurma.ru» для администратора */
+const URL_KEY = 'menu-import-url';
+
+/** Кнопка «Импорт меню с сайта» для администратора: адрес страницы меню вводится один раз и запоминается */
 const MenuImportButton: React.FC = () => {
   const isAdmin = useCan()(P.MenuImport);
   const queryClient = useQueryClient();
   const [open, setOpen] = React.useState(false);
   const [downloadImages, setDownloadImages] = React.useState(true);
+  const [sourceUrl, setSourceUrl] = React.useState(() => { try { return localStorage.getItem(URL_KEY) ?? ''; } catch { return ''; } });
 
   const importMenu = useMutation<ImportResult, any>({
     mutationFn: () => apiClient
-      .post('/api/admin/menu-import', { downloadImages }, { timeout: 5 * 60 * 1000 })
+      .post('/api/admin/menu-import', { sourceUrl: sourceUrl.trim(), downloadImages }, { timeout: 5 * 60 * 1000 })
       .then(res => res.data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
+      try { localStorage.setItem(URL_KEY, sourceUrl.trim()); } catch { /* ignore */ }
+      queryClient.invalidateQueries({ queryKey: ['dishes'] });
       queryClient.invalidateQueries({ queryKey: ['addon-categories'] });
       queryClient.invalidateQueries({ queryKey: ['stoplist'] });
     },
@@ -42,10 +46,10 @@ const MenuImportButton: React.FC = () => {
   return (
     <>
       <Button variant="outlined" startIcon={<ImportIcon />} onClick={() => { importMenu.reset(); setOpen(true); }}>
-        Импорт с kumashaurma.ru
+        Импорт с сайта
       </Button>
       <Dialog open={open} onClose={() => !importMenu.isPending && setOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Импорт меню с kumashaurma.ru</DialogTitle>
+        <DialogTitle>Импорт меню с сайта</DialogTitle>
         <DialogContent>
           {!result && (
             <>
@@ -53,6 +57,9 @@ const MenuImportButton: React.FC = () => {
                 Загрузим разделы, позиции, размеры с ценами, добавки и фото с сайта. Уже существующие позиции обновятся
                 (цены и состав), новые добавятся. Ничего не удаляется, а свои фото у позиций не заменяются.
               </Typography>
+              <TextField fullWidth size="small" label="Адрес страницы меню" placeholder="https://…" value={sourceUrl}
+                onChange={e => setSourceUrl(e.target.value)} sx={{ mb: 1 }}
+                helperText="Сайты на платформе FoodPicasso" />
               <FormControlLabel
                 control={<Checkbox checked={downloadImages} onChange={(e) => setDownloadImages(e.target.checked)} />}
                 label="Скачать фото к себе (надёжнее, чем ссылки на сайт)"
@@ -90,7 +97,7 @@ const MenuImportButton: React.FC = () => {
             {result ? 'Закрыть' : 'Отмена'}
           </Button>
           {!result && (
-            <Button variant="contained" onClick={() => importMenu.mutate()} disabled={importMenu.isPending}>
+            <Button variant="contained" onClick={() => importMenu.mutate()} disabled={importMenu.isPending || !/^https:\/\/\S+/.test(sourceUrl.trim())}>
               Импортировать
             </Button>
           )}

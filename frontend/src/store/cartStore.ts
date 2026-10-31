@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Shawarma, CartItem, SelectedAddon } from '../types';
+import type { Dish, CartItem, SelectedAddon } from '../types';
 
 // Уникальный ключ: учитывает id родителя + id выбранного ребёнка + добавки
 const generateUniqueKey = (
@@ -23,11 +23,11 @@ interface CartStore {
 
   // Добавление товара с добавками и выбранным вариантом-ребёнком
   addItem: (
-    product: Shawarma,
+    product: Dish,
     quantity: number,
     selectedAddons: SelectedAddon[],
     instructions?: string,
-    selectedChild?: Shawarma
+    selectedChild?: Dish
   ) => void;
 
   removeItem: (uniqueKey: string) => void;

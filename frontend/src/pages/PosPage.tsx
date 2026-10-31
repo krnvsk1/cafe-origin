@@ -10,7 +10,7 @@ import {
   ExpandMore as ExpandMoreIcon, ExpandLess as ExpandLessIcon, KeyboardArrowDown as ArrowDownIcon,
   PrintOutlined as PrintIcon,
 } from '@mui/icons-material';
-import { useShawarmas } from '../api/hooks';
+import { useDishes } from '../api/hooks';
 import {
   useCreatePosOrder, usePosOrders, usePosSummary, useSetOrderStatus, lookupPosCustomer, type PosOrder,
 } from '../api/pos';
@@ -22,14 +22,14 @@ import {
 import ProductModal from '../components/ProductModal';
 import FullscreenButton from '../components/FullscreenButton';
 import { useIsFullscreen, useWorkScreen } from '../hooks/useFullscreen';
-import type { Shawarma, SelectedAddon } from '../types';
+import type { Dish, SelectedAddon } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import { tokens } from '../theme';
 import { allowedOrderTypes, isAllowedFor, describeOrderTypes } from '../utils/orderTypes';
 
 interface TicketLine {
   key: string;
-  shawarmaId: number;
+  dishId: number;
   title: string;
   variant: string | null;
   unitPrice: number;
@@ -46,7 +46,7 @@ const lineKey = (id: number, addons: SelectedAddon[], comment: string) =>
   `${id}|${addons.map(a => `${a.addonId}x${a.quantity}`).sort().join(',')}|${comment}`;
 
 /** Есть ли у позиции добавки (тогда нужно окно выбора) */
-const hasAddons = (s: Shawarma) => ((s as unknown as { addons?: unknown[] }).addons?.length ?? 0) > 0;
+const hasAddons = (s: Dish) => ((s as unknown as { addons?: unknown[] }).addons?.length ?? 0) > 0;
 
 const STATUS_COLORS: Record<string, string> = {
   'Новый': '#2563EB',
@@ -59,10 +59,10 @@ const STATUS_COLORS: Record<string, string> = {
 
 // ============ Меню кассы ============
 
-const PosMenu: React.FC<{ onPick: (card: Shawarma) => void }> = ({ onPick }) => {
+const PosMenu: React.FC<{ onPick: (card: Dish) => void }> = ({ onPick }) => {
   const theme = useTheme();
   const t = tokens[theme.palette.mode];
-  const { data: menu = [], isLoading } = useShawarmas();
+  const { data: menu = [], isLoading } = useDishes();
   const [search, setSearch] = React.useState('');
   const [section, setSection] = React.useState('');
 
@@ -131,7 +131,7 @@ const PosMenu: React.FC<{ onPick: (card: Shawarma) => void }> = ({ onPick }) => 
               >
                 <Box sx={{ width: 56, height: 56, borderRadius: '12px', overflow: 'hidden', bgcolor: t.surfaceMuted, flexShrink: 0, display: 'grid', placeItems: 'center' }}>
                   {img ? <Box component="img" src={resolveMediaUrl(img)} alt="" loading="lazy" sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <Typography aria-hidden sx={{ fontSize: 26 }}>🌯</Typography>}
+                    : <Typography aria-hidden sx={{ fontSize: 26 }}>🍽️</Typography>}
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: '0.92rem', lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
@@ -241,7 +241,7 @@ const Ticket: React.FC<{
     try {
       const res = await create.mutateAsync({
         items: lines.map(l => ({
-          shawarmaId: l.shawarmaId,
+          dishId: l.dishId,
           quantity: l.quantity,
           addons: l.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })),
           comment: l.comment || undefined,
@@ -699,21 +699,21 @@ const PosPage: React.FC = () => {
   const { data: summary } = usePosSummary();
   const [tab, setTab] = React.useState<'new' | 'orders'>('new');
   const [lines, setLines] = React.useState<TicketLine[]>([]);
-  const [picking, setPicking] = React.useState<Shawarma | null>(null);
+  const [picking, setPicking] = React.useState<Dish | null>(null);
   const [ticketOpen, setTicketOpen] = React.useState(false);
   const [done, setDone] = React.useState<{ id: number; change: number | null; fiscal: FiscalReceiptResult | null } | null>(null);
   const [retrying, setRetrying] = React.useState(false);
   const qc = useQueryClient();
   const [toast, setToast] = React.useState('');
 
-  const addLine = (card: Shawarma, child: Shawarma, quantity: number, addons: SelectedAddon[], comment: string) => {
+  const addLine = (card: Dish, child: Dish, quantity: number, addons: SelectedAddon[], comment: string) => {
     const key = lineKey(child.id, addons, comment);
     setLines(prev => {
       const existing = prev.find(l => l.key === key);
       if (existing) return prev.map(l => (l.key === key ? { ...l, quantity: l.quantity + quantity } : l));
       return [...prev, {
         key,
-        shawarmaId: child.id,
+        dishId: child.id,
         title: card.name,
         variant: card.children && card.children.length > 1 ? child.name : child.name !== 'Стандарт' && child.name !== card.name ? child.name : null,
         unitPrice: child.price,
@@ -726,7 +726,7 @@ const PosPage: React.FC = () => {
     setToast(`${card.name} — в чеке`);
   };
 
-  const pick = (card: Shawarma) => {
+  const pick = (card: Dish) => {
     const children = card.children ?? [];
     // Один вариант и нет добавок — сразу в чек, без лишних окон
     if (children.length === 1 && !hasAddons(card) && !hasAddons(children[0])) {

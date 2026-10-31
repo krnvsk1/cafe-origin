@@ -26,14 +26,14 @@ import MenuItemCard from '../components/MenuItemCard';
 import RepeatLastOrderBanner from '../components/RepeatLastOrderBanner';
 import CartPanel, { MobileCartBar } from '../components/CartPanel';
 import { useFavoriteIds, useToggleFavorite } from '../api/favorites';
-import { useShawarmas, useRestaurantSettings, useBrand } from '../api/hooks';
-import type { Shawarma, SelectedAddon } from '../types';
+import { useDishes, useRestaurantSettings, useBrand } from '../api/hooks';
+import type { Dish, SelectedAddon } from '../types';
 import ProductModal from '../components/ProductModal';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { tokens } from '../theme';
 import { useCan, P } from '../auth/permissions';
-import heroShawarma from '../assets/hero-shawarma.jpg';
+import heroDish from '../assets/hero-dish.jpg';
 
 // Сетка карточек: 2 колонки на телефоне, 3 на планшете и ноутбуке, 4 на широком экране
 const gridSx = {
@@ -66,10 +66,10 @@ const RestaurantHero: React.FC = () => {
         mb: { xs: 2, md: 3 },
       }}
     >
-      {/* Фото фирменной шаурмы справа — главный графический акцент страницы (раньше был эмодзи, похожий на буррито) */}
+      {/* Картинка справа — главный графический акцент обложки */}
       <Box
         component="img"
-        src={heroShawarma}
+        src={heroDish}
         alt=""
         aria-hidden
         sx={{
@@ -143,9 +143,9 @@ const MenuPage: React.FC = () => {
   const can = useCan();
   const isAdminRole = isAuthenticated && can(P.Menu);
 
-  const { data: menuItems, isLoading, error, refetch } = useShawarmas();
+  const { data: menuItems, isLoading, error, refetch } = useDishes();
 
-  const [selectedProduct, setSelectedProduct] = useState<Shawarma | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Dish | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [activeSection, setActiveSection] = useState('');
@@ -187,7 +187,7 @@ const MenuPage: React.FC = () => {
 
   // Разделы меню в порядке первого появления
   const sections = useMemo(() => {
-    const map = new Map<string, Shawarma[]>();
+    const map = new Map<string, Dish[]>();
     visibleCards.forEach(card => {
       const key = card.category?.trim() || 'Меню';
       if (!map.has(key)) map.set(key, []);
@@ -225,7 +225,7 @@ const MenuPage: React.FC = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const handleAddToCart = (product: Shawarma, quantity: number, selectedAddons: SelectedAddon[], instructions: string, selectedChild?: Shawarma) => {
+  const handleAddToCart = (product: Dish, quantity: number, selectedAddons: SelectedAddon[], instructions: string, selectedChild?: Dish) => {
     addToCart(product, quantity, selectedAddons, instructions, selectedChild);
   };
 
@@ -362,7 +362,7 @@ const MenuPage: React.FC = () => {
                     inCartCount={inCart.get(card.id) ?? 0}
                     isFavorite={favoriteSet.has(card.id)}
                     onToggleFavorite={isAuthenticated
-                      ? () => toggleFavorite.mutate({ shawarmaId: card.id, isFavorite: !favoriteSet.has(card.id) })
+                      ? () => toggleFavorite.mutate({ dishId: card.id, isFavorite: !favoriteSet.has(card.id) })
                       : undefined}
                   />
                 ))}

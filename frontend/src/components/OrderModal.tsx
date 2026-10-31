@@ -187,7 +187,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
       latitude: useZones && coords ? coords[0] : undefined,
       longitude: useZones && coords ? coords[1] : undefined,
       items: cartItems.map(item => ({
-        shawarmaId: item.selectedChild?.id ?? item.id,
+        dishId: item.selectedChild?.id ?? item.id,
         quantity: item.quantity,
         name: item.selectedChild
           ? `${item.name} — ${item.selectedChild.name}`
@@ -464,7 +464,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
                             />
                           ) : (
                             <Typography component="span" sx={{ fontSize: '1.8rem' }}>
-                              🥙
+                              🍽️
                             </Typography>
                           )}
                         </Avatar>

@@ -1,15 +1,14 @@
 // src/types/index.ts
 
-// ==================== SHAWARMA (Меню) ====================
+// ==================== DISH (Меню) ====================
 
-export interface Shawarma {
+export interface Dish {
   id: number;
   name: string;
   price: number;
   displayPrice?: number;
   description: string;
   isSpicy: boolean;
-  hasCheese: boolean;
   isAvailable: boolean;
   isPromo?: boolean;
   category?: string;          // Раздел меню (Пиццы, Бургеры…)
@@ -18,7 +17,7 @@ export interface Shawarma {
   availableOrderTypes?: string[] | null;
   createdAt: string;
   updatedAt?: string | null;
-  images?: ShawarmaImage[];
+  images?: DishImage[];
   primaryImage?: string;
   sortOrder?: number;
   addonCategories?: AddonCategory[];
@@ -27,24 +26,23 @@ export interface Shawarma {
   /** Кухня, куда идёт блюдо; null — как у карточки / кухня по умолчанию */
   kitchenStationId?: number | null;
   isCard?: boolean;
-  children?: Shawarma[];
+  children?: Dish[];
 }
 
-  export interface ShawarmaImage {
+  export interface DishImage {
     id: number;
-    shawarmaId: number;
+    dishId: number;
     filePath: string;
     isPrimary: boolean;
     createdAt: string;
   }
 
   // Для создания (все обязательные поля, без автогенерируемых)
-  export interface CreateShawarmaDto {
+  export interface CreateDishDto {
     name: string;
     price: number;
     description: string;
     isSpicy?: boolean;
-    hasCheese?: boolean;
     isAvailable?: boolean;
     isPromo?: boolean;
     parentId?: number | null;
@@ -55,17 +53,17 @@ export interface Shawarma {
     availableOrderTypes?: string[] | null;
   };
 
-  export interface CartItem extends Shawarma {
+  export interface CartItem extends Dish {
     quantity: number;
     selectedAddons: SelectedAddon[];
     specialInstructions?: string;
     uniqueKey?: string;
     // Выбранный дочерний вариант (если товар — карточка с детьми)
-    selectedChild?: Shawarma;
+    selectedChild?: Dish;
   }
   
   // Для обновления (все опционально, кроме id)
-  export type UpdateShawarmaDto = Partial<CreateShawarmaDto> & { id: number };
+  export type UpdateDishDto = Partial<CreateDishDto> & { id: number };
   
   // ==================== ORDER (Заказы) ====================
   
@@ -88,7 +86,7 @@ export interface Shawarma {
   export interface OrderItem {
     id: number;
     orderId: number;
-    shawarmaId: number;
+    dishId: number;
     name: string;               // Название на момент заказа
     quantity: number;
     price: number;              // Цена на момент заказа
@@ -133,7 +131,7 @@ export interface Shawarma {
     latitude?: number;
     longitude?: number;
     items: {
-      shawarmaId: number;
+      dishId: number;
       quantity: number;
       name?: string;            // опционально, бэкенд сам подставит
       price?: number;
@@ -155,8 +153,8 @@ export interface Shawarma {
     totalOrdersToday: number;
     totalRevenueToday: number;
     popularItems: {
-      shawarmaId: number;
-      shawarmaName: string;
+      dishId: number;
+      dishName: string;
       quantity: number;
     }[];
     ordersByStatus: {

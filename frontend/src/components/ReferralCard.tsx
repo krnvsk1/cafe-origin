@@ -29,7 +29,7 @@ const ReferralCard: React.FC = () => {
   if (!data?.enabled || !data.code) return null;
 
   const link = `${window.location.origin}/?ref=${data.code}`;
-  const text = `Попробуй «${brand.name}»! По моей ссылке получишь ${data.inviteeBonus} баллов после первого заказа 🌯`;
+  const text = `Попробуй «${brand.name}»! По моей ссылке получишь ${data.inviteeBonus} баллов после первого заказа 🍽️`;
 
   const copy = async () => {
     try {

@@ -5,13 +5,13 @@ import {
   Favorite as FavoriteIcon,
   FavoriteBorder as FavoriteBorderIcon,
 } from '@mui/icons-material';
-import type { Shawarma } from '../types';
+import type { Dish } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import { tokens } from '../theme';
 import { allowedOrderTypes, describeOrderTypes } from '../utils/orderTypes';
 
 interface MenuItemCardProps {
-  item: Shawarma;
+  item: Dish;
   onOpen: () => void;
   isFavorite?: boolean;
   // Если не передан — кнопка «в избранное» не показывается (например, для гостей)
@@ -20,7 +20,7 @@ interface MenuItemCardProps {
   inCartCount?: number;
 }
 
-const priceOf = (item: Shawarma) => {
+const priceOf = (item: Dish) => {
   const children = item.children ?? [];
   if (children.length === 0) return { value: item.price, from: false };
   const min = Math.min(...children.map(c => c.price));
@@ -45,7 +45,6 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
   const badge = item.badge ? BADGES[item.badge] : undefined;
   // Единственный вариант с весом/размером (например «400 г») показываем под названием
   const sizeNote = item.children?.length === 1 && item.children[0].name !== 'Стандарт' ? item.children[0].name : '';
-  const cheese = item.hasCheese || item.children?.some(c => c.hasCheese);
 
   return (
     <Box
@@ -87,16 +86,15 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
           />
         ) : (
           <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-            <Typography aria-hidden sx={{ fontSize: { xs: 56, sm: 72 }, lineHeight: 1, opacity: 0.85 }}>🌯</Typography>
+            <Typography aria-hidden sx={{ fontSize: { xs: 56, sm: 72 }, lineHeight: 1, opacity: 0.85 }}>🍽️</Typography>
           </Box>
         )}
 
-        {(badge || spicy || cheese || venueNote) && (
+        {(badge || spicy || venueNote) && (
           <Box sx={{ position: 'absolute', left: 8, top: 8, display: 'flex', gap: 0.5, flexWrap: 'wrap', pr: 5 }}>
             {badge && <Tag label={badge.label} color={badge.color} solid />}
             {spicy && <Tag label="Острое" color={tokens.chili} />}
             {venueNote && <Tag label={venueNote[0].toUpperCase() + venueNote.slice(1)} color="#21201F" />}
-            {cheese && !badge && <Tag label="С сыром" color="#B86A00" />}
           </Box>
         )}
 

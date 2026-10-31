@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Menu View
 
 struct MenuView: View {
-    @State private var shawarmas: [Shawarma] = []
+    @State private var dishes: [Dish] = []
     @State private var selectedCategory: String? = nil
     @State private var isLoading: Bool = true
     @State private var searchText: String = ""
@@ -19,12 +19,12 @@ struct MenuView: View {
     // MARK: - Computed Properties
 
     /// Parent cards (with at least one available child)
-    private var parentCards: [Shawarma] {
-        shawarmas.filter { $0.isParentCard && ($0.availableChildren?.isEmpty == false) }
+    private var parentCards: [Dish] {
+        dishes.filter { $0.isParentCard && ($0.availableChildren?.isEmpty == false) }
     }
 
     /// Filtered parent cards (search + category)
-    private var filteredCards: [Shawarma] {
+    private var filteredCards: [Dish] {
         var result = parentCards
 
         // Search: match against parent name, child names/descriptions
@@ -54,12 +54,12 @@ struct MenuView: View {
     }
 
     /// Promo cards
-    private var promoCards: [Shawarma] {
+    private var promoCards: [Dish] {
         filteredCards.filter { $0.isPromo }
     }
 
     /// Regular (non-promo) cards
-    private var regularCards: [Shawarma] {
+    private var regularCards: [Dish] {
         filteredCards.filter { !$0.isPromo }
     }
 
@@ -120,7 +120,7 @@ struct MenuView: View {
             }
         }
         .onAppear {
-            if shawarmas.isEmpty { loadMenu() }
+            if dishes.isEmpty { loadMenu() }
         }
         .refreshable { await loadMenuAsync() }
         .alert("Ошибка", isPresented: $showError) {
@@ -169,7 +169,7 @@ struct MenuView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(.secondary)
 
-            TextField("Поиск шаурмы...", text: $searchText)
+            TextField("Поиск блюд...", text: $searchText)
                 .font(.body)
 
             if !searchText.isEmpty {
@@ -246,9 +246,9 @@ struct MenuView: View {
                             HStack(spacing: 16) {
                                 ForEach(promoCards) { card in
                                     NavigationLink {
-                                        ProductDetailView(shawarma: card)
+                                        ProductDetailView(dish: card)
                                     } label: {
-                                        MenuProductCard(shawarma: card)
+                                        MenuProductCard(dish: card)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -266,9 +266,9 @@ struct MenuView: View {
                         LazyVGrid(columns: columns, spacing: 16) {
                             ForEach(regularCards) { card in
                                 NavigationLink {
-                                    ProductDetailView(shawarma: card)
+                                    ProductDetailView(dish: card)
                                 } label: {
-                                    MenuProductCard(shawarma: card)
+                                    MenuProductCard(dish: card)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -318,7 +318,7 @@ struct MenuView: View {
         defer { isLoading = false }
 
         do {
-            shawarmas = try await APIClient.shared.getMenu()
+            dishes = try await APIClient.shared.getMenu()
         } catch {
             errorMessage = "Не удалось загрузить меню. Проверьте подключение."
             showError = true
@@ -366,7 +366,7 @@ struct FilterChip: View {
 // MARK: - Menu Product Card (Parent Card) — matches frontend MenuItemCard
 
 struct MenuProductCard: View {
-    let shawarma: Shawarma
+    let dish: Dish
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -376,7 +376,7 @@ struct MenuProductCard: View {
             // Product info
             VStack(alignment: .leading, spacing: 6) {
                 // Name
-                Text(shawarma.name)
+                Text(dish.name)
                     .font(.subheadline)
                     .fontWeight(.bold)
                     .lineLimit(2)
@@ -384,8 +384,8 @@ struct MenuProductCard: View {
                     .padding(.top, 10)
 
                 // Description
-                if !shawarma.description.isEmpty {
-                    Text(shawarma.description)
+                if !dish.description.isEmpty {
+                    Text(dish.description)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
@@ -393,15 +393,10 @@ struct MenuProductCard: View {
 
                 // Badges row
                 HStack(spacing: 4) {
-                    if shawarma.isSpicy {
+                    if dish.isSpicy {
                         Label("Острое", systemImage: "flame.fill")
                             .font(.caption2)
                             .foregroundColor(.red)
-                    }
-                    if shawarma.hasCheese {
-                        Label("С сыром", systemImage: "cheese")
-                            .font(.caption2)
-                            .foregroundColor(.orange)
                     }
                     Spacer()
                 }
@@ -443,7 +438,7 @@ struct MenuProductCard: View {
     @ViewBuilder
     private var productImage: some View {
         ZStack(alignment: .topTrailing) {
-            if let imagePath = shawarma.primaryImage,
+            if let imagePath = dish.primaryImage,
                let url = APIClient.shared.getImageURL(imagePath) {
                 AsyncImage(url: url) { phase in
                     switch phase {
@@ -470,7 +465,7 @@ struct MenuProductCard: View {
             }
 
             // Promo badge
-            if shawarma.isPromo {
+            if dish.isPromo {
                 Text("АКЦИЯ")
                     .font(.caption2)
                     .fontWeight(.bold)
@@ -482,23 +477,15 @@ struct MenuProductCard: View {
                     .padding(.top, 0)
             }
 
-            // Spicy / Cheese badges overlay
+            // Spicy badge overlay
             VStack {
                 HStack(spacing: 4) {
-                    if shawarma.isSpicy {
+                    if dish.isSpicy {
                         Image(systemName: "flame.fill")
                             .font(.caption2)
                             .foregroundColor(.white)
                             .padding(6)
                             .background(Color.red.opacity(0.85))
-                            .clipShape(Capsule())
-                    }
-                    if shawarma.hasCheese {
-                        Image(systemName: "cheese")
-                            .font(.caption2)
-                            .foregroundColor(.white)
-                            .padding(6)
-                            .background(Color.orange.opacity(0.85))
                             .clipShape(Capsule())
                     }
                     Spacer()
@@ -524,11 +511,11 @@ struct MenuProductCard: View {
     // MARK: - Price Text
 
     private var priceText: String {
-        let children = shawarma.availableChildren ?? []
+        let children = dish.availableChildren ?? []
         if !children.isEmpty {
-            return "от \(Int(shawarma.displayPrice)) \u{20BD}"
+            return "от \(Int(dish.displayPrice)) \u{20BD}"
         }
-        return "\(Int(shawarma.price)) \u{20BD}"
+        return "\(Int(dish.price)) \u{20BD}"
     }
 }
 

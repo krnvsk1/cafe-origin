@@ -63,17 +63,17 @@ index 5edc8d3..b023722 100644
    OrderStats,
    HealthStatus,
    DashboardStats,
--  ShawarmaImage
-+  ShawarmaImage,
+-  DishImage
++  DishImage,
 +  User,
 +  UserDetail,
 +  AssignRoleDto,
 +  UsersQueryParams
  } from '../types';
  
- // ==================== SHAWARMA HOOKS ====================
-@@ -264,4 +268,60 @@ export const useReorderShawarmas = () => {
-       queryClient.invalidateQueries({ queryKey: ['shawarmas'] });
+ // ==================== DISH HOOKS ====================
+@@ -264,4 +268,60 @@ export const useReorderDishes = () => {
+       queryClient.invalidateQueries({ queryKey: ['dishes'] });
      },
    });
 +};
@@ -138,7 +138,7 @@ diff --git a/frontend/src/types/index.ts b/frontend/src/types/index.ts
 index 8d239cd..02abecf 100644
 --- a/frontend/src/types/index.ts
 +++ b/frontend/src/types/index.ts
-@@ -194,4 +194,42 @@ export interface Shawarma {
+@@ -194,4 +194,42 @@ export interface Dish {
      addonCategoryName: string;
      price: number;
      quantity: number;

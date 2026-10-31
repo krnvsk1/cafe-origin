@@ -59,7 +59,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'kumashaurma-auth',
+      name: 'cafe-auth',
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,

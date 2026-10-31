@@ -36,7 +36,7 @@ frontend/dist/
 xcuserdata/
 
 # Фото, загруженные локально через админку и импорт меню (уже добавленные в репозиторий остаются)
-src/Kumashaurma.API/wwwroot/uploads/*
+src/Cafe.API/wwwroot/uploads/*
 
 # Локальные настройки Claude Code (запуск серверов в панели браузера)
 .claude/launch.json

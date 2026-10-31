@@ -12,7 +12,7 @@ import {
 } from '@mui/icons-material';
 import { usePushNotifications, type PushState } from '../api/push';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useShawarmas } from '../api/hooks';
+import { useDishes } from '../api/hooks';
 import {
   useWaiterTables, useTableCheck, useOpenCheck, useAddRound, useCancelRound, useCloseCheck, useCancelCheck,
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
@@ -28,7 +28,7 @@ import { useCan, P } from '../auth/permissions';
 import { resolveMediaUrl } from '../utils/media';
 import { allowedOrderTypes, isAllowedFor } from '../utils/orderTypes';
 import { plural } from '../components/CartPanel';
-import type { Shawarma, SelectedAddon } from '../types';
+import type { Dish, SelectedAddon } from '../types';
 import { tokens } from '../theme';
 import FullscreenButton from '../components/FullscreenButton';
 import { useWorkScreen } from '../hooks/useFullscreen';
@@ -359,7 +359,7 @@ export const TablesSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =
 
 interface DraftLine {
   key: string;
-  shawarmaId: number;
+  dishId: number;
   title: string;
   unitPrice: number;
   quantity: number;
@@ -368,15 +368,15 @@ interface DraftLine {
 }
 
 const lineTotal = (l: DraftLine) => (l.unitPrice + l.addons.reduce((s, a) => s + a.price * a.quantity, 0)) * l.quantity;
-const hasAddons = (s: Shawarma) => ((s as unknown as { addons?: unknown[] }).addons?.length ?? 0) > 0;
+const hasAddons = (s: Dish) => ((s as unknown as { addons?: unknown[] }).addons?.length ?? 0) > 0;
 
 const MenuPicker: React.FC<{ open: boolean; tableName: string; onClose: () => void; onSend: (lines: DraftLine[], comment: string) => Promise<void> }> = ({ open, tableName, onClose, onSend }) => {
-  const { data: menu = [] } = useShawarmas();
+  const { data: menu = [] } = useDishes();
   const [search, setSearch] = React.useState('');
   const [section, setSection] = React.useState('');
   const [lines, setLines] = React.useState<DraftLine[]>([]);
   const [comment, setComment] = React.useState('');
-  const [picking, setPicking] = React.useState<Shawarma | null>(null);
+  const [picking, setPicking] = React.useState<Dish | null>(null);
   const [showDraft, setShowDraft] = React.useState(false);
   const [sending, setSending] = React.useState(false);
   const [err, setErr] = React.useState('');
@@ -392,22 +392,22 @@ const MenuPicker: React.FC<{ open: boolean; tableName: string; onClose: () => vo
   const visible = cards.filter(c => (!section || (c.category?.trim() || 'Меню') === section)
     && (!q || c.name.toLowerCase().includes(q) || c.children.some(ch => ch.name.toLowerCase().includes(q))));
 
-  const add = (card: Shawarma, child: Shawarma, quantity: number, addons: SelectedAddon[], cmt: string) => {
+  const add = (card: Dish, child: Dish, quantity: number, addons: SelectedAddon[], cmt: string) => {
     const key = `${child.id}|${addons.map(a => `${a.addonId}x${a.quantity}`).sort().join(',')}|${cmt}`;
     const title = card.children && card.children.length > 1 && child.name !== card.name ? `${card.name} ${child.name}` : card.name;
     setLines(prev => prev.some(l => l.key === key)
       ? prev.map(l => (l.key === key ? { ...l, quantity: l.quantity + quantity } : l))
-      : [...prev, { key, shawarmaId: child.id, title, unitPrice: child.price, quantity, addons, comment: cmt }]);
+      : [...prev, { key, dishId: child.id, title, unitPrice: child.price, quantity, addons, comment: cmt }]);
   };
 
-  const pick = (card: Shawarma & { children: Shawarma[] }) => {
+  const pick = (card: Dish & { children: Dish[] }) => {
     if (card.children.length === 1 && !hasAddons(card) && !hasAddons(card.children[0])) add(card, card.children[0], 1, [], '');
     else setPicking(card);
   };
 
   const count = lines.reduce((s, l) => s + l.quantity, 0);
   const total = lines.reduce((s, l) => s + lineTotal(l), 0);
-  const qtyOf = (cardId: number) => lines.filter(l => cards.find(c => c.id === cardId)?.children.some(ch => ch.id === l.shawarmaId)).reduce((s, l) => s + l.quantity, 0);
+  const qtyOf = (cardId: number) => lines.filter(l => cards.find(c => c.id === cardId)?.children.some(ch => ch.id === l.dishId)).reduce((s, l) => s + l.quantity, 0);
 
   const send = async () => {
     setSending(true);
@@ -556,7 +556,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
     await addRound.mutateAsync({
       checkId: check.id,
       comment: comment.trim() || null,
-      items: lines.map(l => ({ shawarmaId: l.shawarmaId, quantity: l.quantity, addons: l.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })), comment: l.comment || undefined })),
+      items: lines.map(l => ({ dishId: l.dishId, quantity: l.quantity, addons: l.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })), comment: l.comment || undefined })),
     });
   };
 
@@ -862,7 +862,7 @@ const SplitDialog: React.FC<{ check: TableCheck; onClose: () => void; onDone: (t
         <Typography sx={{ fontWeight: 800, fontSize: '1.15rem' }}>Разделить счёт</Typography>
       </Box>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        <Typography variant="body2" color="text.secondary">Отметьте, что перенести. Можно часть штук: из 3 шаурм перенести 1.</Typography>
+        <Typography variant="body2" color="text.secondary">Отметьте, что перенести. Можно часть штук: из 3 одинаковых блюд перенести 1.</Typography>
         {items.map(i => {
           const n = qty[i.id] ?? 0;
           return (

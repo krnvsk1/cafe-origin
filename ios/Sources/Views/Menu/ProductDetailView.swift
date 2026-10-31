@@ -3,10 +3,10 @@ import SwiftUI
 // MARK: - Product Detail View
 
 struct ProductDetailView: View {
-    let shawarma: Shawarma          // Parent card
-    var preselectedChild: Shawarma? // Child navigated from menu
+    let dish: Dish          // Parent card
+    var preselectedChild: Dish? // Child navigated from menu
 
-    @State private var selectedChild: Shawarma?
+    @State private var selectedChild: Dish?
     @State private var selectedAddons: Set<SelectedAddon> = []
     @State private var quantity: Int = 1
     @State private var addonCategories: [AddonCategory] = []
@@ -19,8 +19,8 @@ struct ProductDetailView: View {
     // MARK: - Computed Properties
 
     /// Children available for selection
-    private var children: [Shawarma] {
-        (shawarma.availableChildren ?? []).sorted { $0.price < $1.price }
+    private var children: [Dish] {
+        (dish.availableChildren ?? []).sorted { $0.price < $1.price }
     }
 
     /// Is this a parent card with children (variant selection mode)
@@ -29,16 +29,16 @@ struct ProductDetailView: View {
     }
 
     /// The active product for image/addon display (child or self)
-    private var activeProduct: Shawarma {
-        selectedChild ?? shawarma
+    private var activeProduct: Dish {
+        selectedChild ?? dish
     }
 
-    private var allImages: [ShawarmaImage] {
-        activeProduct.images ?? shawarma.images ?? []
+    private var allImages: [DishImage] {
+        activeProduct.images ?? dish.images ?? []
     }
 
     private var effectivePrice: Double {
-        selectedChild?.price ?? shawarma.displayPrice
+        selectedChild?.price ?? dish.displayPrice
     }
 
     private var addonsTotal: Double {
@@ -171,7 +171,7 @@ struct ProductDetailView: View {
             // Status & promo badges overlay
             VStack {
                 HStack {
-                    if shawarma.isPromo {
+                    if dish.isPromo {
                         promoBadge
                     }
                     Spacer()
@@ -229,11 +229,11 @@ struct ProductDetailView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(hasChildren && selectedChild != nil ? selectedChild!.name : shawarma.name)
+                    Text(hasChildren && selectedChild != nil ? selectedChild!.name : dish.name)
                         .font(.appTitle)
 
                     if hasChildren {
-                        Text(shawarma.name)
+                        Text(dish.name)
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -243,13 +243,9 @@ struct ProductDetailView: View {
 
                 // Badges
                 HStack(spacing: 6) {
-                    if shawarma.isSpicy || selectedChild?.isSpicy == true {
+                    if dish.isSpicy || selectedChild?.isSpicy == true {
                         Image(systemName: "flame.fill")
                             .foregroundColor(.red)
-                    }
-                    if shawarma.hasCheese || selectedChild?.hasCheese == true {
-                        Image(systemName: "cheese")
-                            .foregroundColor(.orange)
                     }
                 }
                 .font(.title3)
@@ -260,17 +256,17 @@ struct ProductDetailView: View {
                 Text("\(Int(selectedChild!.price)) \u{20BD}")
                     .font(.appPrice)
             } else if hasChildren {
-                Text("от \(Int(shawarma.displayPrice)) \u{20BD}")
+                Text("от \(Int(dish.displayPrice)) \u{20BD}")
                     .font(.appPrice)
                     .foregroundColor(.secondary)
             } else {
-                Text("\(Int(shawarma.price)) \u{20BD}")
+                Text("\(Int(dish.price)) \u{20BD}")
                     .font(.appPrice)
             }
 
             // Category tag
-            if !shawarma.category.isEmpty {
-                Text(shawarma.category)
+            if !dish.category.isEmpty {
+                Text(dish.category)
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundColor(.appPrimary)
@@ -301,7 +297,7 @@ struct ProductDetailView: View {
         }
     }
 
-    private func childChip(_ child: Shawarma) -> some View {
+    private func childChip(_ child: Dish) -> some View {
         let isSelected = selectedChild?.id == child.id
 
         return Button {
@@ -553,7 +549,7 @@ struct ProductDetailView: View {
 
     private func addToCart() {
         cartService.addItem(
-            shawarma: shawarma,
+            dish: dish,
             quantity: quantity,
             selectedChild: selectedChild,
             selectedAddons: Array(selectedAddons)
@@ -572,11 +568,11 @@ struct ProductDetailView: View {
 
     private func loadAddons() {
         // Load addons for the selected child (or parent if no children)
-        let productId = selectedChild?.id ?? shawarma.id
+        let productId = selectedChild?.id ?? dish.id
         isLoadingAddons = true
         Task {
             do {
-                addonCategories = try await APIClient.shared.getShawarmaAddons(shawarmaId: productId)
+                addonCategories = try await APIClient.shared.getDishAddons(dishId: productId)
             } catch {
                 addonCategories = []
             }

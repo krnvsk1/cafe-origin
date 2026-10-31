@@ -5,7 +5,7 @@ import SwiftUI
 struct AdminDashboardView: View {
     @State private var stats: OrderStats?
     @State private var recentOrders: [Order] = []
-    @State private var shawarmas: [Shawarma] = []
+    @State private var dishes: [Dish] = []
     @State private var popularItems: [PopularItem] = []
     @State private var isLoading = true
     @State private var errorMessage: String = ""
@@ -57,7 +57,7 @@ struct AdminDashboardView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 StatCardView(
                     title: "В меню",
-                    value: "\(availableCount)/\(shawarmas.count)",
+                    value: "\(availableCount)/\(dishes.count)",
                     subtitle: "доступных товаров",
                     icon: "menu.fill",
                     color: .appPrimary
@@ -91,7 +91,7 @@ struct AdminDashboardView: View {
     }
 
     private var availableCount: Int {
-        shawarmas.filter { $0.isAvailable }.count
+        dishes.filter { $0.isAvailable }.count
     }
 
     // MARK: - Popular Items Section
@@ -217,7 +217,7 @@ struct AdminDashboardView: View {
 
         stats = (try? await statsTask)
         recentOrders = (try? await ordersTask) ?? []
-        shawarmas = (try? await menuTask) ?? []
+        dishes = (try? await menuTask) ?? []
 
         // Calculate popular items from orders
         calculatePopularItems()
@@ -234,12 +234,12 @@ struct AdminDashboardView: View {
         for order in recentOrders {
             guard let items = order.orderItems else { continue }
             for item in items {
-                if var existing = itemMap[item.shawarmaId ?? 0] {
+                if var existing = itemMap[item.dishId ?? 0] {
                     existing.quantity += item.quantity
                     existing.revenue += item.price * Double(item.quantity)
-                    itemMap[item.shawarmaId ?? 0] = existing
+                    itemMap[item.dishId ?? 0] = existing
                 } else {
-                    itemMap[item.shawarmaId ?? 0] = (name: item.name, quantity: item.quantity, revenue: item.price * Double(item.quantity))
+                    itemMap[item.dishId ?? 0] = (name: item.name, quantity: item.quantity, revenue: item.price * Double(item.quantity))
                 }
             }
         }
