@@ -36,6 +36,7 @@ import {
   useTheme,
   Tooltip,
   CircularProgress,
+  InputAdornment,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -46,10 +47,13 @@ import {
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
   Link as LinkIcon,
-  FiberManualRecord as DotIcon
+  FiberManualRecord as DotIcon,
+  Search as SearchIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useShawarmas, useDeleteShawarma, useUpdateShawarmaAvailability } from '../api/hooks';
 import { KitchenStationSelect, KitchenStationsButton } from '../components/KitchenStationControls';
+import { useKitchenStations } from '../api/staff';
 import { 
   useAddonCategories, 
   useCreateAddonCategory,
@@ -125,6 +129,37 @@ const AdminMenuPage: React.FC = () => {
     [shawarmas]
   );
   const { data: categories = [] } = useAddonCategories();
+  const { data: stations = [] } = useKitchenStations();
+
+  // Фильтры и поиск: по названию, разделу, наличию, кухне
+  const [search, setSearch] = useState('');
+  const [section, setSection] = useState('all');
+  const [stock, setStock] = useState<'all' | 'on' | 'off'>('all');
+  const [station, setStation] = useState<'all' | number>('all');
+  const q = search.trim().toLowerCase();
+  const sections = useMemo(
+    () => Array.from(new Set(parents.map(p => p.category).filter((c): c is string => !!c))).sort((a, b) => a.localeCompare(b, 'ru')),
+    [parents],
+  );
+  const shownParents = useMemo(() => parents.filter(p => {
+    const kids = shawarmas.filter(s => s.parentId === p.id);
+    const items = kids.length ? kids : [p];
+    if (q && ![p, ...kids].some(x => x.name.toLowerCase().includes(q) || (x.description ?? '').toLowerCase().includes(q))) return false;
+    if (section !== 'all' && (section === '' ? !!p.category : p.category !== section)) return false;
+    if (stock === 'on' && !items.some(x => x.isAvailable)) return false;
+    if (stock === 'off' && items.every(x => x.isAvailable)) return false;
+    if (station !== 'all') {
+      const def = stations[0]?.id;
+      const of = (x: typeof p) => x.kitchenStationId ?? p.kitchenStationId ?? def;
+      if (![p, ...kids].some(x => of(x) === station)) return false;
+    }
+    return true;
+  }), [parents, shawarmas, q, section, stock, station, stations]);
+  const shownCategories = useMemo(() => !q ? categories : categories
+    .map(c => (c.name.toLowerCase().includes(q) ? c : { ...c, addons: c.addons.filter(a => a.name.toLowerCase().includes(q)) }))
+    .filter(c => c.name.toLowerCase().includes(q) || c.addons.length > 0), [categories, q]);
+  const filtered = q !== '' || section !== 'all' || stock !== 'all' || station !== 'all';
+  const resetFilters = () => { setSearch(''); setSection('all'); setStock('all'); setStation('all'); };
   
   // Мутации
   const deleteProduct = useDeleteShawarma();
@@ -317,10 +352,46 @@ const AdminMenuPage: React.FC = () => {
           <Tab label="Добавки" />
         </Tabs>
 
+        {/* Поиск и фильтры */}
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', px: { xs: 2, sm: 3 }, pt: 2 }}>
+          <TextField size="small" placeholder={tabValue === 0 ? 'Поиск по названию и описанию' : 'Поиск групп и добавок'} value={search}
+            onChange={e => setSearch(e.target.value)} sx={{ flex: '1 1 240px' }}
+            slotProps={{ input: {
+              startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+              endAdornment: search ? <InputAdornment position="end"><IconButton size="small" onClick={() => setSearch('')} aria-label="Очистить"><CloseIcon fontSize="small" /></IconButton></InputAdornment> : undefined,
+            } }} />
+          {tabValue === 0 && (
+            <>
+              <TextField select size="small" label="Раздел" value={section} onChange={e => setSection(e.target.value)} sx={{ minWidth: 160 }}>
+                <MenuItem value="all">Все разделы</MenuItem>
+                {sections.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                <MenuItem value=""><em>Без раздела</em></MenuItem>
+              </TextField>
+              <TextField select size="small" label="Наличие" value={stock} onChange={e => setStock(e.target.value as 'all' | 'on' | 'off')} sx={{ minWidth: 150 }}>
+                <MenuItem value="all">Все</MenuItem>
+                <MenuItem value="on">В продаже</MenuItem>
+                <MenuItem value="off">Есть снятые с продажи</MenuItem>
+              </TextField>
+              {stations.length > 1 && (
+                <TextField select size="small" label="Кухня" value={station}
+                  onChange={e => setStation(e.target.value === 'all' ? 'all' : Number(e.target.value))} sx={{ minWidth: 150 }}>
+                  <MenuItem value="all">Все кухни</MenuItem>
+                  {stations.map(st => <MenuItem key={st.id} value={st.id}>{st.name}</MenuItem>)}
+                </TextField>
+              )}
+            </>
+          )}
+          {filtered && (
+            <Button size="small" onClick={resetFilters} sx={{ color: 'text.secondary' }}>
+              Сбросить{tabValue === 0 ? ` · найдено ${shownParents.length} из ${parents.length}` : ''}
+            </Button>
+          )}
+        </Box>
+
         {/* Панель товаров */}
         <TabPanel value={tabValue} index={0}>
           <Grid container spacing={2}>
-            {parents.map((parent) => {
+            {shownParents.map((parent) => {
               const children = shawarmas.filter(s => s.parentId === parent.id);
               const isExpanded = expandedParent === parent.id;
               const availableCount = children.filter(c => c.isAvailable).length;
@@ -601,6 +672,13 @@ const AdminMenuPage: React.FC = () => {
             })}
           </Grid>
 
+          {parents.length > 0 && shownParents.length === 0 && (
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <Typography color="text.secondary" sx={{ mb: 1 }}>Ничего не найдено</Typography>
+              <Button onClick={resetFilters}>Сбросить фильтры</Button>
+            </Box>
+          )}
+
           {parents.length === 0 && (
             <Box sx={{ textAlign: 'center', py: 6 }}>
               <FastfoodIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
@@ -614,7 +692,7 @@ const AdminMenuPage: React.FC = () => {
         {/* Панель добавок */}
         <TabPanel value={tabValue} index={1}>
           <AddonGroupsTab
-            categories={categories}
+            categories={shownCategories}
             expandedId={expandedCategory}
             onToggle={handleToggleCategory}
             onCreateGroup={() => setCategoryDialog({ open: true, mode: 'create' })}
