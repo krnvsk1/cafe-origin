@@ -7,7 +7,7 @@ import {
 import {
   ArrowBack as BackIcon, Add as AddIcon, Remove as RemoveIcon, Search as SearchIcon, Close as CloseIcon,
   TableRestaurant as TableIcon, CheckCircle as ReadyIcon, Schedule as CookingIcon, DoneAll as ServedIcon,
-  SettingsOutlined as SettingsIcon, DeleteOutline as DeleteIcon, MoreVert as MoreIcon,
+  DeleteOutline as DeleteIcon, MoreVert as MoreIcon,
   NotificationsActiveOutlined as BellOnIcon, NotificationsOffOutlined as BellOffIcon,
 } from '@mui/icons-material';
 import { usePushNotifications, type PushState } from '../api/push';
@@ -104,7 +104,6 @@ export const FloorView: React.FC<{ plan: FloorPlan; tables: WaiterTable[]; highl
 const TablesView: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
-  const can = useCan();
   const { data: tables = [], isLoading, error } = useWaiterTables();
   const open = useOpenCheck();
   const [mine, setMine] = React.useState(false);
@@ -116,7 +115,6 @@ const TablesView: React.FC = () => {
   const chooseView = (v: 'plan' | 'tiles') => { setView(v); try { localStorage.setItem('waiter-view', v); } catch { /* ignore */ } };
   const [opening, setOpening] = React.useState<WaiterTable | null>(null);
   const [guests, setGuests] = React.useState(2);
-  const [settings, setSettings] = React.useState(false);
   const [err, setErr] = React.useState('');
 
   const [choosing, setChoosing] = React.useState<WaiterTable | null>(null);
@@ -146,11 +144,9 @@ const TablesView: React.FC = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800, flex: 1 }}>Столы</Typography>
-        <Typography variant="body2" color="text.secondary">занято {busy} из {tables.length}</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>занято {busy} из {tables.length}</Typography>
         <PushButton />
         <FullscreenButton />
-        {can(P.TablesManage) && <IconButton onClick={() => setSettings(true)} aria-label="Настроить столы"><SettingsIcon /></IconButton>}
       </Box>
       {shift && <ShiftBar shift={shift} />}
       <Box sx={{ display: 'flex', gap: 1 }}>
@@ -234,7 +230,6 @@ const TablesView: React.FC = () => {
           <Button variant="contained" color="secondary" size="large" onClick={confirmOpen} disabled={open.isPending}>Открыть чек</Button>
         </DialogActions>
       </Dialog>
-      {settings && <TablesSettings onClose={() => setSettings(false)} />}
       <Snackbar open={!!toast} autoHideDuration={2500} onClose={() => setToast('')} message={toast} />
     </Box>
   );
