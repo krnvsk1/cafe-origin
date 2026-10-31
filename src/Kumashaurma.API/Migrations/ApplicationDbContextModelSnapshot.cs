@@ -2436,15 +2436,27 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("total");
 
+                    b.Property<int?>("VenueShiftId")
+                        .HasColumnType("integer")
+                        .HasColumnName("venue_shift_id");
+
                     b.Property<int?>("WaiterId")
                         .HasColumnType("integer")
                         .HasColumnName("waiter_id");
+
+                    b.Property<int?>("WaiterShiftId")
+                        .HasColumnType("integer")
+                        .HasColumnName("waiter_shift_id");
 
                     b.HasKey("Id");
 
                     b.HasIndex("Status");
 
                     b.HasIndex("TableId");
+
+                    b.HasIndex("VenueShiftId");
+
+                    b.HasIndex("WaiterShiftId");
 
                     b.ToTable("table_checks");
                 });
@@ -2690,6 +2702,83 @@ namespace Kumashaurma.API.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("user_points_transactions");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.VenueShift", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("BusinessDate")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("business_date");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<int?>("ClosedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("closed_by_user_id");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTime>("OpenedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("opened_at");
+
+                    b.Property<int?>("OpenedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("opened_by_user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessDate");
+
+                    b.HasIndex("ClosedAt");
+
+                    b.ToTable("venue_shifts");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.WaiterShift", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<DateTime>("OpenedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("opened_at");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.Property<int>("VenueShiftId")
+                        .HasColumnType("integer")
+                        .HasColumnName("venue_shift_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("VenueShiftId");
+
+                    b.ToTable("waiter_shifts");
                 });
 
             modelBuilder.Entity("Kumashaurma.API.Models.WebPushSubscription", b =>
@@ -3264,6 +3353,15 @@ namespace Kumashaurma.API.Migrations
                     b.Navigation("PerformedByUser");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.WaiterShift", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.VenueShift", null)
+                        .WithMany()
+                        .HasForeignKey("VenueShiftId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<int>", b =>

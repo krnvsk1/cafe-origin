@@ -10,6 +10,8 @@ export interface TableCheckSummary {
     guests: number | null;
     waiter: string | null;
     isMine: boolean;
+    /** Счёт другого официанта: видно только, что стол занят */
+    hidden: boolean;
     total: number;
     /** Заказов, где всё готово — пора нести */
     ready: number;
@@ -68,7 +70,10 @@ export interface TableCheck {
   /** Убранные из счёта блюда */
   voids: CheckVoid[];
   waiter: string | null;
+  waiterId: number | null;
   isMine: boolean;
+  /** Менеджер: видит все счета, может передать счёт другому официанту */
+  canManage: boolean;
   guests: number | null;
   comment: string | null;
   openedAt: string;
@@ -204,3 +209,72 @@ export const useAllTables = (enabled: boolean) =>
 
 export const useSaveTables = () =>
   useWaiterMutation<TableSetting[]>(list => apiClient.put('/api/waiter/tables', list).then(r => r.data));
+
+// ==================== Смены ====================
+
+export interface ShiftCurrent {
+  canManageVenue: boolean;
+  seesAll: boolean;
+  venue: { id: number; businessDate: string; openedAt: string; openedBy: string | null; stale: boolean } | null;
+  mine: { id: number; openedAt: string; openChecks: number } | null;
+  waiters: { id: number; userId: number; name: string | null; openedAt: string; openChecks: number }[] | null;
+  totalOpenChecks: number | null;
+}
+
+export const useShiftCurrent = () =>
+  useQuery<ShiftCurrent>({
+    queryKey: [KEY, 'shift'],
+    queryFn: () => apiClient.get('/api/shifts/current').then(r => r.data),
+    refetchInterval: 30_000,
+  });
+
+export const useOpenVenueShift = () => useWaiterMutation<void>(() => apiClient.post('/api/shifts/venue/open').then(r => r.data));
+export const useCloseVenueShift = () => useWaiterMutation<void>(() => apiClient.post('/api/shifts/venue/close').then(r => r.data));
+export const useOpenMyShift = () => useWaiterMutation<void>(() => apiClient.post('/api/shifts/mine/open').then(r => r.data));
+export const useCloseMyShift = () => useWaiterMutation<void>(() => apiClient.post('/api/shifts/mine/close').then(r => r.data));
+
+export const useAssignCheck = () =>
+  useWaiterMutation<{ id: number; waiterId: number }>(({ id, waiterId }) => apiClient.post(`/api/waiter/checks/${id}/assign`, { waiterId }).then(r => r.data));
+
+export interface ShiftRow {
+  id: number;
+  businessDate: string;
+  openedAt: string;
+  closedAt: string | null;
+  openedBy: string | null;
+  closedBy: string | null;
+  waiters: number;
+  checks: number;
+  openChecks: number;
+  revenue: number;
+  cash: number;
+  card: number;
+}
+
+export interface ShiftDetails {
+  id: number;
+  businessDate: string;
+  openedAt: string;
+  closedAt: string | null;
+  openedBy: string | null;
+  closedBy: string | null;
+  waiters: { id: number; userId: number; name: string | null; openedAt: string; closedAt: string | null; checks: number; revenue: number }[];
+  checks: {
+    id: number; table: string | null; label: string | null; waiter: string | null; waiterId: number | null;
+    status: 'open' | 'closed' | 'cancelled'; guests: number | null; openedAt: string; closedAt: string | null;
+    paymentMethod: string | null; total: number;
+  }[];
+}
+
+export const useShifts = (from: string, to: string) =>
+  useQuery<ShiftRow[]>({
+    queryKey: [KEY, 'shifts', from, to],
+    queryFn: () => apiClient.get('/api/shifts', { params: { from, to } }).then(r => r.data),
+  });
+
+export const useShiftDetails = (id: number | null) =>
+  useQuery<ShiftDetails>({
+    queryKey: [KEY, 'shifts', 'one', id],
+    queryFn: () => apiClient.get(`/api/shifts/${id}`).then(r => r.data),
+    enabled: id != null,
+  });

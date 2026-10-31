@@ -18,6 +18,8 @@ namespace Kumashaurma.API.Authorization
         public const string Waiter = "waiter";
         public const string Voids = "voids";
         public const string TablesManage = "tables";
+        public const string Shift = "shift";
+        public const string ChecksAll = "checks.all";
         public const string Delivery = "delivery";
         public const string CouriersAssign = "couriers.assign";
 
@@ -57,6 +59,8 @@ namespace Kumashaurma.API.Authorization
             new(Pos, "Заказы", "Касса", "Принимать заказы у стойки — в зале и с собой, отмечать оплату и выдачу"),
             new(Waiter, "Заказы", "Официант", "Открывать чеки на столы с телефона, отправлять заказы на кухню, закрывать чек при оплате"),
             new(Voids, "Заказы", "Отменённые блюда", "Видеть, какие блюда официанты убрали из чеков: кто, когда, почему, списано ли со склада"),
+            new(Shift, "Заказы", "Смена заведения", "Открывать и закрывать смену заведения на день — без неё официанты не начинают работу"),
+            new(ChecksAll, "Заказы", "Все чеки и смены", "Видеть чеки всех официантов и все смены, открывать чужие счета и передавать их другому официанту"),
             new(TablesManage, "Заказы", "Зал и столы", "Расставлять столы и перегородки на схеме зала, добавлять и переименовывать столы"),
             new(Kitchen, "Заказы", "Кухня", "Экран кухни: принимать заказы и отмечать готовность"),
             new(Delivery, "Заказы", "Доставка", "Экран курьера: брать заказы и отмечать доставку"),
@@ -94,7 +98,7 @@ namespace Kumashaurma.API.Authorization
         {
             ["manager"] = new[]
             {
-                Dashboard, Analytics, OrdersView, OrdersManage, Pos, Waiter, Voids, TablesManage, Kitchen, Delivery, CouriersAssign,
+                Dashboard, Analytics, OrdersView, OrdersManage, Pos, Waiter, Voids, TablesManage, Shift, ChecksAll, Kitchen, Delivery, CouriersAssign,
                 Menu, StopList, Zones, PromoCodes, Reviews, Points, UsersView, InventoryView, Haccp, HaccpManage
             },
             ["courier"] = new[] { OrdersView, Delivery },

@@ -52,6 +52,14 @@ namespace Kumashaurma.API.Models
         [Column("waiter_id")]
         public int? WaiterId { get; set; }
 
+        /// <summary>Смена заведения, в которую открыт счёт</summary>
+        [Column("venue_shift_id")]
+        public int? VenueShiftId { get; set; }
+
+        /// <summary>Смена официанта, в которую открыт счёт</summary>
+        [Column("waiter_shift_id")]
+        public int? WaiterShiftId { get; set; }
+
         [Column("guests")]
         public int? Guests { get; set; }
 

@@ -228,6 +228,7 @@ builder.Services.AddSingleton<Kumashaurma.API.Services.BrandSettingsProvider>();
 
 // Отмена блюд из чека официантом (с подтверждением кухни)
 builder.Services.AddScoped<Kumashaurma.API.Services.VoidService>();
+builder.Services.AddScoped<Kumashaurma.API.Services.ShiftService>();
 builder.Services.AddSingleton<Kumashaurma.API.Services.WebPushService>();
 builder.Services.AddScoped<Kumashaurma.API.Services.WaiterReadyNotifier>();
 

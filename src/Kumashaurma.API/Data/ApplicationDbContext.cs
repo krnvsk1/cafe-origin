@@ -65,6 +65,8 @@ namespace Kumashaurma.API.Data
         public DbSet<TableCheck> TableChecks { get; set; } = null!;
         public DbSet<OrderItemVoid> OrderItemVoids { get; set; } = null!;
         public DbSet<WebPushSubscription> PushSubscriptions { get; set; } = null!;
+        public DbSet<VenueShift> VenueShifts { get; set; } = null!;
+        public DbSet<WaiterShift> WaiterShifts { get; set; } = null!;
         public DbSet<OrderStationStatus> OrderStationStatuses { get; set; } = null!;
         public DbSet<OrderItemKitchenState> OrderItemKitchenStates { get; set; } = null!;
 
@@ -456,11 +458,26 @@ namespace Kumashaurma.API.Data
             modelBuilder.Entity<TableCheck>(entity =>
             {
                 entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.VenueShiftId);
+                entity.HasIndex(e => e.WaiterShiftId);
                 entity.HasOne(e => e.Table).WithMany().HasForeignKey(e => e.TableId).OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<Order>()
                 .HasOne<TableCheck>().WithMany().HasForeignKey(o => o.CheckId).OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<VenueShift>(entity =>
+            {
+                entity.HasIndex(e => e.BusinessDate);
+                entity.HasIndex(e => e.ClosedAt);
+            });
+
+            modelBuilder.Entity<WaiterShift>(entity =>
+            {
+                entity.HasIndex(e => e.VenueShiftId);
+                entity.HasIndex(e => e.UserId);
+                entity.HasOne<VenueShift>().WithMany().HasForeignKey(e => e.VenueShiftId).OnDelete(DeleteBehavior.Cascade);
+            });
 
             modelBuilder.Entity<WebPushSubscription>(entity =>
             {

@@ -1,0 +1,211 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Kumashaurma.API.Authorization;
+using Kumashaurma.API.Data;
+using Kumashaurma.API.Extensions;
+using Kumashaurma.API.Models;
+using Kumashaurma.API.Services;
+
+namespace Kumashaurma.API.Controllers
+{
+    /// <summary>Смены заведения и официантов; история смен с чеками — для менеджера</summary>
+    [ApiController]
+    [Route("api/shifts")]
+    [Authorize]
+    public class ShiftsController : ControllerBase
+    {
+        private readonly ApplicationDbContext _context;
+        private readonly ShiftService _shifts;
+
+        public ShiftsController(ApplicationDbContext context, ShiftService shifts)
+        {
+            _context = context;
+            _shifts = shifts;
+        }
+
+        private IActionResult Fail(ShiftService.ShiftException ex) => BadRequest(new { message = ex.Message });
+
+        // GET: api/shifts/current — открыта ли смена заведения, моя смена, кто сейчас работает
+        [HttpGet("current")]
+        public async Task<IActionResult> Current()
+        {
+            if (!User.IsStaff()) return Forbid();
+            var me = User.GetUserId() ?? 0;
+            var canVenue = await _shifts.HasAsync(User, Permissions.Shift);
+            var seesAll = await _shifts.HasAsync(User, Permissions.ChecksAll);
+            var venue = await _shifts.CurrentVenueAsync();
+            var mine = await _shifts.CurrentWaiterAsync(me);
+            var waiters = venue == null ? new List<WaiterShift>()
+                : await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == venue.Id && w.ClosedAt == null).OrderBy(w => w.OpenedAt).ToListAsync();
+            var names = await WaiterController.StaffNamesAsync(_context, waiters.Select(w => (int?)w.UserId).Append(venue?.OpenedByUserId));
+            var openChecks = await _context.TableChecks.AsNoTracking().Where(c => c.Status == CheckStatuses.Open)
+                .GroupBy(c => c.WaiterId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key ?? 0, x => x.Count);
+
+            return Ok(new
+            {
+                canManageVenue = canVenue,
+                seesAll,
+                venue = venue == null ? null : new
+                {
+                    venue.Id,
+                    venue.BusinessDate,
+                    venue.OpenedAt,
+                    openedBy = names.GetValueOrDefault(venue.OpenedByUserId ?? 0),
+                    // Смена с прошлого дня не закрыта
+                    stale = venue.BusinessDate < ShiftService.BusinessDate(DateTime.UtcNow),
+                },
+                mine = mine == null || venue == null || mine.VenueShiftId != venue.Id ? null : new { mine.Id, mine.OpenedAt, openChecks = openChecks.GetValueOrDefault(me) },
+                waiters = canVenue || seesAll
+                    ? waiters.Select(w => new { w.Id, w.UserId, name = names.GetValueOrDefault(w.UserId), w.OpenedAt, openChecks = openChecks.GetValueOrDefault(w.UserId) })
+                    : null,
+                totalOpenChecks = canVenue || seesAll ? openChecks.Values.Sum() : (int?)null
+            });
+        }
+
+        // POST: api/shifts/venue/open — открыть смену заведения на день
+        [HttpPost("venue/open")]
+        [HasPermission(Permissions.Shift)]
+        public async Task<IActionResult> OpenVenue()
+        {
+            try { var s = await _shifts.OpenVenueAsync(User.GetUserId()); return Ok(new { s.Id }); }
+            catch (ShiftService.ShiftException ex) { return Fail(ex); }
+        }
+
+        // POST: api/shifts/venue/close — закрыть смену заведения (открытых счетов быть не должно)
+        [HttpPost("venue/close")]
+        [HasPermission(Permissions.Shift)]
+        public async Task<IActionResult> CloseVenue()
+        {
+            try { var s = await _shifts.CloseVenueAsync(User.GetUserId()); return Ok(new { s.Id }); }
+            catch (ShiftService.ShiftException ex) { return Fail(ex); }
+        }
+
+        // POST: api/shifts/mine/open — официант начинает смену
+        [HttpPost("mine/open")]
+        [HasPermission(Permissions.Waiter)]
+        public async Task<IActionResult> OpenMine()
+        {
+            var me = User.GetUserId();
+            if (me == null) return Unauthorized();
+            try { var w = await _shifts.OpenWaiterAsync(me.Value); return Ok(new { w.Id }); }
+            catch (ShiftService.ShiftException ex) { return Fail(ex); }
+        }
+
+        // POST: api/shifts/mine/close — официант заканчивает смену (свои счета должны быть закрыты)
+        [HttpPost("mine/close")]
+        [HasPermission(Permissions.Waiter)]
+        public async Task<IActionResult> CloseMine()
+        {
+            var me = User.GetUserId();
+            if (me == null) return Unauthorized();
+            try { var w = await _shifts.CloseWaiterAsync(me.Value); return Ok(new { w.Id }); }
+            catch (ShiftService.ShiftException ex) { return Fail(ex); }
+        }
+
+        /// <summary>Сумма открытого счёта — по его блюдам; закрытого — как при оплате</summary>
+        private async Task<Dictionary<int, decimal>> OpenTotalsAsync(List<int> openIds)
+        {
+            if (openIds.Count == 0) return new();
+            var orders = await _context.Orders.AsNoTracking().Include(o => o.OrderItems).ThenInclude(i => i.SelectedAddons)
+                .Where(o => o.Status != OrderStatuses.Cancelled &&
+                            ((o.CheckId != null && openIds.Contains(o.CheckId.Value)) || o.OrderItems.Any(i => i.CheckId != null && openIds.Contains(i.CheckId.Value))))
+                .ToListAsync();
+            return orders.SelectMany(o => o.OrderItems.Select(i => (Check: i.CheckId ?? o.CheckId ?? 0, Sum: WaiterController.LineTotal(i))))
+                .Where(x => openIds.Contains(x.Check)).GroupBy(x => x.Check).ToDictionary(g => g.Key, g => g.Sum(x => x.Sum));
+        }
+
+        // GET: api/shifts?from&to — смены заведения за период (по Москве, до 92 дней)
+        [HttpGet]
+        [HasPermission(Permissions.ChecksAll)]
+        public async Task<IActionResult> List([FromQuery] DateTime? from, [FromQuery] DateTime? to)
+        {
+            var today = ShiftService.BusinessDate(DateTime.UtcNow);
+            var f = (from ?? today.AddDays(-13)).Date;
+            var t = (to ?? today).Date;
+            if (t < f) (f, t) = (t, f);
+            if ((t - f).TotalDays > 92) return BadRequest(new { message = "Период — не больше 3 месяцев" });
+
+            var shifts = await _context.VenueShifts.AsNoTracking().Where(s => s.BusinessDate >= f && s.BusinessDate <= t)
+                .OrderByDescending(s => s.OpenedAt).ToListAsync();
+            var ids = shifts.Select(s => s.Id).ToList();
+            var checks = await _context.TableChecks.AsNoTracking().Where(c => c.VenueShiftId != null && ids.Contains(c.VenueShiftId.Value)).ToListAsync();
+            var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => ids.Contains(w.VenueShiftId)).ToListAsync();
+            var names = await WaiterController.StaffNamesAsync(_context, shifts.SelectMany(s => new[] { s.OpenedByUserId, s.ClosedByUserId }));
+
+            return Ok(shifts.Select(s =>
+            {
+                var cs = checks.Where(c => c.VenueShiftId == s.Id).ToList();
+                var closed = cs.Where(c => c.Status == CheckStatuses.Closed).ToList();
+                return new
+                {
+                    s.Id,
+                    s.BusinessDate,
+                    s.OpenedAt,
+                    s.ClosedAt,
+                    openedBy = names.GetValueOrDefault(s.OpenedByUserId ?? 0),
+                    closedBy = names.GetValueOrDefault(s.ClosedByUserId ?? 0),
+                    waiters = waiters.Where(w => w.VenueShiftId == s.Id).Select(w => w.UserId).Distinct().Count(),
+                    checks = cs.Count,
+                    openChecks = cs.Count(c => c.Status == CheckStatuses.Open),
+                    revenue = closed.Sum(c => c.Total),
+                    cash = closed.Where(c => c.PaymentMethod == "cash").Sum(c => c.Total),
+                    card = closed.Where(c => c.PaymentMethod == "card").Sum(c => c.Total),
+                };
+            }));
+        }
+
+        // GET: api/shifts/{id} — смена: официанты и все чеки
+        [HttpGet("{id:int}")]
+        [HasPermission(Permissions.ChecksAll)]
+        public async Task<IActionResult> Get(int id)
+        {
+            var s = await _context.VenueShifts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            if (s == null) return NotFound(new { message = "Смена не найдена" });
+            var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table).Where(c => c.VenueShiftId == id).OrderBy(c => c.OpenedAt).ToListAsync();
+            var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == id).OrderBy(w => w.OpenedAt).ToListAsync();
+            var names = await WaiterController.StaffNamesAsync(_context,
+                waiters.Select(w => (int?)w.UserId).Concat(checks.Select(c => c.WaiterId)).Append(s.OpenedByUserId).Append(s.ClosedByUserId));
+            var openTotals = await OpenTotalsAsync(checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList());
+            decimal Total(TableCheck c) => c.Status == CheckStatuses.Open ? openTotals.GetValueOrDefault(c.Id) : c.Status == CheckStatuses.Closed ? c.Total : 0;
+
+            return Ok(new
+            {
+                s.Id,
+                s.BusinessDate,
+                s.OpenedAt,
+                s.ClosedAt,
+                openedBy = names.GetValueOrDefault(s.OpenedByUserId ?? 0),
+                closedBy = names.GetValueOrDefault(s.ClosedByUserId ?? 0),
+                waiters = waiters.Select(w =>
+                {
+                    var mine = checks.Where(c => c.WaiterShiftId == w.Id).ToList();
+                    return new
+                    {
+                        w.Id,
+                        w.UserId,
+                        name = names.GetValueOrDefault(w.UserId),
+                        w.OpenedAt,
+                        w.ClosedAt,
+                        checks = mine.Count,
+                        revenue = mine.Where(c => c.Status == CheckStatuses.Closed).Sum(c => c.Total),
+                    };
+                }),
+                checks = checks.Select(c => new
+                {
+                    c.Id,
+                    table = c.Table?.Name,
+                    c.Label,
+                    waiter = names.GetValueOrDefault(c.WaiterId ?? 0),
+                    c.WaiterId,
+                    c.Status,
+                    c.Guests,
+                    c.OpenedAt,
+                    c.ClosedAt,
+                    c.PaymentMethod,
+                    total = Total(c),
+                })
+            });
+        }
+    }
+}

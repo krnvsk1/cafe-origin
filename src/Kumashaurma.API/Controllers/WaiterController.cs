@@ -14,7 +14,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/waiter")]
-    [HasPermission(Permissions.Waiter, Permissions.TablesManage)]
+    [HasPermission(Permissions.Waiter, Permissions.TablesManage, Permissions.ChecksAll)]
     public class WaiterController : ControllerBase
     {
         public const string Source = "waiter";
@@ -28,10 +28,13 @@ namespace Kumashaurma.API.Controllers
         private readonly ILogger<WaiterController> _logger;
 
         private readonly VoidService _voids;
+        private readonly ShiftService _shifts;
+        private bool? _seesAll;
 
-        public WaiterController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, VoidService voids, ILogger<WaiterController> logger)
+        public WaiterController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, VoidService voids, ShiftService shifts, ILogger<WaiterController> logger)
         {
             _voids = voids;
+            _shifts = shifts;
             _context = context;
             _statusService = statusService;
             _events = events;
@@ -90,11 +93,38 @@ namespace Kumashaurma.API.Controllers
             public int? Guests { get; set; }
         }
 
+        public class AssignRequest
+        {
+            public int WaiterId { get; set; }
+        }
+
         public class CloseRequest
         {
             /// <summary>cash или card</summary>
             public string PaymentMethod { get; set; } = "cash";
             public decimal? CashReceived { get; set; }
+        }
+
+        // ==================== Доступ ====================
+
+        /// <summary>Менеджер видит и ведёт все счета, официант — только свои</summary>
+        private async Task<bool> SeesAllAsync() => _seesAll ??= await _shifts.HasAsync(User, Permissions.ChecksAll);
+
+        /// <summary>null — можно работать с этим счётом; иначе ответ с отказом</summary>
+        private async Task<IActionResult?> DenyAsync(TableCheck c)
+        {
+            if (c.WaiterId == User.GetUserId() || await SeesAllAsync()) return null;
+            return StatusCode(403, new { message = "Это счёт другого официанта" });
+        }
+
+        /// <summary>Официант работает только в открытую смену</summary>
+        private async Task<IActionResult?> NeedShiftAsync()
+        {
+            if (await SeesAllAsync()) return null;
+            var me = User.GetUserId();
+            if (me == null || await _shifts.CurrentWaiterAsync(me.Value) == null)
+                return BadRequest(new { message = "Сначала откройте свою смену", code = "no_shift" });
+            return null;
         }
 
         // ==================== Столы ====================
@@ -117,6 +147,7 @@ namespace Kumashaurma.API.Controllers
         public async Task<IActionResult> Tables()
         {
             var me = User.GetUserId();
+            var all = await SeesAllAsync();
             var tables = await TablesAsync(onlyActive: true);
             var open = await _context.TableChecks.AsNoTracking().Where(c => c.Status == CheckStatuses.Open).OrderBy(c => c.OpenedAt).ToListAsync();
             var waiterNames = await NamesAsync(open.Select(c => c.WaiterId));
@@ -128,9 +159,12 @@ namespace Kumashaurma.API.Controllers
                 t.Name,
                 checks = open.Where(c => c.TableId == t.Id).Select(c =>
                 {
-                    var mine = lines.Where(l => l.CheckId == c.Id && l.Order.Status != OrderStatuses.Cancelled).ToList();
+                    // Чужие счета официант видит только как «стол занят»
+                    var visible = all || c.WaiterId == me;
+                    var mine = visible ? lines.Where(l => l.CheckId == c.Id && l.Order.Status != OrderStatuses.Cancelled).ToList() : new List<CheckLine>();
                     return new
                     {
+                        hidden = !visible,
                         c.Id,
                         c.Label,
                         c.OpenedAt,
@@ -210,6 +244,10 @@ namespace Kumashaurma.API.Controllers
         [HasPermission(Permissions.Waiter)]
         public async Task<IActionResult> Open([FromBody] OpenRequest r)
         {
+            var me = User.GetUserId();
+            var shift = me == null ? null : await _shifts.CurrentWaiterAsync(me.Value);
+            if (shift == null)
+                return BadRequest(new { message = await _shifts.CurrentVenueAsync() == null ? "Смена заведения ещё не открыта" : "Сначала откройте свою смену", code = "no_shift" });
             var table = await _context.DiningTables.FirstOrDefaultAsync(t => t.Id == r.TableId && t.IsActive);
             if (table == null) return BadRequest(new { message = "Стол не найден" });
             if (r.Guests is < 1 or > 100) return BadRequest(new { message = "Гостей — от 1 до 100" });
@@ -220,7 +258,9 @@ namespace Kumashaurma.API.Controllers
             var check = new TableCheck
             {
                 TableId = table.Id,
-                WaiterId = User.GetUserId(),
+                WaiterId = me,
+                VenueShiftId = shift.VenueShiftId,
+                WaiterShiftId = shift.Id,
                 Guests = r.Guests,
                 Label = label,
                 Comment = string.IsNullOrWhiteSpace(r.Comment) ? null : r.Comment.Trim(),
@@ -233,11 +273,12 @@ namespace Kumashaurma.API.Controllers
 
         // GET: api/waiter/checks/{id} — чек: заказы на кухню, готовность блюд, сумма
         [HttpGet("checks/{id:int}")]
-        [HasPermission(Permissions.Waiter)]
+        [HasPermission(Permissions.Waiter, Permissions.ChecksAll)]
         public async Task<IActionResult> Get(int id)
         {
             var c = await _context.TableChecks.AsNoTracking().Include(x => x.Table).FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Чек не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
             var waiter = (await NamesAsync(new[] { c.WaiterId })).GetValueOrDefault(c.WaiterId ?? 0);
             var lines = await LinesAsync(new List<int> { id });
             var itemIds = lines.Select(l => l.Item.Id).ToList();
@@ -255,8 +296,9 @@ namespace Kumashaurma.API.Controllers
                 .GroupBy(v => v.OrderItemId!.Value).ToDictionary(g => g.Key, g => g.Sum(v => v.Quantity));
 
             // Другие открытые счета за этим столом — для деления и объединения
+            var seesAll = await SeesAllAsync();
             var siblings = await _context.TableChecks.AsNoTracking()
-                .Where(x => x.TableId == c.TableId && x.Status == CheckStatuses.Open && x.Id != id)
+                .Where(x => x.TableId == c.TableId && x.Status == CheckStatuses.Open && x.Id != id && (seesAll || x.WaiterId == c.WaiterId))
                 .OrderBy(x => x.OpenedAt).Select(x => new { x.Id, x.Label }).ToListAsync();
 
             return Ok(new
@@ -267,6 +309,8 @@ namespace Kumashaurma.API.Controllers
                 table = new { c.Table!.Id, c.Table.Name },
                 waiter,
                 isMine = c.WaiterId == User.GetUserId(),
+                c.WaiterId,
+                canManage = seesAll,
                 c.Guests,
                 c.Comment,
                 c.OpenedAt,
@@ -309,6 +353,8 @@ namespace Kumashaurma.API.Controllers
         {
             var c = await _context.TableChecks.Include(x => x.Table).FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Чек не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
+            if (await NeedShiftAsync() is { } noShift) return noShift;
             if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Чек уже закрыт" });
             if (r.Items.Count == 0) return BadRequest(new { message = "Добавьте блюда" });
             if (r.Items.Count > 100) return BadRequest(new { message = "Слишком много позиций за раз" });
@@ -350,6 +396,9 @@ namespace Kumashaurma.API.Controllers
         [HasPermission(Permissions.Waiter)]
         public async Task<IActionResult> CancelRound(int id, int orderId)
         {
+            var c = await _context.TableChecks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Чек не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
             var order = await _context.Orders.AsNoTracking().Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == orderId);
             if (order == null) return NotFound(new { message = "Заказ не найден" });
             if (order.Status != OrderStatuses.New)
@@ -368,6 +417,12 @@ namespace Kumashaurma.API.Controllers
         [HasPermission(Permissions.Waiter)]
         public async Task<IActionResult> VoidItem(int itemId, [FromBody] VoidRequest r)
         {
+            var item = await _context.OrderItems.AsNoTracking().Include(i => i.Order).FirstOrDefaultAsync(i => i.Id == itemId);
+            if (item == null) return NotFound(new { message = "Позиция не найдена" });
+            var checkId = item.CheckId ?? item.Order?.CheckId;
+            var check = checkId == null ? null : await _context.TableChecks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == checkId);
+            if (check == null) return BadRequest(new { message = "Позиция не из счёта стола" });
+            if (await DenyAsync(check) is { } deny) return deny;
             try
             {
                 var v = await _voids.RequestAsync(itemId, r.Quantity, r.Reason, User.GetUserId());
@@ -385,6 +440,7 @@ namespace Kumashaurma.API.Controllers
             if (method is not ("cash" or "card")) return BadRequest(new { message = "Выберите способ оплаты" });
             var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Чек не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
             if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Чек уже закрыт" });
 
             var lines = (await LinesAsync(new List<int> { id })).Where(l => l.Order.Status != OrderStatuses.Cancelled).ToList();
@@ -434,6 +490,7 @@ namespace Kumashaurma.API.Controllers
         {
             var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Чек не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
             if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Чек уже закрыт" });
             if ((await LinesAsync(new List<int> { id })).Any(l => l.Order.Status != OrderStatuses.Cancelled))
                 return BadRequest(new { message = "В счёте есть блюда — перенесите их, отмените подачу или закройте счёт оплатой" });
@@ -450,6 +507,7 @@ namespace Kumashaurma.API.Controllers
         {
             var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
             if (r.Guests is < 1 or > 100) return BadRequest(new { message = "Гостей — от 1 до 100" });
             c.Label = string.IsNullOrWhiteSpace(r.Label) ? null : Trunc(r.Label.Trim(), 40);
             if (r.Guests.HasValue) c.Guests = r.Guests;
@@ -464,6 +522,7 @@ namespace Kumashaurma.API.Controllers
         {
             var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
             if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт уже закрыт" });
             var table = await _context.DiningTables.FirstOrDefaultAsync(t => t.Id == r.TableId && t.IsActive);
             if (table == null) return BadRequest(new { message = "Стол не найден" });
@@ -484,6 +543,7 @@ namespace Kumashaurma.API.Controllers
         {
             var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
             if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт уже закрыт" });
             var moves = r.Items.Where(x => x.Quantity > 0).GroupBy(x => x.ItemId).Select(g => (ItemId: g.Key, Quantity: g.Sum(x => x.Quantity))).ToList();
             if (moves.Count == 0) return BadRequest(new { message = "Выберите, что перенести" });
@@ -494,6 +554,7 @@ namespace Kumashaurma.API.Controllers
                 if (r.TargetCheckId == id) return BadRequest(new { message = "Это тот же счёт" });
                 target = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == r.TargetCheckId) ?? null!;
                 if (target == null || target.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт, куда переносим, не найден или закрыт" });
+                if (await DenyAsync(target) is { } denyTarget) return denyTarget;
             }
             else
             {
@@ -501,7 +562,10 @@ namespace Kumashaurma.API.Controllers
                 target = new TableCheck
                 {
                     TableId = c.TableId,
-                    WaiterId = User.GetUserId(),
+                    // Новый счёт — того же официанта и в ту же смену
+                    WaiterId = c.WaiterId,
+                    VenueShiftId = c.VenueShiftId,
+                    WaiterShiftId = c.WaiterShiftId,
                     Label = string.IsNullOrWhiteSpace(r.Label) ? $"Счёт {openHere + 1}" : Trunc(r.Label.Trim(), 40),
                     OpenedAt = DateTime.UtcNow
                 };
@@ -557,6 +621,23 @@ namespace Kumashaurma.API.Controllers
             foreach (var o in items.Select(i => i.Order!).Distinct())
                 _events.Publish(new OrderEvent("updated", o.Id, o.UserId, o.Status, null, DateTime.UtcNow));
             return Ok(new { targetCheckId = target.Id });
+        }
+
+        // POST: api/waiter/checks/{id}/assign — менеджер передаёт счёт другому официанту (тот должен быть на смене)
+        [HttpPost("checks/{id:int}/assign")]
+        [HasPermission(Permissions.ChecksAll)]
+        public async Task<IActionResult> Assign(int id, [FromBody] AssignRequest r)
+        {
+            var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт уже закрыт" });
+            var shift = await _shifts.CurrentWaiterAsync(r.WaiterId);
+            if (shift == null) return BadRequest(new { message = "Этот официант сейчас не на смене" });
+            c.WaiterId = r.WaiterId;
+            c.WaiterShiftId = shift.Id;
+            c.VenueShiftId ??= shift.VenueShiftId;
+            await _context.SaveChangesAsync();
+            return NoContent();
         }
 
         // ==================== Схема зала ====================
@@ -634,10 +715,13 @@ namespace Kumashaurma.API.Controllers
 
         private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max];
 
-        private async Task<Dictionary<int, string>> NamesAsync(IEnumerable<int?> ids)
+        private Task<Dictionary<int, string>> NamesAsync(IEnumerable<int?> ids) => StaffNamesAsync(_context, ids);
+
+        /// <summary>Имена сотрудников для экранов: «Имя Фамилия», иначе телефон</summary>
+        public static async Task<Dictionary<int, string>> StaffNamesAsync(ApplicationDbContext context, IEnumerable<int?> ids)
         {
             var list = ids.Where(i => i.HasValue).Select(i => i!.Value).Distinct().ToList();
-            var users = await _context.Users.AsNoTracking().Where(u => list.Contains(u.Id))
+            var users = await context.Users.AsNoTracking().Where(u => list.Contains(u.Id))
                 .Select(u => new { u.Id, u.FirstName, u.LastName, u.PhoneNumber }).ToListAsync();
             return users.ToDictionary(u => u.Id, u =>
             {

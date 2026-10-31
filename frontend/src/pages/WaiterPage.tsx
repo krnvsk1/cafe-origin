@@ -16,6 +16,7 @@ import { useShawarmas } from '../api/hooks';
 import {
   useWaiterTables, useTableCheck, useOpenCheck, useAddRound, useCancelRound, useCloseCheck, useCancelCheck,
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
+  useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
   type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
 import { apiError } from '../api/inventory';
@@ -79,8 +80,8 @@ export const FloorView: React.FC<{ plan: FloorPlan; tables: WaiterTable[]; highl
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: dim ? 0.35 : 1, overflow: 'hidden' }}>
             <Typography sx={{ fontWeight: 800, fontSize: { xs: '0.85rem', sm: '1.1rem' }, lineHeight: 1 }}>{t.name}</Typography>
             {cs.length > 0 && (
-              <Typography sx={{ fontSize: { xs: '0.6rem', sm: '0.75rem' }, fontWeight: 700, lineHeight: 1.1 }}>
-                {money(cs.reduce((x, c) => x + c.total, 0))}
+              <Typography sx={{ fontSize: { xs: '0.6rem', sm: '0.75rem' }, fontWeight: 700, lineHeight: 1.1 }} noWrap>
+                {cs.every(c => c.hidden) ? (cs[0].waiter ?? 'занят') : money(cs.reduce((x, c) => x + c.total, 0))}
               </Typography>
             )}
           </Box>
@@ -109,12 +110,16 @@ const TablesView: React.FC = () => {
   const [err, setErr] = React.useState('');
 
   const [choosing, setChoosing] = React.useState<WaiterTable | null>(null);
+  const [toast, setToast] = React.useState('');
+  const { data: shift } = useShiftCurrent();
+  const onShift = !!shift?.mine;
   const shown = mine ? tables.filter(t => t.checks.some(c => c.isMine)) : tables;
   const busy = tables.filter(t => t.checks.length > 0).length;
 
   const tap = (t: WaiterTable) => {
-    if (t.checks.length === 1) navigate(`/waiter/${t.checks[0].id}`);
-    else if (t.checks.length > 1) setChoosing(t);
+    if (t.checks.length === 1 && !t.checks[0].hidden) navigate(`/waiter/${t.checks[0].id}`);
+    else if (t.checks.length > 0) setChoosing(t);
+    else if (!onShift) setToast(shift?.venue ? 'Сначала начните смену' : 'Смена заведения ещё не открыта');
     else { setGuests(2); setErr(''); setOpening(t); }
   };
   const checkTitle = (c: TableCheckSummary, i: number) => c.label ?? (i === 0 ? 'Счёт 1' : `Счёт ${i + 1}`);
@@ -136,6 +141,7 @@ const TablesView: React.FC = () => {
         <PushButton />
         {can(P.TablesManage) && <IconButton onClick={() => setSettings(true)} aria-label="Настроить столы"><SettingsIcon /></IconButton>}
       </Box>
+      {shift && <ShiftBar shift={shift} />}
       <Box sx={{ display: 'flex', gap: 1 }}>
         <Chip label="Все" color={!mine ? 'primary' : 'default'} onClick={() => setMine(false)} />
         <Chip label="Мои" color={mine ? 'primary' : 'default'} onClick={() => setMine(true)} />
@@ -166,7 +172,9 @@ const TablesView: React.FC = () => {
                   display: 'flex', flexDirection: 'column', gap: 0.25, cursor: 'pointer', '&:active': { transform: 'scale(0.97)' },
                 }}>
                 <Typography sx={{ fontWeight: 800, fontSize: '1.4rem', lineHeight: 1.1 }}>{t.name}</Typography>
-                {first ? (
+                {first && cs.every(c => c.hidden) ? (
+                  <Typography variant="caption" color="text.secondary" noWrap>занят · {first.waiter ?? 'другой официант'}</Typography>
+                ) : first ? (
                   <>
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem' }}>{money(total)}</Typography>
                     <Typography variant="caption" color="text.secondary" noWrap>
@@ -188,12 +196,12 @@ const TablesView: React.FC = () => {
         <DialogTitle>Стол {choosing?.name}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {choosing?.checks.map((c, i) => (
-            <Button key={c.id} variant="outlined" onClick={() => navigate(`/waiter/${c.id}`)} sx={{ justifyContent: 'space-between', py: 1.25 }}>
+            <Button key={c.id} variant="outlined" onClick={() => navigate(`/waiter/${c.id}`)} disabled={c.hidden} sx={{ justifyContent: 'space-between', py: 1.25 }}>
               <span>{checkTitle(c, i)}{c.isMine ? '' : ` · ${c.waiter ?? ''}`}</span>
-              <b>{money(c.total)}</b>
+              <b>{c.hidden ? 'чужой' : money(c.total)}</b>
             </Button>
           ))}
-          <Button startIcon={<AddIcon />} onClick={() => { const t = choosing; setChoosing(null); if (t) { setGuests(1); setErr(''); setOpening(t); } }}>
+          <Button startIcon={<AddIcon />} disabled={!onShift} onClick={() => { const t = choosing; setChoosing(null); if (t) { setGuests(1); setErr(''); setOpening(t); } }}>
             Открыть ещё счёт
           </Button>
         </DialogContent>
@@ -216,6 +224,83 @@ const TablesView: React.FC = () => {
         </DialogActions>
       </Dialog>
       {settings && <TablesSettings onClose={() => setSettings(false)} />}
+      <Snackbar open={!!toast} autoHideDuration={2500} onClose={() => setToast('')} message={toast} />
+    </Box>
+  );
+};
+
+// ==================== Смены ====================
+
+const timeOf = (iso: string) => parseUtc(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+/** Смена заведения и моя смена: открыть, закрыть */
+export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = ({ shift, hideMine }) => {
+  const can = useCan();
+  const openVenue = useOpenVenueShift();
+  const closeVenue = useCloseVenueShift();
+  const openMine = useOpenMyShift();
+  const closeMine = useCloseMyShift();
+  const [err, setErr] = React.useState('');
+  const [confirm, setConfirm] = React.useState<'venue' | 'mine' | null>(null);
+  const run = async (fn: () => Promise<unknown>) => {
+    setErr('');
+    try { await fn(); setConfirm(null); } catch (e) { setErr(apiError(e)); setConfirm(null); }
+  };
+  const { venue, mine } = shift;
+  const isWaiter = can(P.Waiter) && !hideMine;
+  const busy = openVenue.isPending || closeVenue.isPending || openMine.isPending || closeMine.isPending;
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      {!venue && (
+        <Alert severity="warning" action={shift.canManageVenue
+          ? <Button color="inherit" size="small" onClick={() => run(() => openVenue.mutateAsync())} disabled={busy}>Открыть</Button> : undefined}>
+          Смена заведения не открыта{shift.canManageVenue ? '' : ' — попросите менеджера'}
+        </Alert>
+      )}
+      {venue?.stale && (
+        <Alert severity="warning">
+          Смена заведения открыта {parseUtc(venue.openedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} и не закрыта
+        </Alert>
+      )}
+      {venue && isWaiter && !mine && (
+        <Button variant="contained" color="secondary" size="large" onClick={() => run(() => openMine.mutateAsync())} disabled={busy} sx={{ py: 1.5, fontWeight: 800 }}>
+          Начать мою смену
+        </Button>
+      )}
+      {venue && (mine && isWaiter || shift.canManageVenue) && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', bgcolor: 'background.paper', borderRadius: '12px', px: 1.5, py: 0.75 }}>
+          {mine && isWaiter && (
+            <>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>Моя смена с {timeOf(mine.openedAt)}</Typography>
+              <Button size="small" color="inherit" onClick={() => setConfirm('mine')} disabled={busy}>Закончить</Button>
+            </>
+          )}
+          <Box sx={{ flex: 1 }} />
+          {shift.canManageVenue && (
+            <Button size="small" color="error" onClick={() => setConfirm('venue')} disabled={busy}>Закрыть смену заведения</Button>
+          )}
+        </Box>
+      )}
+      {err && <Alert severity="error" onClose={() => setErr('')}>{err}</Alert>}
+
+      <Dialog open={!!confirm} onClose={() => setConfirm(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>{confirm === 'venue' ? 'Закрыть смену заведения?' : 'Закончить смену?'}</DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary">
+            {confirm === 'venue'
+              ? (shift.totalOpenChecks ? `Открытых счетов: ${shift.totalOpenChecks}. Их нужно закрыть или отменить.` : 'Смены официантов закроются вместе со сменой заведения.')
+              : (mine?.openChecks ? `У вас открыто счетов: ${mine.openChecks}. Закройте их или попросите менеджера передать другому официанту.` : 'Новые счета открыть будет нельзя, пока не начнёте смену снова.')}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setConfirm(null)} sx={{ color: 'text.secondary' }}>Отмена</Button>
+          <Button variant="contained" color="error" disabled={busy}
+            onClick={() => run(() => (confirm === 'venue' ? closeVenue.mutateAsync() : closeMine.mutateAsync()))}>
+            {confirm === 'venue' ? 'Закрыть смену' : 'Закончить'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
@@ -426,7 +511,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const open = useOpenCheck();
   const [picker, setPicker] = React.useState(false);
   const [menu, setMenu] = React.useState<HTMLElement | null>(null);
-  const [dialog, setDialog] = React.useState<'move' | 'split' | 'edit' | null>(null);
+  const [dialog, setDialog] = React.useState<'move' | 'split' | 'edit' | 'assign' | null>(null);
   const [toast, setToast] = React.useState('');
   const [voiding, setVoiding] = React.useState<CheckItem | null>(null);
   const [closing, setClosing] = React.useState(false);
@@ -506,6 +591,11 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         <MenuItem onClick={() => { setMenu(null); setDialog('edit'); }}>
           <ListItemText primary="Подпись счёта и гости" />
         </MenuItem>
+        {check.canManage && (
+          <MenuItem onClick={() => { setMenu(null); setDialog('assign'); }}>
+            <ListItemText primary="Передать официанту" secondary={check.waiter ? `Сейчас: ${check.waiter}` : undefined} />
+          </MenuItem>
+        )}
       </Menu>
 
       {!isOpen && <Alert severity={check.status === 'closed' ? 'success' : 'info'}>{check.status === 'closed' ? `Чек закрыт · ${check.paymentMethod === 'cash' ? 'наличные' : 'карта'}` : 'Чек отменён'}</Alert>}
@@ -588,6 +678,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       }} />}
       {dialog === 'move' && <MoveDialog check={check} onClose={() => setDialog(null)} onDone={name => { setDialog(null); setToast(`Счёт перенесён на стол ${name}`); }} />}
       {dialog === 'edit' && <EditCheckDialog check={check} onClose={() => setDialog(null)} />}
+      {dialog === 'assign' && <AssignDialog check={check} onClose={() => setDialog(null)} onDone={name => { setDialog(null); setToast(`Счёт передан: ${name}`); }} />}
       {voiding && <VoidDialog item={voiding} onClose={() => setVoiding(null)} onDone={needsKitchen => {
         setVoiding(null);
         setToast(needsKitchen ? 'Блюдо уже готовят — кухня подтвердит отмену' : 'Блюдо убрано из счёта');
@@ -774,6 +865,36 @@ const MoveDialog: React.FC<{ check: TableCheck; onClose: () => void; onDone: (ta
           ))}
         </Box>
         {err && <Alert severity="error" sx={{ mt: 2 }}>{err}</Alert>}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button onClick={onClose} sx={{ color: 'text.secondary' }}>Отмена</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+/** Менеджер передаёт счёт официанту, который сейчас на смене */
+const AssignDialog: React.FC<{ check: TableCheck; onClose: () => void; onDone: (name: string) => void }> = ({ check, onClose, onDone }) => {
+  const { data: shift } = useShiftCurrent();
+  const assign = useAssignCheck();
+  const [err, setErr] = React.useState('');
+  const waiters = (shift?.waiters ?? []).filter(w => w.userId !== check.waiterId);
+  const go = async (userId: number, name: string) => {
+    setErr('');
+    try { await assign.mutateAsync({ id: check.id, waiterId: userId }); onDone(name); } catch (e) { setErr(apiError(e)); }
+  };
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Передать счёт</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {waiters.length === 0 && <Typography color="text.secondary">Других официантов на смене нет</Typography>}
+        {waiters.map(w => (
+          <Button key={w.id} variant="outlined" onClick={() => go(w.userId, w.name ?? 'официант')} disabled={assign.isPending} sx={{ justifyContent: 'space-between', py: 1.25 }}>
+            <span>{w.name ?? `Сотрудник #${w.userId}`}</span>
+            <span style={{ opacity: 0.7 }}>с {timeOf(w.openedAt)}</span>
+          </Button>
+        ))}
+        {err && <Alert severity="error">{err}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
         <Button onClick={onClose} sx={{ color: 'text.secondary' }}>Отмена</Button>
