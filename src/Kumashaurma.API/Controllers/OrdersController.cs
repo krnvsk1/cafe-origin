@@ -707,9 +707,13 @@ namespace Kumashaurma.API.Controllers
                         return StatusCode(403, new { Message = "Отменить заказ может только администратор или кассир" });
                 }
 
+                var notifier = HttpContext.RequestServices.GetRequiredService<WaiterReadyNotifier>();
+                var readyBefore = request.Status == OrderStatuses.Ready ? await notifier.SnapshotAsync(order) : null;
+
                 if (!await _statusService.ChangeStatusAsync(order, request.Status))
                     return BadRequest(new { Message = $"Неизвестный статус: {request.Status}" });
 
+                if (readyBefore != null) await notifier.NotifyAsync(order, readyBefore);
                 return Ok(order);
             }
             catch (Exception ex)

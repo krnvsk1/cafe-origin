@@ -8,7 +8,9 @@ import {
   ArrowBack as BackIcon, Add as AddIcon, Remove as RemoveIcon, Search as SearchIcon, Close as CloseIcon,
   TableRestaurant as TableIcon, CheckCircle as ReadyIcon, Schedule as CookingIcon, DoneAll as ServedIcon,
   SettingsOutlined as SettingsIcon, DeleteOutline as DeleteIcon, MoreVert as MoreIcon,
+  NotificationsActiveOutlined as BellOnIcon, NotificationsOffOutlined as BellOffIcon,
 } from '@mui/icons-material';
+import { usePushNotifications, type PushState } from '../api/push';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useShawarmas } from '../api/hooks';
 import {
@@ -131,6 +133,7 @@ const TablesView: React.FC = () => {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography variant="h5" sx={{ fontWeight: 800, flex: 1 }}>Столы</Typography>
         <Typography variant="body2" color="text.secondary">занято {busy} из {tables.length}</Typography>
+        <PushButton />
         {can(P.TablesManage) && <IconButton onClick={() => setSettings(true)} aria-label="Настроить столы"><SettingsIcon /></IconButton>}
       </Box>
       <Box sx={{ display: 'flex', gap: 1 }}>
@@ -808,10 +811,89 @@ const EditCheckDialog: React.FC<{ check: TableCheck; onClose: () => void }> = ({
   );
 };
 
+// ==================== Уведомления ====================
+
+const PUSH_HINT: Record<Exclude<PushState, 'loading' | 'on' | 'off'>, string> = {
+  unsupported: 'Этот браузер не умеет присылать уведомления. На Android откройте сайт в Chrome, на iPhone — в Safari.',
+  insecure: 'Уведомления работают только когда сайт открыт по https.',
+  'ios-install': 'На iPhone уведомления приходят только приложению на экране «Домой»: в Safari нажмите «Поделиться» → «На экран Домой», откройте сайт оттуда, войдите и включите уведомления.',
+  denied: 'Уведомления запрещены для этого сайта. Разрешите их в настройках браузера (значок замка у адреса → Уведомления) и обновите страницу.',
+};
+
+/** Колокольчик: уведомления на телефон, когда блюдо готово */
+const PushButton: React.FC = () => {
+  const push = usePushNotifications();
+  const [open, setOpen] = React.useState(false);
+  const [msg, setMsg] = React.useState('');
+  const [err, setErr] = React.useState('');
+  const [dismissed, setDismissed] = React.useState(() => { try { return localStorage.getItem('waiter-push-hint') === '1'; } catch { return false; } });
+  if (push.state === 'loading') return null;
+
+  const on = push.state === 'on';
+  const run = async (fn: () => Promise<unknown>) => {
+    setErr(''); setMsg('');
+    try { await fn(); } catch (e) { setErr(apiError(e, 'Не получилось включить уведомления')); }
+  };
+  const enable = () => run(async () => {
+    if (await push.enable()) {
+      const sent = await push.test();
+      setMsg(sent > 0 ? 'Готово! Проверочное уведомление отправлено.' : 'Включено, но проверочное уведомление не дошло — попробуйте ещё раз.');
+    }
+  });
+  const test = () => run(async () => {
+    const sent = await push.test();
+    setMsg(sent > 0 ? 'Проверочное уведомление отправлено.' : 'Не дошло: выключите и включите уведомления заново.');
+  });
+  const hide = () => { setDismissed(true); try { localStorage.setItem('waiter-push-hint', '1'); } catch { /* ignore */ } };
+
+  return (
+    <>
+      <IconButton onClick={() => setOpen(true)} aria-label="Уведомления" color={on ? 'primary' : 'default'}>
+        {on ? <BellOnIcon /> : <BellOffIcon />}
+      </IconButton>
+      {(push.state === 'off' || push.state === 'ios-install') && !dismissed && (
+        <Alert severity="info" onClose={hide} onClick={() => setOpen(true)}
+          sx={{ position: 'fixed', left: 12, right: 12, bottom: 12, zIndex: 1200, cursor: 'pointer', boxShadow: 3 }}>
+          Включите уведомления — телефон подскажет, когда блюдо готово
+        </Alert>
+      )}
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Уведомления о готовых блюдах</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            Кухня отметила блюдо готовым — на этот телефон придёт уведомление со столом и блюдами, даже если экран заблокирован.
+            Нажмите на него, чтобы открыть счёт.
+          </Typography>
+          {push.state in PUSH_HINT && <Alert severity="warning">{PUSH_HINT[push.state as keyof typeof PUSH_HINT]}</Alert>}
+          {on && <Alert severity="success">Уведомления включены на этом телефоне</Alert>}
+          {msg && <Alert severity="info">{msg}</Alert>}
+          {err && <Alert severity="error">{err}</Alert>}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setOpen(false)} sx={{ color: 'text.secondary' }}>Закрыть</Button>
+          {on && <Button onClick={() => run(push.disable)} disabled={push.busy} color="inherit">Выключить</Button>}
+          {on && <Button variant="outlined" onClick={test} disabled={push.busy}>Проверить</Button>}
+          {push.state === 'off' && <Button variant="contained" onClick={enable} disabled={push.busy}>Включить</Button>}
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+};
+
 /** Официант: столы и чеки — удобно с телефона */
 const WaiterPage: React.FC = () => {
   const { checkId } = useParams();
+  const navigate = useNavigate();
   useLiveWaiter();
+  // Нажали на уведомление при открытом приложении — открываем счёт без перезагрузки
+  React.useEffect(() => {
+    const onOpen = (e: Event) => {
+      const path = (e as CustomEvent<string>).detail;
+      if (typeof path === 'string' && path.startsWith('/')) { e.preventDefault(); navigate(path); }
+    };
+    window.addEventListener('sw-open', onOpen);
+    return () => window.removeEventListener('sw-open', onOpen);
+  }, [navigate]);
   return (
     <Box sx={{ py: { xs: 1.5, sm: 2 }, maxWidth: 900, mx: 'auto' }}>
       {checkId ? <CheckView id={Number(checkId)} /> : <TablesView />}

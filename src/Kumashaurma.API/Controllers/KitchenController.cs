@@ -27,11 +27,13 @@ namespace Kumashaurma.API.Controllers
         private readonly IInventoryService _inventory;
         private readonly IOrderStatusService _statusService;
         private readonly IOrderEventBus _events;
+        private readonly WaiterReadyNotifier _notifier;
 
         private static readonly string[] DefaultStations = { "Горячая кухня", "Мангал" };
 
-        public KitchenController(ApplicationDbContext context, IInventoryService inventory, IOrderStatusService statusService, IOrderEventBus events)
+        public KitchenController(ApplicationDbContext context, IInventoryService inventory, IOrderStatusService statusService, IOrderEventBus events, WaiterReadyNotifier notifier)
         {
+            _notifier = notifier;
             _context = context;
             _inventory = inventory;
             _statusService = statusService;
@@ -101,6 +103,7 @@ namespace Kumashaurma.API.Controllers
             var itemStations = await ItemStationsAsync(order.OrderItems.Select(i => i.ShawarmaId), stations[0].Id);
             var involved = order.OrderItems.Select(i => itemStations.GetValueOrDefault(i.ShawarmaId, stations[0].Id)).Distinct().ToList();
             if (!involved.Contains(stationId)) return BadRequest(new { message = "В заказе нет блюд для этой кухни" });
+            var readyBefore = await _notifier.SnapshotAsync(order);
 
             var rows = await _context.OrderStationStatuses.Where(x => x.OrderId == id).ToListAsync();
             var row = rows.FirstOrDefault(x => x.StationId == stationId);
@@ -128,6 +131,7 @@ namespace Kumashaurma.API.Controllers
             }
             await _context.SaveChangesAsync();
             await RecalcAsync(order);
+            await _notifier.NotifyAsync(order, readyBefore);
             return Ok(new { order.Id, order.Status });
         }
 
@@ -163,6 +167,7 @@ namespace Kumashaurma.API.Controllers
             var order = await _context.Orders.Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == item.OrderId);
             if (order == null || KitchenFlow.Rank(order.Status) < 0) return BadRequest(new { message = "Заказ уже закрыт" });
 
+            var readyBefore = served ? null : await _notifier.SnapshotAsync(order);
             var states = await StatesAsync(new[] { itemId });
             var st = State(states, itemId);
             var (ready, servedQty) = served
@@ -173,6 +178,7 @@ namespace Kumashaurma.API.Controllers
             st.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
             await RecalcAsync(order);
+            if (readyBefore != null) await _notifier.NotifyAsync(order, readyBefore);
             return Ok(new { order.Id, order.Status, readyQuantity = ready, servedQuantity = servedQty });
         }
 
