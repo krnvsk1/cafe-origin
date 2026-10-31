@@ -495,7 +495,7 @@ const PosOrders: React.FC = () => {
                   <Typography sx={{ fontWeight: 800, flex: 1 }}>
                     {money(o.total)}
                     <Typography component="span" variant="body2" color="text.secondary">
-                      {' '}{o.paymentMethod === 'cash' ? 'нал' : o.paymentMethod === 'card' ? 'карта' : o.paymentMethod === 'check' ? 'стол, не оплачен' : 'онлайн'}
+                      {' '}{o.paymentMethod === 'cash' ? 'нал' : o.paymentMethod === 'card' ? 'карта' : o.paymentMethod === 'check' ? 'стол, не оплачен' : o.paymentMethod === 'mixed' ? 'стол, раздельно' : 'онлайн'}
                     </Typography>
                   </Typography>
                   {!['Выполнен', 'Доставлен', 'Отменён'].includes(o.status) && (

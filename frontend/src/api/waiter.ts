@@ -3,11 +3,9 @@ import { apiClient } from './client';
 import type { PosOrderInput } from './pos';
 import type { OrderStatus } from '../types';
 
-export interface WaiterTable {
-  id: number;
-  name: string;
-  check: {
+export interface TableCheckSummary {
     id: number;
+    label: string | null;
     openedAt: string;
     guests: number | null;
     waiter: string | null;
@@ -16,7 +14,13 @@ export interface WaiterTable {
     /** Заказов, где всё готово — пора нести */
     ready: number;
     cooking: number;
-  } | null;
+}
+
+export interface WaiterTable {
+  id: number;
+  name: string;
+  /** Открытые счета за столом (их может быть несколько) */
+  checks: TableCheckSummary[];
 }
 
 export interface CheckItem {
@@ -27,6 +31,9 @@ export interface CheckItem {
   addons: { addonName: string; quantity: number; price: number }[];
   readyQuantity: number;
   servedQuantity: number;
+  lineTotal: number;
+  /** Перенесена из другого счёта при делении */
+  moved: boolean;
 }
 
 export interface CheckOrder {
@@ -41,7 +48,10 @@ export interface CheckOrder {
 export interface TableCheck {
   id: number;
   status: 'open' | 'closed' | 'cancelled';
+  label: string | null;
   table: { id: number; name: string };
+  /** Другие открытые счета за этим столом */
+  siblings: { id: number; label: string | null }[];
   waiter: string | null;
   isMine: boolean;
   guests: number | null;
@@ -83,7 +93,7 @@ const useWaiterMutation = <T, R = unknown>(fn: (v: T) => Promise<R>) => {
 };
 
 export const useOpenCheck = () =>
-  useWaiterMutation<{ tableId: number; guests: number | null }, { id: number; alreadyOpen: boolean }>(body =>
+  useWaiterMutation<{ tableId: number; guests: number | null; label?: string | null }, { id: number; alreadyOpen: boolean }>(body =>
     apiClient.post('/api/waiter/checks', body).then(r => r.data));
 
 export const useAddRound = () =>
@@ -100,6 +110,18 @@ export const useCloseCheck = () =>
 
 export const useCancelCheck = () =>
   useWaiterMutation<number>(id => apiClient.post(`/api/waiter/checks/${id}/cancel`).then(r => r.data));
+
+export const useUpdateCheck = () =>
+  useWaiterMutation<{ checkId: number; label: string | null; guests: number | null }>(({ checkId, ...body }) =>
+    apiClient.put(`/api/waiter/checks/${checkId}`, body).then(r => r.data));
+
+export const useMoveCheck = () =>
+  useWaiterMutation<{ checkId: number; tableId: number }>(({ checkId, tableId }) =>
+    apiClient.post(`/api/waiter/checks/${checkId}/move`, { tableId }).then(r => r.data));
+
+export const useSplitCheck = () =>
+  useWaiterMutation<{ checkId: number; items: { itemId: number; quantity: number }[]; targetCheckId: number | null; label: string | null }, { targetCheckId: number }>(
+    ({ checkId, ...body }) => apiClient.post(`/api/waiter/checks/${checkId}/split`, body).then(r => r.data));
 
 export interface TableSetting { id?: number; name: string; isActive: boolean }
 
