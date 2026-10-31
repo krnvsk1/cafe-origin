@@ -76,7 +76,7 @@ namespace Kumashaurma.API.Controllers
         [HttpPut("stations/{id:int}")]
         public async Task<IActionResult> RenameStation(int id, [FromBody] RenameRequest r)
         {
-            if (!User.IsInRole(AppRoles.Admin)) return StatusCode(403, new { message = "Переименовать кухню может только администратор" });
+            if (AdminOnly() is { } deny) return deny;
             var name = (r.Name ?? "").Trim();
             if (name.Length == 0 || name.Length > 60) return BadRequest(new { message = "Название кухни — от 1 до 60 символов" });
             var st = await _context.KitchenStations.FirstOrDefaultAsync(s => s.Id == id);
@@ -86,6 +86,68 @@ namespace Kumashaurma.API.Controllers
             st.Name = name;
             await _context.SaveChangesAsync();
             return Ok(new { st.Id, st.Name });
+        }
+
+        public class StationOrderRequest
+        {
+            public List<int> Ids { get; set; } = new();
+        }
+
+        private IActionResult? AdminOnly() =>
+            User.IsInRole(AppRoles.Admin) ? null : StatusCode(403, new { message = "Кухни настраивает только администратор" });
+
+        // POST: api/kitchen/stations — добавить кухню (только администратор)
+        [HttpPost("stations")]
+        public async Task<IActionResult> AddStation([FromBody] RenameRequest r)
+        {
+            if (AdminOnly() is { } deny) return deny;
+            var name = (r.Name ?? "").Trim();
+            if (name.Length == 0 || name.Length > 60) return BadRequest(new { message = "Название кухни — от 1 до 60 символов" });
+            var list = await StationsAsync();
+            if (list.Count >= 20) return BadRequest(new { message = "Кухонь не больше 20" });
+            if (list.Any(s => s.Name.ToLower() == name.ToLower())) return BadRequest(new { message = "Кухня с таким названием уже есть" });
+            var st = new KitchenStation { Name = name, SortOrder = list.Max(s => s.SortOrder) + 1 };
+            _context.KitchenStations.Add(st);
+            await _context.SaveChangesAsync();
+            return Ok(new { st.Id, st.Name });
+        }
+
+        // PUT: api/kitchen/stations/order — порядок кухонь; первая — для блюд без метки
+        [HttpPut("stations/order")]
+        public async Task<IActionResult> OrderStations([FromBody] StationOrderRequest r)
+        {
+            if (AdminOnly() is { } deny) return deny;
+            var all = await _context.KitchenStations.ToListAsync();
+            if (r.Ids.Count != all.Count || r.Ids.Distinct().Count() != all.Count || all.Any(s => !r.Ids.Contains(s.Id)))
+                return BadRequest(new { message = "Передайте все кухни по одному разу" });
+            for (var i = 0; i < r.Ids.Count; i++) all.First(s => s.Id == r.Ids[i]).SortOrder = i;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // DELETE: api/kitchen/stations/{id} — убрать кухню: её блюда уходят на первую кухню
+        [HttpDelete("stations/{id:int}")]
+        public async Task<IActionResult> DeleteStation(int id)
+        {
+            if (AdminOnly() is { } deny) return deny;
+            var list = await StationsAsync();
+            var st = list.FirstOrDefault(s => s.Id == id);
+            if (st == null) return NotFound(new { message = "Кухня не найдена" });
+            if (list.Count == 1) return BadRequest(new { message = "Нельзя убрать единственную кухню" });
+
+            // Не убираем кухню, пока на ней готовятся заказы
+            var active = new[] { OrderStatuses.New, OrderStatuses.Accepted, OrderStatuses.Preparing, OrderStatuses.Ready };
+            var activeItems = await _context.Orders.AsNoTracking().Where(o => active.Contains(o.Status))
+                .SelectMany(o => o.OrderItems.Select(i => i.ShawarmaId)).Distinct().ToListAsync();
+            var stationOf = await ItemStationsAsync(activeItems, list[0].Id);
+            if (activeItems.Any(sid => stationOf.GetValueOrDefault(sid, list[0].Id) == id))
+                return BadRequest(new { message = "На этой кухне сейчас есть заказы — уберите её, когда они будут готовы" });
+
+            var dishes = await _context.Shawarmas.Where(s => s.KitchenStationId == id).ToListAsync();
+            foreach (var d in dishes) d.KitchenStationId = null;
+            _context.KitchenStations.Remove(await _context.KitchenStations.FirstAsync(s => s.Id == id));
+            await _context.SaveChangesAsync();
+            return Ok(new { movedDishes = dishes.Count });
         }
 
         // POST: api/kitchen/orders/{id}/stations/{stationId} — кухня отмечает свою часть заказа

@@ -117,6 +117,22 @@ export const useKitchenStations = () =>
     staleTime: 5 * 60 * 1000,
   });
 
+const useStationMutation = <T,>(fn: (v: T) => Promise<unknown>) => {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, T>({
+    mutationFn: fn,
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['kitchen-stations'] });
+      queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+    },
+  });
+};
+
+/** Добавить кухню, задать порядок, убрать (только администратор) */
+export const useAddStation = () => useStationMutation<string>(name => apiClient.post('/api/kitchen/stations', { name }).then(r => r.data));
+export const useOrderStations = () => useStationMutation<number[]>(ids => apiClient.put('/api/kitchen/stations/order', { ids }).then(r => r.data));
+export const useDeleteStation = () => useStationMutation<number>(id => apiClient.delete(`/api/kitchen/stations/${id}`).then(r => r.data));
+
 /** Переименовать кухню (только администратор) */
 export const useRenameStation = () => {
   const queryClient = useQueryClient();
