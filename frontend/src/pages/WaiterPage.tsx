@@ -508,6 +508,15 @@ const roundStatus = (o: CheckOrder) => {
   return { text: 'отдано', color: '#7B776F' };
 };
 
+/** Статус блюда на его кухне — у каждого блюда свой */
+const ITEM_STATUS: Record<string, { text: string; color: string }> = {
+  'Новый': { text: 'отправлено', color: '#2563EB' },
+  'Принят': { text: 'принято', color: '#C77700' },
+  'Готовится': { text: 'готовится', color: '#C77700' },
+  'Готов': { text: 'готово — нести', color: tokens.herb },
+  'Отдано': { text: 'отдано', color: '#7B776F' },
+};
+
 const ItemState: React.FC<{ ready: number; served: number; qty: number; cancelled: boolean }> = ({ ready, served, qty, cancelled }) => {
   if (cancelled) return null;
   if (served >= qty) return <ServedIcon fontSize="small" sx={{ color: 'text.disabled' }} titleAccess="отдано" />;
@@ -636,7 +645,10 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
               <Typography sx={{ fontWeight: 700, flex: 1 }}>
                 {idx + 1}-я подача <Typography component="span" variant="body2" color="text.secondary">· №{o.id} · {parseUtc(o.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</Typography>
               </Typography>
-              <Chip size="small" label={st.text} sx={{ bgcolor: alpha(st.color, 0.14), color: st.color, fontWeight: 700 }} />
+              {/* Общий статус подачи — только когда он один на все блюда; иначе смотрим по блюдам */}
+              {(cancelled || new Set(o.items.map(i => i.kitchenStatus)).size <= 1) && (
+                <Chip size="small" label={st.text} sx={{ bgcolor: alpha(st.color, 0.14), color: st.color, fontWeight: 700 }} />
+              )}
             </Box>
             {toServe.length > 1 && (
               <Button fullWidth variant="contained" color="success" startIcon={<ServedIcon />} disabled={serve.isPending} sx={{ mb: 1 }}
@@ -652,10 +664,17 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
               <Box key={i.id} onClick={() => isOpen && !cancelled && i.quantity - i.pendingVoid > 0 && setVoiding(i)}
                 sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25, cursor: isOpen && !cancelled ? 'pointer' : 'default', borderRadius: 1, '&:active': { bgcolor: 'action.hover' } }}>
                 <ItemState ready={i.readyQuantity} served={i.servedQuantity} qty={i.quantity} cancelled={cancelled} />
-                <Typography sx={{ flex: 1, fontSize: '0.95rem', textDecoration: cancelled ? 'line-through' : 'none' }}>
-                  {i.quantity} × {i.name}
-                  {i.addons.length > 0 && <Typography component="span" variant="body2" color="text.secondary"> + {i.addons.map(a => a.addonName).join(', ')}</Typography>}
-                </Typography>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography sx={{ fontSize: '0.95rem', textDecoration: cancelled ? 'line-through' : 'none' }}>
+                    {i.quantity} × {i.name}
+                    {i.addons.length > 0 && <Typography component="span" variant="body2" color="text.secondary"> + {i.addons.map(a => a.addonName).join(', ')}</Typography>}
+                  </Typography>
+                  {!cancelled && ITEM_STATUS[i.kitchenStatus] && (
+                    <Typography variant="caption" sx={{ color: ITEM_STATUS[i.kitchenStatus].color, fontWeight: 700 }}>
+                      {i.station ? `${i.station} · ` : ''}{ITEM_STATUS[i.kitchenStatus].text}
+                    </Typography>
+                  )}
+                </Box>
                 {i.moved && <Chip size="small" label="перенесено" sx={{ height: 20, fontSize: '0.7rem' }} />}
                 {i.pendingVoid > 0 && <Chip size="small" color="error" variant="outlined" label={`убрать ${i.pendingVoid} — ждёт кухню`} sx={{ height: 20, fontSize: '0.7rem' }} />}
                 {i.quantity > 1 && i.readyQuantity > 0 && i.servedQuantity < i.quantity && (

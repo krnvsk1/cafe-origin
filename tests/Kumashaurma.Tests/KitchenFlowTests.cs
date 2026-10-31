@@ -35,6 +35,16 @@ namespace Kumashaurma.Tests
         }
 
         [Fact]
+        public void Effective_WithMarks_OtherKitchenDoesNotFollowOrder()
+        {
+            // Горячая кухня приняла — заказ стал «Принят», но мангал без своей отметки остаётся «Новый»
+            Assert.Equal(OrderStatuses.New, KitchenFlow.Effective(null, OrderStatuses.Accepted, orderHasMarks: true));
+            Assert.Equal(OrderStatuses.New, KitchenFlow.Effective(OrderStatuses.New, OrderStatuses.Preparing, orderHasMarks: true));
+            // Готовый (или выданный) целиком заказ готов на всех кухнях
+            Assert.Equal(OrderStatuses.Ready, KitchenFlow.Effective(OrderStatuses.Accepted, OrderStatuses.Completed, orderHasMarks: true));
+        }
+
+        [Fact]
         public void StationFor_OwnThenParentThenDefault()
         {
             Assert.Equal(2, KitchenFlow.StationFor(2, 1, 1));

@@ -26,11 +26,16 @@ namespace Kumashaurma.API.Services
         };
 
         /// <summary>
-        /// Статус части заказа на кухне: отметка кухни, но не «ниже» общего статуса заказа
-        /// (если заказ целиком двинули с общего экрана — части идут за ним).
+        /// Статус части заказа на кухне. Пока ни одна кухня не отмечала заказ — все части идут за общим статусом
+        /// (заказ двигают целиком). Как только кухни отмечают свои части — у каждой свой статус,
+        /// и общий статус (он складывается из них) другие кухни не двигает; только готовый целиком заказ готов везде.
         /// </summary>
-        public static string Effective(string? stationStatus, string orderStatus) =>
-            FromRank(Math.Max(stationStatus == null ? 0 : Rank(stationStatus), Math.Max(0, Rank(orderStatus))));
+        public static string Effective(string? stationStatus, string orderStatus, bool orderHasMarks = false)
+        {
+            var order = Rank(orderStatus);
+            var lift = !orderHasMarks ? Math.Max(0, order) : order >= 3 ? 3 : 0;
+            return FromRank(Math.Max(stationStatus == null ? 0 : Rank(stationStatus), lift));
+        }
 
         /// <summary>
         /// Общий статус заказа по кухням: все готовы — «Готов»; хоть одна готовит — «Готовится»;
@@ -49,9 +54,9 @@ namespace Kumashaurma.API.Services
         /// Статус части заказа на кухне с учётом готовности блюд: все блюда кухни готовы — «Готов»,
         /// часть готова — как минимум «Готовится».
         /// </summary>
-        public static string Effective(string? stationStatus, string orderStatus, int itemsTotal, int itemsReady)
+        public static string Effective(string? stationStatus, string orderStatus, int itemsTotal, int itemsReady, bool orderHasMarks = false)
         {
-            var baseStatus = Effective(stationStatus, orderStatus);
+            var baseStatus = Effective(stationStatus, orderStatus, orderHasMarks);
             if (itemsTotal > 0 && itemsReady >= itemsTotal) return OrderStatuses.Ready;
             if (itemsReady > 0 && Rank(baseStatus) < 2) return OrderStatuses.Preparing;
             return baseStatus;

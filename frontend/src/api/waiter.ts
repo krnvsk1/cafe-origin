@@ -38,6 +38,10 @@ export interface CheckItem {
   moved: boolean;
   /** Сколько штук ждёт решения кухни об отмене */
   pendingVoid: number;
+  /** Статус блюда на его кухне: Новый, Принят, Готовится, Готов, Отдано, Отменён */
+  kitchenStatus: string;
+  /** Кухня блюда — когда кухонь несколько */
+  station: string | null;
 }
 
 export interface CheckVoid {

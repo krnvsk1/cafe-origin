@@ -286,6 +286,24 @@ namespace Kumashaurma.API.Controllers
             var active = lines.Where(l => l.Order.Status != OrderStatuses.Cancelled).ToList();
             int Ready(CheckLine l) => l.Order.Status is OrderStatuses.Ready or OrderStatuses.Completed
                 ? l.Item.Quantity : Math.Min(l.Item.Quantity, states.GetValueOrDefault(l.Item.Id)?.ReadyQuantity ?? 0);
+            // Статус каждого блюда — по его кухне: горячая уже готова, а мангал ещё только принял
+            var stationList = await _context.KitchenStations.AsNoTracking().OrderBy(s => s.SortOrder).ThenBy(s => s.Id).ToListAsync();
+            var defStation = stationList.FirstOrDefault()?.Id ?? 0;
+            var itemStation = await KitchenController.ItemStationsAsync(_context, lines.Select(l => l.Item.ShawarmaId), defStation);
+            var orderIdsHere = lines.Select(l => l.Order.Id).Distinct().ToList();
+            var stationMarks = await _context.OrderStationStatuses.AsNoTracking().Where(x => orderIdsHere.Contains(x.OrderId))
+                .ToDictionaryAsync(x => (x.OrderId, x.StationId), x => x.Status);
+            var marked = stationMarks.Keys.Select(k => k.OrderId).ToHashSet();
+            string ItemStatus(CheckLine l)
+            {
+                if (l.Order.Status == OrderStatuses.Cancelled) return OrderStatuses.Cancelled;
+                if (Served(l) >= l.Item.Quantity) return "Отдано";
+                var ready = Ready(l);
+                var st = itemStation.GetValueOrDefault(l.Item.ShawarmaId, defStation);
+                return KitchenFlow.Effective(stationMarks.GetValueOrDefault((l.Order.Id, st)), l.Order.Status, l.Item.Quantity, ready, marked.Contains(l.Order.Id));
+            }
+            string? StationName(CheckLine l) => stationList.Count > 1
+                ? stationList.FirstOrDefault(s => s.Id == itemStation.GetValueOrDefault(l.Item.ShawarmaId, defStation))?.Name : null;
             int Served(CheckLine l) => l.Order.Status == OrderStatuses.Completed
                 ? l.Item.Quantity : Math.Min(l.Item.Quantity, states.GetValueOrDefault(l.Item.Id)?.ServedQuantity ?? 0);
 
@@ -337,6 +355,8 @@ namespace Kumashaurma.API.Controllers
                         lineTotal = LineTotal(l.Item),
                         addons = l.Item.SelectedAddons.Select(a => new { a.AddonName, a.Quantity, a.Price }),
                         pendingVoid = pendingByItem.GetValueOrDefault(l.Item.Id),
+                        kitchenStatus = ItemStatus(l),
+                        station = StationName(l),
                         readyQuantity = Ready(l),
                         servedQuantity = Served(l),
                         // Перенесена из другого счёта или в этот счёт пришла не своей подачей

@@ -611,6 +611,7 @@ namespace Kumashaurma.API.Controllers
                     // Сохраняет и остальные изменённые поля, начисляет баллы, публикует событие
                     if (!await _statusService.ChangeStatusAsync(order, request.Status))
                         return BadRequest(new { Message = $"Неизвестный статус: {request.Status}" });
+                    await KitchenController.LiftMarksAsync(_context, order.Id, request.Status, User.GetUserId());
                 }
                 else
                 {
@@ -713,6 +714,7 @@ namespace Kumashaurma.API.Controllers
                 if (!await _statusService.ChangeStatusAsync(order, request.Status))
                     return BadRequest(new { Message = $"Неизвестный статус: {request.Status}" });
 
+                await KitchenController.LiftMarksAsync(_context, order.Id, request.Status, User.GetUserId());
                 if (readyBefore != null) await notifier.NotifyAsync(order, readyBefore);
                 return Ok(order);
             }
