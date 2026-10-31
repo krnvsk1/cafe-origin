@@ -49,6 +49,7 @@ import {
   FiberManualRecord as DotIcon
 } from '@mui/icons-material';
 import { useShawarmas, useDeleteShawarma, useUpdateShawarmaAvailability } from '../api/hooks';
+import { KitchenStationSelect, KitchenStationsButton } from '../components/KitchenStationControls';
 import { 
   useAddonCategories, 
   useCreateAddonCategory,
@@ -283,6 +284,7 @@ const AdminMenuPage: React.FC = () => {
         </Typography>
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
           <MenuImportButton />
+          <KitchenStationsButton />
           <Button
             variant="contained"
             startIcon={<FastfoodIcon />}
@@ -404,6 +406,9 @@ const AdminMenuPage: React.FC = () => {
                             </Box>
                           </Box>
                         </Box>
+
+                        {/* Кухня, куда идут блюда карточки */}
+                        <KitchenStationSelect item={parent} onError={text => setSnackbar({ open: true, message: text, severity: 'error' })} />
 
                         {/* Цена */}
                         <Box sx={{ textAlign: 'center', mx: 2 }}>
@@ -549,6 +554,8 @@ const AdminMenuPage: React.FC = () => {
                                   >
                                     {child.price} ₽
                                   </Typography>
+
+                                  <KitchenStationSelect item={child} parent={parent} onError={text => setSnackbar({ open: true, message: text, severity: 'error' })} />
 
                                   <Switch
                                     size="small"

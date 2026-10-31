@@ -112,7 +112,8 @@ namespace Kumashaurma.API.Controllers
                 SortOrder = dto.SortOrder,
                 Category = dto.Category?.Trim() ?? string.Empty,
                 Badge = string.IsNullOrWhiteSpace(dto.Badge) ? null : dto.Badge.Trim(),
-                OrderTypes = SalesChannels.Format(dto.AvailableOrderTypes)
+                OrderTypes = SalesChannels.Format(dto.AvailableOrderTypes),
+                KitchenStationId = dto.KitchenStationId is > 0 ? dto.KitchenStationId : null
             };
 
             _context.Shawarmas.Add(shawarma);
@@ -148,6 +149,13 @@ namespace Kumashaurma.API.Controllers
             if (dto.Badge != null) shawarma.Badge = string.IsNullOrWhiteSpace(dto.Badge) ? null : dto.Badge.Trim();
             // Пустой список или все способы — без ограничений
             if (dto.AvailableOrderTypes != null) shawarma.OrderTypes = SalesChannels.Format(dto.AvailableOrderTypes);
+            // 0 — снять метку (вариант пойдёт на кухню карточки)
+            if (dto.KitchenStationId.HasValue)
+            {
+                if (dto.KitchenStationId > 0 && !await _context.KitchenStations.AnyAsync(k => k.Id == dto.KitchenStationId))
+                    return BadRequest(new { Message = "Кухня не найдена" });
+                shawarma.KitchenStationId = dto.KitchenStationId > 0 ? dto.KitchenStationId : null;
+            }
 
             shawarma.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -207,6 +215,8 @@ namespace Kumashaurma.API.Controllers
         public string? Badge { get; set; }
         /// <summary>Где можно заказать: «Доставка», «Самовывоз», «В зале»; пусто/все — везде</summary>
         public List<string>? AvailableOrderTypes { get; set; }
+        /// <summary>Кухня, куда идёт блюдо; null или 0 — как у карточки / по умолчанию</summary>
+        public int? KitchenStationId { get; set; }
     }
 
     public class UpdateShawarmaDto
@@ -224,6 +234,8 @@ namespace Kumashaurma.API.Controllers
         public string? Badge { get; set; }
         /// <summary>Где можно заказать: «Доставка», «Самовывоз», «В зале»; пусто/все — везде</summary>
         public List<string>? AvailableOrderTypes { get; set; }
+        /// <summary>Кухня, куда идёт блюдо; 0 — снять метку</summary>
+        public int? KitchenStationId { get; set; }
     }
 
     public class ReorderItem

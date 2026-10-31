@@ -14,11 +14,26 @@ export interface KitchenOrder {
   createdAt: string;
   scheduledFor: string | null;
   isLater: boolean;
+  /** Кухни, на которые идут блюда заказа, и статус части заказа на каждой */
+  stations: KitchenOrderStation[];
   items: KitchenOrderItem[];
+}
+
+export interface KitchenOrderStation {
+  id: number;
+  name: string;
+  status: OrderStatus;
+}
+
+export interface KitchenStation {
+  id: number;
+  name: string;
 }
 
 export interface KitchenOrderItem {
   shawarmaId: number;
+  /** Кухня блюда (метка из меню) */
+  stationId: number;
   name: string;
   quantity: number;
   addons: { addonId: number; addonName: string; quantity: number }[];
@@ -75,6 +90,39 @@ export const useSetOrderStatus = () => {
   const queryClient = useQueryClient();
   return useMutation<unknown, Error, { id: number; status: OrderStatus }>({
     mutationFn: ({ id, status }) => apiClient.patch(`/api/orders/${id}/status`, { status }).then(res => res.data),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+};
+
+/** Кухни: «Горячая кухня», «Мангал»… */
+export const useKitchenStations = () =>
+  useQuery<KitchenStation[]>({
+    queryKey: ['kitchen-stations'],
+    queryFn: () => apiClient.get('/api/kitchen/stations').then(res => res.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+/** Переименовать кухню (только администратор) */
+export const useRenameStation = () => {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, { id: number; name: string }>({
+    mutationFn: ({ id, name }) => apiClient.put(`/api/kitchen/stations/${id}`, { name }).then(res => res.data),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['kitchen-stations'] });
+      queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+    },
+  });
+};
+
+/** Кухня отмечает свою часть заказа: принят, готовится, готов */
+export const useSetStationStatus = () => {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, { orderId: number; stationId: number; status: OrderStatus }>({
+    mutationFn: ({ orderId, stationId, status }) =>
+      apiClient.post(`/api/kitchen/orders/${orderId}/stations/${stationId}`, { status }).then(res => res.data),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
       queryClient.invalidateQueries({ queryKey: ['orders'] });

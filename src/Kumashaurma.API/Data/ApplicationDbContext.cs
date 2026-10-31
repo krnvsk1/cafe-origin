@@ -60,6 +60,8 @@ namespace Kumashaurma.API.Data
         public DbSet<ChzDocument> ChzDocuments { get; set; } = null!;
         public DbSet<EdoDocument> EdoDocuments { get; set; } = null!;
         public DbSet<MercuryDocument> MercuryDocuments { get; set; } = null!;
+        public DbSet<KitchenStation> KitchenStations { get; set; } = null!;
+        public DbSet<OrderStationStatus> OrderStationStatuses { get; set; } = null!;
 
         // Журналы ХАССП
         public DbSet<HaccpObject> HaccpObjects { get; set; } = null!;
@@ -438,6 +440,16 @@ namespace Kumashaurma.API.Data
                 entity.HasIndex(e => e.EntryId);
                 entity.HasOne(e => e.Entry).WithMany().HasForeignKey(e => e.EntryId).OnDelete(DeleteBehavior.Cascade);
             });
+
+            modelBuilder.Entity<OrderStationStatus>(entity =>
+            {
+                entity.HasIndex(e => new { e.OrderId, e.StationId }).IsUnique();
+                entity.HasOne<Order>().WithMany().HasForeignKey(e => e.OrderId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne<KitchenStation>().WithMany().HasForeignKey(e => e.StationId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<Shawarma>()
+                .HasOne<KitchenStation>().WithMany().HasForeignKey(s => s.KitchenStationId).OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<MercuryDocument>(entity =>
             {

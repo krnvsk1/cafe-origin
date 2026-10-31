@@ -96,6 +96,10 @@ namespace Kumashaurma.API.Models
 
         [Column("sort_order")]
         public int SortOrder { get; set; }
+
+        /// <summary>На какую кухню идёт блюдо (у варианта без своей — как у карточки; не задано — первая кухня)</summary>
+        [Column("kitchen_station_id")]
+        public int? KitchenStationId { get; set; }
         
         // Связь с добавками
         public ICollection<ShawarmaAddon> Addons { get; set; } = new List<ShawarmaAddon>();

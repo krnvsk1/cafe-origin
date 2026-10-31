@@ -1082,6 +1082,30 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("haccp_staff");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.KitchenStation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("kitchen_stations");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.MercuryDocument", b =>
                 {
                     b.Property<int>("Id")
@@ -1483,6 +1507,47 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("order_reviews");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.OrderStationStatus", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_id");
+
+                    b.Property<int>("StationId")
+                        .HasColumnType("integer")
+                        .HasColumnName("station_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StationId");
+
+                    b.HasIndex("OrderId", "StationId")
+                        .IsUnique();
+
+                    b.ToTable("order_station_statuses");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.PromoCode", b =>
                 {
                     b.Property<int>("Id")
@@ -1654,6 +1719,10 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_spicy");
 
+                    b.Property<int?>("KitchenStationId")
+                        .HasColumnType("integer")
+                        .HasColumnName("kitchen_station_id");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1684,6 +1753,8 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("KitchenStationId");
 
                     b.HasIndex("ParentId");
 
@@ -2663,6 +2734,21 @@ namespace Kumashaurma.API.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.OrderStationStatus", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.Order", null)
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Kumashaurma.API.Models.KitchenStation", null)
+                        .WithMany()
+                        .HasForeignKey("StationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.PromoCode", b =>
                 {
                     b.HasOne("Kumashaurma.API.Models.AppUser", "Creator")
@@ -2686,6 +2772,11 @@ namespace Kumashaurma.API.Migrations
 
             modelBuilder.Entity("Kumashaurma.API.Models.Shawarma", b =>
                 {
+                    b.HasOne("Kumashaurma.API.Models.KitchenStation", null)
+                        .WithMany()
+                        .HasForeignKey("KitchenStationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Kumashaurma.API.Models.Shawarma", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("ParentId")

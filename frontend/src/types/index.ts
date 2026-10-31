@@ -24,6 +24,8 @@ export interface Shawarma {
   addonCategories?: AddonCategory[];
   // Иерархия: parent_id
   parentId?: number | null;
+  /** Кухня, куда идёт блюдо; null — как у карточки / кухня по умолчанию */
+  kitchenStationId?: number | null;
   isCard?: boolean;
   children?: Shawarma[];
 }

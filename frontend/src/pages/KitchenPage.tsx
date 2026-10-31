@@ -11,7 +11,7 @@ import {
   MenuBookOutlined as RecipeIcon,
   Check as CheckIcon,
 } from '@mui/icons-material';
-import { useKitchenOrders, useSetOrderStatus } from '../api/staff';
+import { useKitchenOrders, useSetOrderStatus, useKitchenStations, useSetStationStatus } from '../api/staff';
 import type { KitchenOrder, KitchenOrderItem } from '../api/staff';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
 import {
@@ -23,6 +23,8 @@ import KitchenTechCardDialog from '../components/KitchenTechCardDialog';
 import type { OrderStatus } from '../types';
 
 const SOUND_KEY = 'kitchen-sound';
+// Какую кухню показывает этот экран (у каждого планшета своя)
+const STATION_KEY = 'kitchen-station';
 
 // Минуты с момента создания (или до времени для заказов ко времени)
 const useNow = (intervalMs = 30000) => {
@@ -46,23 +48,63 @@ const COLUMNS: { status: OrderStatus; title: string; color: string }[] = [
   { status: 'Готов', title: 'Готовы', color: '#2e7d32' },
 ];
 
-const KitchenCard: React.FC<{ order: KitchenOrder; now: number; onRecipe: (item: KitchenOrderItem) => void }> = ({ order, now, onRecipe }) => {
+/** Статус заказа для колонки: на экране кухни — статус её части, на общем — заказа */
+const statusFor = (order: KitchenOrder, stationId: number | null): OrderStatus =>
+  stationId == null ? order.status : (order.stations.find(s => s.id === stationId)?.status ?? order.status);
+
+const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: number | null; onRecipe: (item: KitchenOrderItem) => void }> = ({ order, now, stationId, onRecipe }) => {
   const setStatus = useSetOrderStatus();
+  const setStation = useSetStationStatus();
+  const busy = setStatus.isPending || setStation.isPending;
+  const status = statusFor(order, stationId);
   // now обновляется раз в 30 с — заказ, пришедший между тиками, «моложе» now; без ограничения было «-1 мин»
   const minutes = Math.max(0, Math.floor((now - new Date(order.createdAt).getTime()) / 60000));
-  const late = order.status !== 'Готов' && !order.scheduledFor && minutes >= 20;
+  const late = status !== 'Готов' && !order.scheduledFor && minutes >= 20;
   const isPickup = order.deliveryType !== 'Доставка';
-  const accepted = order.status === 'Принят';
+  const accepted = status === 'Принят';
   // Новый заказ (не «ко времени») звенит и мигает, пока его не примут
-  const ringing = order.status === 'Новый' && !order.isLater;
+  const ringing = status === 'Новый' && !order.isLater;
+  const multi = order.stations.length > 1;
+  const others = stationId == null ? [] : order.stations.filter(s => s.id !== stationId);
+  const waiting = order.stations.filter(s => s.status !== 'Готов' && s.id !== stationId);
+
+  // Своя часть на экране кухни; заказ целиком — на общем экране
+  const advance = (next: OrderStatus) => {
+    if (stationId != null && next !== 'Выполнен') setStation.mutate({ orderId: order.id, stationId, status: next });
+    else setStatus.mutate({ id: order.id, status: next });
+  };
 
   const next: { label: string; status: OrderStatus } | null =
-    order.status === 'Новый' ? { label: 'Принять', status: 'Принят' }
-      : order.status === 'Принят' ? { label: 'Начать готовить', status: 'Готовится' }
-      : order.status === 'Готовится' ? { label: 'Готово', status: 'Готов' }
-      // Самовывоз/в зале кухня выдаёт сама; доставку забирает курьер
-      : isPickup ? { label: 'Выдан', status: 'Выполнен' }
+    status === 'Новый' ? { label: 'Принять', status: 'Принят' }
+      : status === 'Принят' ? { label: 'Начать готовить', status: 'Готовится' }
+      : status === 'Готовится' ? { label: 'Готово', status: 'Готов' }
+      // Выдать можно, когда готов весь заказ; самовывоз/в зале кухня выдаёт сама, доставку забирает курьер
+      : order.status === 'Готов' && isPickup ? { label: 'Выдан', status: 'Выполнен' }
       : null;
+
+  const items = stationId == null ? order.items : order.items.filter(i => i.stationId === stationId);
+  const otherItems = stationId == null ? [] : order.items.filter(i => i.stationId !== stationId);
+
+  const renderItem = (item: KitchenOrderItem, idx: number) => (
+    <Box key={idx} sx={{ mb: 0.75 }}>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+        <Typography fontWeight={700} sx={{ fontSize: '1.05rem', flex: 1 }}>
+          {item.quantity} × {item.name}
+        </Typography>
+        {/* Техкарта — по запросу повара, чтобы не загромождать карточку */}
+        <Tooltip title="Техкарта">
+          <IconButton size="small" onClick={() => onRecipe(item)} aria-label={`Техкарта: ${item.name}`} sx={{ mt: -0.25, color: 'text.secondary' }}>
+            <RecipeIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+      {item.addons.length > 0 && (
+        <Typography variant="body2" color="text.secondary" sx={{ pl: 2 }}>
+          + {item.addons.map(a => (a.quantity > 1 ? `${a.addonName} ×${a.quantity}` : a.addonName)).join(', ')}
+        </Typography>
+      )}
+    </Box>
+  );
 
   return (
     <Paper
@@ -90,26 +132,26 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; onRecipe: (item:
         )}
       </Box>
 
-      {order.items.map((item, idx) => (
-        <Box key={idx} sx={{ mb: 0.75 }}>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-            <Typography fontWeight={700} sx={{ fontSize: '1.05rem', flex: 1 }}>
-              {item.quantity} × {item.name}
+      {stationId == null && multi
+        ? order.stations.map(st => (
+          <Box key={st.id} sx={{ mb: 0.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 800, textTransform: 'uppercase', color: 'text.secondary' }}>
+              {st.name} · {st.status.toLowerCase()}
             </Typography>
-            {/* Техкарта — по запросу повара, чтобы не загромождать карточку */}
-            <Tooltip title="Техкарта">
-              <IconButton size="small" onClick={() => onRecipe(item)} aria-label={`Техкарта: ${item.name}`} sx={{ mt: -0.25, color: 'text.secondary' }}>
-                <RecipeIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            {order.items.filter(i => i.stationId === st.id).map(renderItem)}
           </Box>
-          {item.addons.length > 0 && (
-            <Typography variant="body2" color="text.secondary" sx={{ pl: 2 }}>
-              + {item.addons.map(a => (a.quantity > 1 ? `${a.addonName} ×${a.quantity}` : a.addonName)).join(', ')}
+        ))
+        : items.map(renderItem)}
+
+      {otherItems.length > 0 && (
+        <Box sx={{ mt: 0.5, px: 1, py: 0.5, borderRadius: 1, bgcolor: 'action.hover' }}>
+          {others.map(st => (
+            <Typography key={st.id} variant="body2" color="text.secondary">
+              <b>{st.name}</b> ({st.status.toLowerCase()}): {otherItems.filter(i => i.stationId === st.id).map(i => `${i.quantity}× ${i.name}`).join(', ')}
             </Typography>
-          )}
+          ))}
         </Box>
-      ))}
+      )}
 
       {order.notes && (
         <Alert severity="warning" icon={false} sx={{ mt: 1, py: 0 }}>{order.notes}</Alert>
@@ -118,7 +160,7 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; onRecipe: (item:
       <Divider sx={{ my: 1 }} />
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }} noWrap>{order.customerName}</Typography>
-        {(order.status === 'Новый' || accepted) && (
+        {(order.status === 'Новый' || order.status === 'Принят') && (status === 'Новый' || accepted) && (
           <Button size="small" color="error" onClick={() => {
             if (window.confirm(`Отменить заказ #${order.id}?`)) setStatus.mutate({ id: order.id, status: 'Отменён' });
           }}>
@@ -126,16 +168,14 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; onRecipe: (item:
           </Button>
         )}
         {next && (
-          <Button
-            variant="contained"
-            size="large"
-            disabled={setStatus.isPending}
-            onClick={() => setStatus.mutate({ id: order.id, status: next.status })}
-          >
+          <Button variant="contained" size="large" disabled={busy} onClick={() => advance(next.status)}>
             {next.label}
           </Button>
         )}
-        {!next && <Chip size="small" label="Ждёт курьера" />}
+        {!next && status === 'Готов' && waiting.length > 0 && (
+          <Chip size="small" color="warning" label={`Ждёт: ${waiting.map(w => w.name).join(', ')}`} />
+        )}
+        {!next && status === 'Готов' && waiting.length === 0 && !isPickup && <Chip size="small" label="Ждёт курьера" />}
       </Box>
     </Paper>
   );
@@ -150,12 +190,24 @@ const KitchenPage: React.FC = () => {
   });
   const [melody, setMelodyState] = React.useState<MelodyId>(getMelody);
   const [recipeItem, setRecipeItem] = React.useState<KitchenOrderItem | null>(null);
+  const { data: stations = [] } = useKitchenStations();
+  const [stationId, setStationIdState] = React.useState<number | null>(() => {
+    try { const v = localStorage.getItem(STATION_KEY); return v ? Number(v) : null; } catch { return null; }
+  });
+  // Кухню удалили или их одна — показываем всё
+  const station = stations.length > 1 && stationId != null && stations.some(s => s.id === stationId) ? stationId : null;
+  const chooseStation = (id: number | null) => {
+    setStationIdState(id);
+    try { if (id == null) localStorage.removeItem(STATION_KEY); else localStorage.setItem(STATION_KEY, String(id)); } catch { /* ignore */ }
+  };
+  // На экране кухни — только заказы, где есть её блюда
+  const visible = (orders ?? []).filter(o => station == null || o.stations.some(s => s.id === station));
 
   // Живые события только обновляют список; звук зависит от того, что в «Новых» (так он есть, даже если заказ пришёл опросом)
   useEventStream('/api/events/orders', invalidate);
 
   // Сигнал звучит сразу и повторяется, пока в «Новых» есть заказ; приняли последний — звук пропадает
-  const ringing = soundOn && (orders ?? []).some(o => o.status === 'Новый' && !o.isLater);
+  const ringing = soundOn && visible.some(o => statusFor(o, station) === 'Новый' && !o.isLater);
   React.useEffect(() => {
     if (!ringing) return;
     playChime(melody);
@@ -189,13 +241,23 @@ const KitchenPage: React.FC = () => {
     try { localStorage.setItem(SOUND_KEY, next ? 'on' : 'off'); } catch { /* ignore */ }
   };
 
-  const later = (orders ?? []).filter(o => o.isLater);
-  const current = (orders ?? []).filter(o => !o.isLater);
+  const later = visible.filter(o => o.isLater);
+  const current = visible.filter(o => !o.isLater);
 
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <Typography variant="h4" fontWeight={700} sx={{ flex: 1 }}>Кухня</Typography>
+        <Typography variant="h4" fontWeight={700}>{station == null ? 'Кухня' : stations.find(s => s.id === station)?.name}</Typography>
+        <Box sx={{ flex: 1, display: 'flex', gap: 1, flexWrap: 'wrap', ml: 1 }}>
+          {stations.length > 1 && (
+            <>
+              <Chip label="Все кухни" color={station == null ? 'primary' : 'default'} onClick={() => chooseStation(null)} />
+              {stations.map(st => (
+                <Chip key={st.id} label={st.name} color={station === st.id ? 'primary' : 'default'} onClick={() => chooseStation(st.id)} />
+              ))}
+            </>
+          )}
+        </Box>
         <Tooltip title={`Мелодия сигнала: ${MELODIES[melody].label}`}>
           <IconButton onClick={e => setMelodyMenu(e.currentTarget)} aria-label="Выбрать мелодию сигнала">
             <MusicNoteIcon />
@@ -234,14 +296,14 @@ const KitchenPage: React.FC = () => {
         }}
       >
         {COLUMNS.map(col => {
-          const list = current.filter(o => o.status === col.status);
+          const list = current.filter(o => statusFor(o, station) === col.status);
           return (
             <Box key={col.status}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, borderBottom: `3px solid ${col.color}`, pb: 0.5 }}>
                 <Typography variant="h6" fontWeight={700}>{col.title}</Typography>
                 <Chip size="small" label={list.length} />
               </Box>
-              {list.map(o => <KitchenCard key={o.id} order={o} now={now} onRecipe={setRecipeItem} />)}
+              {list.map(o => <KitchenCard key={o.id} order={o} now={now} stationId={station} onRecipe={setRecipeItem} />)}
               {list.length === 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>Пусто</Typography>
               )}
@@ -254,7 +316,7 @@ const KitchenPage: React.FC = () => {
               <Typography variant="h6" fontWeight={700}>Ко времени (позже)</Typography>
               <Chip size="small" label={later.length} />
             </Box>
-            {later.map(o => <KitchenCard key={o.id} order={o} now={now} onRecipe={setRecipeItem} />)}
+            {later.map(o => <KitchenCard key={o.id} order={o} now={now} stationId={station} onRecipe={setRecipeItem} />)}
           </Box>
         )}
       </Box>
