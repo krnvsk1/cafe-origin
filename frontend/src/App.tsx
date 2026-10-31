@@ -264,7 +264,7 @@ function App() {
     { text: 'Меркурий', icon: <MercuryIcon />, path: '/admin/mercury', perms: [P.InventoryView], group: 'Госсистемы', hint: 'Ветсертификаты: гашение ВСД' },
     { text: 'Честный знак', icon: <ChzIcon />, path: '/admin/chz', perms: [P.Chz], group: 'Госсистемы', hint: 'Маркировка: вывод из оборота' },
     { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', perms: [P.UsersView, P.UsersRoles], group: 'Команда', hint: 'Гости и сотрудники' },
-    { text: 'Настройка интеграций', icon: <IntegrationsIcon />, path: '/admin/integrations', perms: [P.Settings], group: 'Команда', hint: 'ЕГАИС, Честный знак, Меркурий, СБИС' },
+    { text: 'Настройка интеграций', icon: <IntegrationsIcon />, path: '/admin/integrations', perms: [P.Settings], group: 'Команда', hint: 'Касса АТОЛ, ЕГАИС, Честный знак, Меркурий, СБИС' },
     { text: 'Роли и доступы', icon: <RolesIcon />, path: '/admin/roles', perms: [P.Roles], group: 'Команда', hint: 'Что доступно каждой роли' },
   ] as (ControlLink & { perms: string[] })[])
     .filter(link => isAuthenticated && can(...link.perms));

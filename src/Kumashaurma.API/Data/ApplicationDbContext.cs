@@ -75,6 +75,7 @@ namespace Kumashaurma.API.Data
         public DbSet<HaccpStaff> HaccpStaff { get; set; } = null!;
         public DbSet<HaccpEntry> HaccpEntries { get; set; } = null!;
         public DbSet<HaccpEntryRevision> HaccpEntryRevisions { get; set; } = null!;
+        public DbSet<FiscalReceipt> FiscalReceipts { get; set; } = null!;
         public DbSet<EdoItemMapping> EdoItemMappings { get; set; } = null!;
 
         // ЕГАИС
@@ -503,6 +504,13 @@ namespace Kumashaurma.API.Data
 
             modelBuilder.Entity<Shawarma>()
                 .HasOne<KitchenStation>().WithMany().HasForeignKey(s => s.KitchenStationId).OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<FiscalReceipt>(entity =>
+            {
+                entity.HasIndex(e => e.OrderId);
+                entity.HasIndex(e => e.Status);
+                entity.HasOne<Order>().WithMany().HasForeignKey(e => e.OrderId).OnDelete(DeleteBehavior.Cascade);
+            });
 
             modelBuilder.Entity<MercuryDocument>(entity =>
             {

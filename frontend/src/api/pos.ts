@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
+import type { FiscalReceiptResult } from './fiscal';
 
 export interface PosOrderInput {
   items: { shawarmaId: number; quantity: number; addons: { addonId: number; quantity: number }[]; comment?: string }[];
@@ -19,6 +20,8 @@ export interface PosOrderResult {
   paymentMethod: string;
   change: number | null;
   customerFound: boolean;
+  /** Чек на кассе АТОЛ; null — касса не подключена */
+  fiscal: FiscalReceiptResult | null;
 }
 
 export interface PosOrder {
@@ -34,6 +37,10 @@ export interface PosOrder {
   notes: string | null;
   createdAt: string;
   completedAt: string | null;
+  /** Последний чек по заказу на кассе АТОЛ */
+  fiscal: { kind: 'sell' | 'sellReturn'; status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber: number | null } | null;
+  /** Чек прихода пробит */
+  sold: boolean;
   items: { name: string; quantity: number; price: number; addons: { addonName: string; quantity: number; price: number }[] }[];
 }
 

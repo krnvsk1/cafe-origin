@@ -4,11 +4,12 @@ import { useRestaurantSettings, useSaveBrand } from '../api/hooks';
 import { apiError } from '../api/inventory';
 import { useLocation } from 'react-router-dom';
 import {
-  CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon, RemoveCircleOutline as OffIcon, SettingsOutlined as SettingsIcon,
+  ReceiptLongOutlined as ReceiptIcon, CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon, RemoveCircleOutline as OffIcon, SettingsOutlined as SettingsIcon,
 } from '@mui/icons-material';
 import { useEgaisState } from '../api/egais';
 import { useChzState } from '../api/chz';
 import { useEdoState } from '../api/edo';
+import { useFiscalState, TAXATION_TYPES, VAT_TYPES, SHIFT_TEXT } from '../api/fiscal';
 import { useMercuryState } from '../api/mercury';
 import { fmtDateTime } from '../api/inventory';
 import { tokens } from '../theme';
@@ -16,6 +17,8 @@ import { Panel } from './inventory/ui';
 import EgaisSettingsDialog from './inventory/EgaisSettingsDialog';
 import ChzSettingsDialog from './inventory/ChzSettingsDialog';
 import EdoSettingsDialog from './inventory/EdoSettingsDialog';
+import FiscalSettingsDialog from './inventory/FiscalSettingsDialog';
+import ReceiptLayoutDialog from './inventory/ReceiptLayoutDialog';
 import MercurySettingsDialog from './inventory/MercurySettingsDialog';
 
 type Status = 'ok' | 'error' | 'off';
@@ -35,7 +38,8 @@ const Card: React.FC<{
   error?: string | null;
   loading?: boolean;
   onSetup: () => void;
-}> = ({ id, title, purpose, status, statusText, details, error, loading, onSetup }) => (
+  extra?: React.ReactNode;
+}> = ({ id, title, purpose, status, statusText, details, error, loading, onSetup, extra }) => (
   <Panel sx={{ scrollMarginTop: 96 }}>
     <Box id={id} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
       {loading ? <CircularProgress size={28} sx={{ m: 0.25 }} /> : <StatusIcon status={status} />}
@@ -52,9 +56,12 @@ const Card: React.FC<{
           </>
         )}
       </Box>
-      <Button variant={status === 'off' ? 'contained' : 'outlined'} color="secondary" startIcon={<SettingsIcon />} onClick={onSetup}>
-        {status === 'off' ? 'Подключить' : 'Настроить'}
-      </Button>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Button variant={status === 'off' ? 'contained' : 'outlined'} color="secondary" startIcon={<SettingsIcon />} onClick={onSetup}>
+          {status === 'off' ? 'Подключить' : 'Настроить'}
+        </Button>
+        {extra}
+      </Box>
     </Box>
   </Panel>
 );
@@ -104,8 +111,9 @@ const IntegrationsPage: React.FC = () => {
   const { data: egais, isLoading: egaisLoading } = useEgaisState();
   const { data: chz, isLoading: chzLoading } = useChzState();
   const { data: edo, isLoading: edoLoading } = useEdoState();
+  const { data: fiscal, isLoading: fiscalLoading } = useFiscalState(true);
   const { data: mercury, isLoading: mercuryLoading } = useMercuryState();
-  const [open, setOpen] = React.useState<'egais' | 'chz' | 'sbis' | 'mercury' | null>(null);
+  const [open, setOpen] = React.useState<'egais' | 'chz' | 'sbis' | 'mercury' | 'kkt' | 'layout' | null>(null);
 
   // Переход из вкладки склада: /admin/integrations#chz — прокручиваем к нужной карточке
   React.useEffect(() => {
@@ -120,6 +128,7 @@ const IntegrationsPage: React.FC = () => {
   const chzStatus: Status = !chzConfigured ? 'off' : chz!.fiasId ? 'ok' : 'error';
   const edoConfigured = !!edo?.enabled && !!edo.login && edo.hasPassword;
   const edoStatus: Status = !edoConfigured ? 'off' : edo!.lastError ? 'error' : 'ok';
+  const fiscalStatus: Status = !fiscal?.enabled ? 'off' : fiscal.shiftError || fiscal.shiftState === 'expired' ? 'error' : 'ok';
   const mercuryConfigured = !!mercury?.enabled && !!mercury.login && mercury.hasPassword && mercury.hasApiKey;
   const mercuryStatus: Status = !mercuryConfigured ? 'off' : mercury!.lastError ? 'error' : 'ok';
 
@@ -127,7 +136,7 @@ const IntegrationsPage: React.FC = () => {
     <Box sx={{ py: { xs: 2, sm: 3 }, maxWidth: 1000, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Box>
         <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.6rem', sm: '2rem' } }}>Настройка интеграций</Typography>
-        <Typography color="text.secondary">Подключение к государственным системам (ЕГАИС, Честный знак, Меркурий) и ЭДО. Работа с документами — во вкладках склада.</Typography>
+        <Typography color="text.secondary">Подключение к онлайн-кассе, государственным системам (ЕГАИС, Честный знак, Меркурий) и ЭДО.</Typography>
       </Box>
 
       <BrandCard />
@@ -199,8 +208,30 @@ const IntegrationsPage: React.FC = () => {
         onSetup={() => setOpen('mercury')}
       />
 
+      <Card
+        id="kkt"
+        title="Онлайн-касса АТОЛ"
+        purpose="Чек после оплаты на кассе: печать, запись в фискальный накопитель и отправка в ОФД"
+        loading={fiscalLoading}
+        status={fiscalStatus}
+        statusText={fiscalStatus === 'off' ? 'Не подключено' : fiscal?.shiftError ? 'Касса недоступна' : `Касса на связи · ${SHIFT_TEXT[fiscal?.shiftState ?? ''] ?? fiscal?.shiftState ?? ''}`}
+        details={fiscal?.enabled ? [
+          `АТОЛ Web Server: ${fiscal.url}`,
+          `${TAXATION_TYPES.find(t => t.value === fiscal.taxationType)?.label ?? fiscal.taxationType} · ${VAT_TYPES.find(t => t.value === fiscal.vat)?.label ?? fiscal.vat}`,
+          `Электронный чек гостю: ${fiscal.sendToCustomer ? 'на телефон, если указан' : 'не отправляется'}`,
+          fiscal.failedReceipts > 0 && `Не пробито чеков за 2 дня: ${fiscal.failedReceipts} — повторите в «Кассе» → «Заказы смены»`,
+        ] : undefined}
+        error={fiscal?.enabled ? fiscal.shiftError : null}
+        onSetup={() => setOpen('kkt')}
+        extra={fiscal && (
+          <Button variant="outlined" color="secondary" startIcon={<ReceiptIcon />} onClick={() => setOpen('layout')}>Вид чека</Button>
+        )}
+      />
+
       <EgaisSettingsDialog open={open === 'egais'} onClose={() => setOpen(null)} />
       <ChzSettingsDialog open={open === 'chz'} onClose={() => setOpen(null)} />
+      {fiscal && <ReceiptLayoutDialog open={open === 'layout'} state={fiscal} onClose={() => setOpen(null)} />}
+      {fiscal && <FiscalSettingsDialog open={open === 'kkt'} state={fiscal} onClose={() => setOpen(null)} />}
       {edo && <EdoSettingsDialog open={open === 'sbis'} state={edo} onClose={() => setOpen(null)} />}
       {mercury && <MercurySettingsDialog open={open === 'mercury'} state={mercury} onClose={() => setOpen(null)} />}
     </Box>

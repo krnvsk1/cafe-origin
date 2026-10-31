@@ -46,31 +46,34 @@ namespace Kumashaurma.API.Services
         public static string FormatAmount(decimal value) =>
             Math.Round(value, 2, MidpointRounding.AwayFromZero).ToString("0.00", CultureInfo.InvariantCulture);
 
+        /// <summary>
+        /// Чек 54-ФЗ для ЮKassa: позиции заказа (блюда — товар, доставка — услуга).
+        /// ЮKassa (или подключённая к ней облачная касса) пробьёт его и отправит гостю на телефон или почту.
+        /// </summary>
+        private object? Receipt(IReadOnlyList<Fiscal.ReceiptLine>? lines, string? customerPhone)
+        {
+            if (!_options.SendReceipt || lines == null || lines.Count == 0) return null;
+            return new
+            {
+                Customer = new { Phone = NormalizePhone(customerPhone) },
+                Items = lines.Select(l => new
+                {
+                    Description = l.Name.Length > 128 ? l.Name[..128] : l.Name,
+                    Quantity = l.Quantity.ToString("0.000", CultureInfo.InvariantCulture),
+                    Amount = new { Value = FormatAmount(l.Price), Currency = "RUB" },
+                    VatCode = _options.VatCode,
+                    PaymentMode = "full_payment",
+                    PaymentSubject = l.IsService ? "service" : "commodity"
+                }).ToArray()
+            };
+        }
+
         /// <summary>Создать платёж с переадресацией на страницу оплаты</summary>
         public async Task<PaymentInfo?> CreatePaymentAsync(
             int orderId, decimal amount, string description, string returnUrl, string? customerPhone,
-            string idempotenceKey, CancellationToken ct = default)
+            IReadOnlyList<Fiscal.ReceiptLine>? receiptLines, string idempotenceKey, CancellationToken ct = default)
         {
-            object? receipt = null;
-            if (_options.SendReceipt)
-            {
-                receipt = new
-                {
-                    Customer = new { Phone = NormalizePhone(customerPhone) },
-                    Items = new[]
-                    {
-                        new
-                        {
-                            Description = description.Length > 128 ? description[..128] : description,
-                            Quantity = "1.00",
-                            Amount = new { Value = FormatAmount(amount), Currency = "RUB" },
-                            VatCode = _options.VatCode,
-                            PaymentMode = "full_payment",
-                            PaymentSubject = "commodity"
-                        }
-                    }
-                };
-            }
+            var receipt = Receipt(receiptLines, customerPhone);
 
             var body = new
             {
@@ -89,12 +92,15 @@ namespace Kumashaurma.API.Services
             SendAsync(HttpMethod.Get, $"payments/{Uri.EscapeDataString(paymentId)}", null, null, ct);
 
         /// <summary>Вернуть деньги по платежу (полностью)</summary>
-        public async Task<bool> RefundAsync(string paymentId, decimal amount, string idempotenceKey, CancellationToken ct = default)
+        public async Task<bool> RefundAsync(string paymentId, decimal amount, string idempotenceKey,
+            IReadOnlyList<Fiscal.ReceiptLine>? receiptLines = null, string? customerPhone = null, CancellationToken ct = default)
         {
             var body = new
             {
                 PaymentId = paymentId,
-                Amount = new { Value = FormatAmount(amount), Currency = "RUB" }
+                Amount = new { Value = FormatAmount(amount), Currency = "RUB" },
+                // С чеком ЮKassa пробьёт и отправит гостю чек возврата
+                Receipt = Receipt(receiptLines, customerPhone)
             };
             using var request = BuildRequest(HttpMethod.Post, "refunds", body, idempotenceKey);
             try

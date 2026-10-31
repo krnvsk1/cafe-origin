@@ -59,7 +59,7 @@ namespace Kumashaurma.API.Services
             var attempt = DateTime.UtcNow.Ticks;
             var payment = await _yooKassa.CreatePaymentAsync(
                 order.Id, order.Total, $"Заказ #{order.Id} — {(await _brand.GetAsync()).DisplayName}", returnUrl, order.Phone,
-                $"order-{order.Id}-{attempt}", ct);
+                await Fiscal.ReceiptLines.LoadAsync(_context, order, ct), $"order-{order.Id}-{attempt}", ct);
 
             if (payment == null) return null;
 
