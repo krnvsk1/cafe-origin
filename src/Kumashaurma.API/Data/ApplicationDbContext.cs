@@ -63,6 +63,7 @@ namespace Kumashaurma.API.Data
         public DbSet<KitchenStation> KitchenStations { get; set; } = null!;
         public DbSet<DiningTable> DiningTables { get; set; } = null!;
         public DbSet<TableCheck> TableChecks { get; set; } = null!;
+        public DbSet<OrderItemVoid> OrderItemVoids { get; set; } = null!;
         public DbSet<OrderStationStatus> OrderStationStatuses { get; set; } = null!;
         public DbSet<OrderItemKitchenState> OrderItemKitchenStates { get; set; } = null!;
 
@@ -459,6 +460,13 @@ namespace Kumashaurma.API.Data
 
             modelBuilder.Entity<Order>()
                 .HasOne<TableCheck>().WithMany().HasForeignKey(o => o.CheckId).OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<OrderItemVoid>(entity =>
+            {
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.RequestedAt);
+                entity.HasIndex(e => e.OrderId);
+            });
 
             modelBuilder.Entity<OrderItem>()
                 .HasOne<TableCheck>().WithMany().HasForeignKey(i => i.CheckId).OnDelete(DeleteBehavior.SetNull);

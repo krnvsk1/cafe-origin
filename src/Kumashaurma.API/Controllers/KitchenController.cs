@@ -131,6 +131,21 @@ namespace Kumashaurma.API.Controllers
             return Ok(new { order.Id, order.Status });
         }
 
+        public class VoidDecision
+        {
+            /// <summary>writeoff — списать продукты, keep — без списания, reject — отказать</summary>
+            public string Decision { get; set; } = string.Empty;
+        }
+
+        // POST: api/kitchen/voids/{id} — кухня решает по просьбе официанта убрать блюдо
+        [HttpPost("voids/{id:int}")]
+        [HasPermission(Permissions.Kitchen)]
+        public async Task<IActionResult> ResolveVoid(int id, [FromBody] VoidDecision r, [FromServices] VoidService voids)
+        {
+            try { await voids.ResolveAsync(id, r.Decision, User.GetUserId()); return NoContent(); }
+            catch (VoidService.VoidException ex) { return BadRequest(new { message = ex.Message }); }
+        }
+
         // POST: api/kitchen/items/{itemId}/ready — блюдо (или ещё одна штука) готово; Delta −1 — отменить
         [HttpPost("items/{itemId:int}/ready")]
         [HasPermission(Permissions.Kitchen)]
@@ -250,6 +265,11 @@ namespace Kumashaurma.API.Controllers
             int ServedOf(OrderItem i) => Math.Min(ReadyOf(i), itemStates.GetValueOrDefault(i.Id)?.ServedQuantity ?? 0);
             int StationOf(int shawarmaId) => itemStations.GetValueOrDefault(shawarmaId, defaultStation);
 
+            // Просьбы официантов убрать блюда, которые уже готовят
+            var pendingVoids = (await _context.OrderItemVoids.AsNoTracking()
+                    .Where(v => orderIds.Contains(v.OrderId) && v.Status == VoidStatuses.Pending).OrderBy(v => v.RequestedAt).ToListAsync())
+                .GroupBy(v => v.OrderId).ToDictionary(g => g.Key, g => g.ToList());
+
             // Заказы официантов: стол и кто принял
             var checkIds = orders.Where(o => o.CheckId != null).Select(o => o.CheckId!.Value).Distinct().ToList();
             var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table)
@@ -290,6 +310,7 @@ namespace Kumashaurma.API.Controllers
                     // Заказ ко времени, до которого ещё далеко — показывается в колонке «Позже»
                     IsLater = scheduledUtc.HasValue && scheduledUtc.Value > nowUtc.AddMinutes(ScheduledLeadMinutes) && o.Status == OrderStatuses.New,
                     Stations = orderStations,
+                    VoidRequests = pendingVoids.GetValueOrDefault(o.Id, new()).Select(v => new { v.Id, v.OrderItemId, v.Name, v.Quantity, v.Reason }),
                     TableName = o.CheckId != null ? checks.GetValueOrDefault(o.CheckId.Value) : null,
                     WaiterName = o.CheckId != null && o.CashierId != null ? staff.GetValueOrDefault(o.CashierId.Value) : null,
                     Items = o.OrderItems.OrderBy(i => i.Id).Select(i => new

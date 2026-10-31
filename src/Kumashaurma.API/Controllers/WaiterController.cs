@@ -14,7 +14,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/waiter")]
-    [HasPermission(Permissions.Waiter, Permissions.Settings)]
+    [HasPermission(Permissions.Waiter, Permissions.TablesManage)]
     public class WaiterController : ControllerBase
     {
         public const string Source = "waiter";
@@ -27,8 +27,11 @@ namespace Kumashaurma.API.Controllers
         private readonly IOrderEventBus _events;
         private readonly ILogger<WaiterController> _logger;
 
-        public WaiterController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, ILogger<WaiterController> logger)
+        private readonly VoidService _voids;
+
+        public WaiterController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, VoidService voids, ILogger<WaiterController> logger)
         {
+            _voids = voids;
             _context = context;
             _statusService = statusService;
             _events = events;
@@ -54,6 +57,12 @@ namespace Kumashaurma.API.Controllers
         {
             public List<PosController.PosItemRequest> Items { get; set; } = new();
             public string? Comment { get; set; }
+        }
+
+        public class VoidRequest
+        {
+            public int Quantity { get; set; } = 1;
+            public string Reason { get; set; } = string.Empty;
         }
 
         public class SplitLine
@@ -158,13 +167,13 @@ namespace Kumashaurma.API.Controllers
 
         // GET: api/waiter/tables/all — все столы для настройки
         [HttpGet("tables/all")]
-        [HasPermission(Permissions.Settings)]
+        [HasPermission(Permissions.TablesManage)]
         public async Task<IActionResult> AllTables() =>
             Ok((await TablesAsync(onlyActive: false)).Select(t => new { t.Id, t.Name, t.IsActive }));
 
         // PUT: api/waiter/tables — список столов целиком (порядок — как в списке)
         [HttpPut("tables")]
-        [HasPermission(Permissions.Settings)]
+        [HasPermission(Permissions.TablesManage)]
         public async Task<IActionResult> SaveTables([FromBody] List<TableRequest> list)
         {
             if (list.Count == 0 || list.Count > 200) return BadRequest(new { message = "Столов — от 1 до 200" });
@@ -239,6 +248,12 @@ namespace Kumashaurma.API.Controllers
             int Served(CheckLine l) => l.Order.Status == OrderStatuses.Completed
                 ? l.Item.Quantity : Math.Min(l.Item.Quantity, states.GetValueOrDefault(l.Item.Id)?.ServedQuantity ?? 0);
 
+            var voids = await _context.OrderItemVoids.AsNoTracking()
+                .Where(v => v.CheckId == id || (v.OrderItemId != null && itemIds.Contains(v.OrderItemId.Value)))
+                .OrderBy(v => v.RequestedAt).ToListAsync();
+            var pendingByItem = voids.Where(v => v.Status == VoidStatuses.Pending && v.OrderItemId != null)
+                .GroupBy(v => v.OrderItemId!.Value).ToDictionary(g => g.Key, g => g.Sum(v => v.Quantity));
+
             // Другие открытые счета за этим столом — для деления и объединения
             var siblings = await _context.TableChecks.AsNoTracking()
                 .Where(x => x.TableId == c.TableId && x.Status == CheckStatuses.Open && x.Id != id)
@@ -261,6 +276,7 @@ namespace Kumashaurma.API.Controllers
                 // Сколько блюд ещё не отдано (при закрытии предупреждаем)
                 notServed = active.Sum(l => l.Item.Quantity - Served(l)),
                 siblings,
+                voids = voids.Select(v => new { v.Id, v.Name, v.Quantity, v.Amount, v.Reason, v.Status, v.WriteOff, v.RequestedAt }),
                 orders = lines.GroupBy(l => l.Order).OrderBy(g => g.Key.CreatedAt).Select(g => new
                 {
                     g.Key.Id,
@@ -276,6 +292,7 @@ namespace Kumashaurma.API.Controllers
                         l.Item.Price,
                         lineTotal = LineTotal(l.Item),
                         addons = l.Item.SelectedAddons.Select(a => new { a.AddonName, a.Quantity, a.Price }),
+                        pendingVoid = pendingByItem.GetValueOrDefault(l.Item.Id),
                         readyQuantity = Ready(l),
                         servedQuantity = Served(l),
                         // Перенесена из другого счёта или в этот счёт пришла не своей подачей
@@ -328,16 +345,35 @@ namespace Kumashaurma.API.Controllers
             return Ok(new { order.Id, order.Total });
         }
 
-        // POST: api/waiter/checks/{id}/orders/{orderId}/cancel — отменить отправку, пока кухня не начала готовить
+        // POST: api/waiter/checks/{id}/orders/{orderId}/cancel — отменить подачу целиком, пока кухня её не приняла
         [HttpPost("checks/{id:int}/orders/{orderId:int}/cancel")]
         [HasPermission(Permissions.Waiter)]
         public async Task<IActionResult> CancelRound(int id, int orderId)
         {
-            var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId && o.CheckId == id);
+            var order = await _context.Orders.AsNoTracking().Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == orderId);
             if (order == null) return NotFound(new { message = "Заказ не найден" });
-            if (!OrderStatuses.IsNotStarted(order.Status)) return BadRequest(new { message = "Кухня уже готовит — отменить может только кухня или менеджер" });
-            await _statusService.ChangeStatusAsync(order, OrderStatuses.Cancelled);
+            if (order.Status != OrderStatuses.New)
+                return BadRequest(new { message = "Кухня уже приняла подачу — убирайте блюда по одному, кухня подтвердит" });
+            try
+            {
+                foreach (var i in order.OrderItems.Where(i => (i.CheckId ?? order.CheckId) == id).ToList())
+                    await _voids.RequestAsync(i.Id, i.Quantity, "Отмена подачи", User.GetUserId());
+            }
+            catch (VoidService.VoidException ex) { return BadRequest(new { message = ex.Message }); }
             return NoContent();
+        }
+
+        // POST: api/waiter/items/{itemId}/void — убрать блюдо (или часть штук) из счёта с причиной
+        [HttpPost("items/{itemId:int}/void")]
+        [HasPermission(Permissions.Waiter)]
+        public async Task<IActionResult> VoidItem(int itemId, [FromBody] VoidRequest r)
+        {
+            try
+            {
+                var v = await _voids.RequestAsync(itemId, r.Quantity, r.Reason, User.GetUserId());
+                return Ok(new { v.Id, v.Status, needsKitchen = v.Status == VoidStatuses.Pending });
+            }
+            catch (VoidService.VoidException ex) { return BadRequest(new { message = ex.Message }); }
         }
 
         // POST: api/waiter/checks/{id}/close — гость оплатил: чек закрыт, заказы оплачены
@@ -521,6 +557,79 @@ namespace Kumashaurma.API.Controllers
             foreach (var o in items.Select(i => i.Order!).Distinct())
                 _events.Publish(new OrderEvent("updated", o.Id, o.UserId, o.Status, null, DateTime.UtcNow));
             return Ok(new { targetCheckId = target.Id });
+        }
+
+        // ==================== Схема зала ====================
+
+        public const string FloorKey = "floor_plan";
+        private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+        public class FloorWall
+        {
+            public string Id { get; set; } = string.Empty;
+            public int X { get; set; }
+            public int Y { get; set; }
+            public int W { get; set; }
+            public int H { get; set; }
+            /// <summary>wall — стена/перегородка, bar — барная стойка, plant — декор</summary>
+            public string Kind { get; set; } = "wall";
+        }
+
+        public class FloorTable
+        {
+            public int TableId { get; set; }
+            public int X { get; set; }
+            public int Y { get; set; }
+            public int W { get; set; } = 80;
+            public int H { get; set; } = 80;
+            /// <summary>rect или round</summary>
+            public string Shape { get; set; } = "rect";
+        }
+
+        public class FloorPlan
+        {
+            public int Width { get; set; } = 1000;
+            public int Height { get; set; } = 700;
+            public List<FloorWall> Walls { get; set; } = new();
+            public List<FloorTable> Tables { get; set; } = new();
+        }
+
+        // GET: api/waiter/floor — схема зала (столы и перегородки)
+        [HttpGet("floor")]
+        public async Task<IActionResult> GetFloor()
+        {
+            var row = await _context.AppSettings.AsNoTracking().FirstOrDefaultAsync(x => x.Key == FloorKey);
+            var plan = row == null ? new FloorPlan() : System.Text.Json.JsonSerializer.Deserialize<FloorPlan>(row.Value, Json) ?? new FloorPlan();
+            return Ok(plan);
+        }
+
+        // PUT: api/waiter/floor — сохранить схему зала
+        [HttpPut("floor")]
+        [HasPermission(Permissions.TablesManage)]
+        public async Task<IActionResult> SaveFloor([FromBody] FloorPlan plan)
+        {
+            if (plan.Width is < 200 or > 5000 || plan.Height is < 200 or > 5000) return BadRequest(new { message = "Размер зала — от 200 до 5000" });
+            if (plan.Walls.Count > 300 || plan.Tables.Count > 300) return BadRequest(new { message = "Слишком много элементов" });
+            bool Inside(int x, int y, int w, int h) => w >= 10 && h >= 10 && x >= 0 && y >= 0 && x + w <= plan.Width && y + h <= plan.Height;
+            if (plan.Walls.Any(w => !Inside(w.X, w.Y, w.W, w.H)) || plan.Tables.Any(t => !Inside(t.X, t.Y, t.W, t.H)))
+                return BadRequest(new { message = "Элемент выходит за границы зала" });
+            if (plan.Walls.Any(w => w.Kind is not ("wall" or "bar" or "plant")) || plan.Tables.Any(t => t.Shape is not ("rect" or "round")))
+                return BadRequest(new { message = "Неизвестный элемент схемы" });
+            var ids = await _context.DiningTables.Select(t => t.Id).ToListAsync();
+            plan.Tables = plan.Tables.Where(t => ids.Contains(t.TableId)).GroupBy(t => t.TableId).Select(g => g.Last()).ToList();
+            foreach (var w in plan.Walls) w.Id = string.IsNullOrWhiteSpace(w.Id) ? Guid.NewGuid().ToString("N")[..8] : Trunc(w.Id, 20);
+
+            var row = await _context.AppSettings.FirstOrDefaultAsync(x => x.Key == FloorKey);
+            if (row == null)
+            {
+                row = new AppSetting { Key = FloorKey };
+                _context.AppSettings.Add(row);
+            }
+            row.Value = System.Text.Json.JsonSerializer.Serialize(plan, Json);
+            row.UpdatedAt = DateTime.UtcNow;
+            row.UpdatedByUserId = User.GetUserId();
+            await _context.SaveChangesAsync();
+            return Ok(plan);
         }
 
         private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max];

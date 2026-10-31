@@ -16,6 +16,8 @@ namespace Kumashaurma.API.Authorization
         public const string Kitchen = "kitchen";
         public const string Pos = "pos";
         public const string Waiter = "waiter";
+        public const string Voids = "voids";
+        public const string TablesManage = "tables";
         public const string Delivery = "delivery";
         public const string CouriersAssign = "couriers.assign";
 
@@ -54,6 +56,8 @@ namespace Kumashaurma.API.Authorization
             new(OrdersManage, "Заказы", "Управление заказами", "Менять статус, редактировать и удалять заказы"),
             new(Pos, "Заказы", "Касса", "Принимать заказы у стойки — в зале и с собой, отмечать оплату и выдачу"),
             new(Waiter, "Заказы", "Официант", "Открывать чеки на столы с телефона, отправлять заказы на кухню, закрывать чек при оплате"),
+            new(Voids, "Заказы", "Отменённые блюда", "Видеть, какие блюда официанты убрали из чеков: кто, когда, почему, списано ли со склада"),
+            new(TablesManage, "Заказы", "Зал и столы", "Расставлять столы и перегородки на схеме зала, добавлять и переименовывать столы"),
             new(Kitchen, "Заказы", "Кухня", "Экран кухни: принимать заказы и отмечать готовность"),
             new(Delivery, "Заказы", "Доставка", "Экран курьера: брать заказы и отмечать доставку"),
             new(CouriersAssign, "Заказы", "Назначение курьеров", "Назначать курьера на заказ"),
@@ -90,7 +94,7 @@ namespace Kumashaurma.API.Authorization
         {
             ["manager"] = new[]
             {
-                Dashboard, Analytics, OrdersView, OrdersManage, Pos, Waiter, Kitchen, Delivery, CouriersAssign,
+                Dashboard, Analytics, OrdersView, OrdersManage, Pos, Waiter, Voids, TablesManage, Kitchen, Delivery, CouriersAssign,
                 Menu, StopList, Zones, PromoCodes, Reviews, Points, UsersView, InventoryView, Haccp, HaccpManage
             },
             ["courier"] = new[] { OrdersView, Delivery },

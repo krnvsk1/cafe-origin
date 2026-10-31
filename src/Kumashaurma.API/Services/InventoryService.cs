@@ -15,6 +15,12 @@ namespace Kumashaurma.API.Services
         /// <summary>Реакция на смену статуса заказа: списание по техкартам или возврат</summary>
         Task OnOrderStatusChangedAsync(Order order, string oldStatus, string newStatus);
 
+        /// <summary>
+        /// Склад при отмене блюда из заказа: если по заказу уже списано — вернуть продукты блюда;
+        /// writeOff — списать их как порчу (блюдо приготовлено или начато). Сохранение — на вызывающем.
+        /// </summary>
+        Task VoidItemStockAsync(Order order, OrderItem item, int quantity, bool writeOff, string comment);
+
         Task<TechCardCalculator> LoadCalculatorAsync(bool tracking = false);
 
         /// <summary>Пересчитывает остатки по журналу (на случай рассинхронизации)</summary>
@@ -199,6 +205,41 @@ namespace Kumashaurma.API.Services
             order.StockDeductedAt = DateTime.UtcNow;
             if (missing > 0)
                 _logger.LogInformation("📦 Заказ #{OrderId}: {Missing} поз. без техкарты — по ним ничего не списано", order.Id, missing);
+        }
+
+        public async Task VoidItemStockAsync(Order order, OrderItem item, int quantity, bool writeOff, string comment)
+        {
+            if (quantity <= 0) return;
+            var parentId = await _context.Shawarmas.Where(s => s.Id == item.ShawarmaId).Select(s => s.ParentId).FirstOrDefaultAsync();
+            List<(int AddonId, int Quantity)> addons;
+            if (item.SelectedAddons.Count > 0)
+                addons = item.SelectedAddons.Select(a => (a.AddonId, a.Quantity)).ToList();
+            else
+                addons = (await _context.OrderItemAddons.Where(a => a.OrderItemId == item.Id).Select(a => new { a.AddonId, a.Quantity }).ToListAsync())
+                    .Select(a => (a.AddonId, a.Quantity)).ToList();
+
+            var calc = await LoadCalculatorAsync(tracking: true);
+            var consumption = new Dictionary<int, decimal>();
+            var card = calc.ForDish(item.ShawarmaId, parentId);
+            if (card != null) calc.AddToRaw(card, quantity, consumption);
+            foreach (var (addonId, addonQty) in addons)
+            {
+                var addonCard = calc.ForAddon(addonId);
+                if (addonCard != null) calc.AddToRaw(addonCard, addonQty * quantity, consumption);
+            }
+
+            foreach (var (itemId, qty) in consumption)
+            {
+                var stock = calc.Item(itemId);
+                if (stock == null || qty == 0) continue;
+                var cost = Math.Round(TechCardCalculator.CostOf(stock), 4);
+                // Уже списано с заказом — возвращаем (так отмена всего заказа не вернёт это второй раз)
+                if (order.StockDeductedAt != null)
+                    Apply(stock, Math.Round(qty, 3), cost, StockMovementTypes.SaleReturn, null, order.Id, $"Отмена блюда: {comment}", affectsAvg: false);
+                // Приготовлено или начато — списываем как порчу, без привязки к заказу
+                if (writeOff)
+                    Apply(stock, -Math.Round(qty, 3), cost, StockMovementTypes.WriteOff, null, null, $"Списание отменённого блюда: {comment}", affectsAvg: false);
+            }
         }
 
         private async Task ReturnForOrderAsync(Order order)
