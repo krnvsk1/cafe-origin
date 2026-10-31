@@ -16,7 +16,7 @@ import {
 import { apiError } from '../api/inventory';
 import ProductModal from '../components/ProductModal';
 import FullscreenButton from '../components/FullscreenButton';
-import { useIsFullscreen } from '../hooks/useFullscreen';
+import { useIsFullscreen, useWorkScreen } from '../hooks/useFullscreen';
 import type { Shawarma, SelectedAddon } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import { tokens } from '../theme';
@@ -537,6 +537,7 @@ const PosOrders: React.FC = () => {
  * Касса: заказы у стойки — в зале и с собой. Чек → оплата → заказ сразу на кухне.
  */
 const PosPage: React.FC = () => {
+  useWorkScreen();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const isFullscreen = useIsFullscreen();

@@ -19,6 +19,7 @@ import {
 } from '../utils/sound';
 import { formatScheduled } from '../utils/schedule';
 import FullscreenButton from '../components/FullscreenButton';
+import { useWorkScreen } from '../hooks/useFullscreen';
 import KitchenTechCardDialog from '../components/KitchenTechCardDialog';
 import type { OrderStatus } from '../types';
 
@@ -243,6 +244,7 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
 };
 
 const KitchenPage: React.FC = () => {
+  useWorkScreen();
   const { data: orders, isLoading, error } = useKitchenOrders();
   const invalidate = useInvalidateOnOrderEvent();
   const now = useNow();

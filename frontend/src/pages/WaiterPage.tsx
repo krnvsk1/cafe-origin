@@ -30,6 +30,8 @@ import { allowedOrderTypes, isAllowedFor } from '../utils/orderTypes';
 import { plural } from '../components/CartPanel';
 import type { Shawarma, SelectedAddon } from '../types';
 import { tokens } from '../theme';
+import FullscreenButton from '../components/FullscreenButton';
+import { useWorkScreen } from '../hooks/useFullscreen';
 
 const money = (v: number) => `${Math.round(v * 100) / 100} ₽`.replace('.', ',');
 const DINE_IN = 'В зале';
@@ -147,6 +149,7 @@ const TablesView: React.FC = () => {
         <Typography variant="h5" sx={{ fontWeight: 800, flex: 1 }}>Столы</Typography>
         <Typography variant="body2" color="text.secondary">занято {busy} из {tables.length}</Typography>
         <PushButton />
+        <FullscreenButton />
         {can(P.TablesManage) && <IconButton onClick={() => setSettings(true)} aria-label="Настроить столы"><SettingsIcon /></IconButton>}
       </Box>
       {shift && <ShiftBar shift={shift} />}
@@ -1125,6 +1128,7 @@ const WaiterPage: React.FC = () => {
   const { checkId } = useParams();
   const navigate = useNavigate();
   useLiveWaiter();
+  useWorkScreen();
   // Нажали на уведомление при открытом приложении — открываем счёт без перезагрузки
   React.useEffect(() => {
     const onOpen = (e: Event) => {
