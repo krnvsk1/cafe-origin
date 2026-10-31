@@ -405,7 +405,7 @@ namespace Cafe.API.Controllers
 
         private async Task<Owner?> ResolveOwnerAsync(string target, int id) => target switch
         {
-            Dish => await _context.Dishes.AsNoTracking().Where(s => s.Id == id)
+            DishTarget => await _context.Dishes.AsNoTracking().Where(s => s.Id == id)
                 .Select(s => new Owner(s.Parent != null ? s.Parent.Name + " · " + s.Name : s.Name, s.Price, s.ParentId, null))
                 .FirstOrDefaultAsync(),
             AddonTarget => await _context.Addons.AsNoTracking().Where(a => a.Id == id)
