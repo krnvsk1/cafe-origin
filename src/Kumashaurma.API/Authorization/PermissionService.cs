@@ -24,7 +24,10 @@ namespace Kumashaurma.API.Authorization
         /// <summary>Названия ролей для интерфейса: ключ → «Менеджер»</summary>
         Task<IReadOnlyDictionary<string, string>> GetTitlesAsync();
 
-        /// <summary>Сбросить кэш после изменения ролей</summary>
+        /// <summary>Роли пользователя по базе (null — пользователь не найден)</summary>
+        Task<IReadOnlyList<string>?> GetUserRolesAsync(int userId);
+
+        /// <summary>Сбросить кэш после изменения ролей или назначения ролей пользователю</summary>
         void Invalidate();
     }
 
@@ -38,7 +41,8 @@ namespace Kumashaurma.API.Authorization
         private readonly SemaphoreSlim _lock = new(1, 1);
         private Snapshot? _snapshot;
 
-        private record Snapshot(Dictionary<string, HashSet<string>> Permissions, Dictionary<string, string> Titles, DateTime LoadedAt);
+        private record Snapshot(Dictionary<string, HashSet<string>> Permissions, Dictionary<string, string> Titles,
+            Dictionary<int, List<string>> UserRoles, DateTime LoadedAt);
 
         public PermissionService(IServiceScopeFactory scopes) => _scopes = scopes;
 
@@ -56,6 +60,17 @@ namespace Kumashaurma.API.Authorization
         }
 
         public async Task<IReadOnlyDictionary<string, string>> GetTitlesAsync() => (await GetSnapshotAsync()).Titles;
+
+        public async Task<IReadOnlyList<string>?> GetUserRolesAsync(int userId)
+        {
+            var snapshot = await GetSnapshotAsync();
+            if (snapshot.UserRoles.TryGetValue(userId, out var roles)) return roles;
+            // Нет в снимке — возможно, пользователь появился позже: перечитаем, но не чаще раза в 10 секунд
+            if (DateTime.UtcNow - snapshot.LoadedAt < TimeSpan.FromSeconds(10)) return null;
+            Invalidate();
+            snapshot = await GetSnapshotAsync();
+            return snapshot.UserRoles.TryGetValue(userId, out roles) ? roles : null;
+        }
 
         public void Invalidate() => _snapshot = null;
 
@@ -83,7 +98,13 @@ namespace Kumashaurma.API.Authorization
                     .GroupBy(r => r.Role)
                     .ToDictionary(g => g.Key, g => g.First().ClaimValue!);
 
-                _snapshot = new Snapshot(perms, titles, DateTime.UtcNow);
+                // Кто какие роли носит — по базе, а не по токену: назначенная роль действует сразу, без перевхода
+                var userRoles = (await db.UserRoles.AsNoTracking()
+                        .Join(db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => new { ur.UserId, Role = r.Name! })
+                        .ToListAsync())
+                    .GroupBy(x => x.UserId).ToDictionary(g => g.Key, g => g.Select(x => x.Role).ToList());
+
+                _snapshot = new Snapshot(perms, titles, userRoles, DateTime.UtcNow);
                 return _snapshot;
             }
             finally
@@ -94,8 +115,8 @@ namespace Kumashaurma.API.Authorization
     }
 
     /// <summary>
-    /// На каждый запрос добавляет пользователю claim'ы permission по его ролям из токена.
-    /// Так изменения прав роли действуют сразу, без перевыпуска токенов.
+    /// На каждый запрос подставляет пользователю его роли по базе и claim'ы permission по ним.
+    /// Так и изменения прав роли, и назначение роли действуют сразу, без перевыпуска токенов.
     /// </summary>
     public class PermissionClaimsTransformation : IClaimsTransformation
     {
@@ -108,14 +129,25 @@ namespace Kumashaurma.API.Authorization
             if (principal.Identity?.IsAuthenticated != true || principal.HasClaim(c => c.Type == Permissions.ClaimType))
                 return principal;
 
-            var roles = principal.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+            var tokenRoles = principal.FindAll(ClaimTypes.Role).Select(c => c.Value).Distinct().ToList();
+            var idText = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub");
+            var dbRoles = int.TryParse(idText, out var userId) ? await _permissions.GetUserRolesAsync(userId) : null;
+            var roles = dbRoles?.ToList() ?? tokenRoles;
+
+            // Роли в токене устарели — собираем пользователя заново с ролями из базы
+            if (dbRoles != null && (roles.Count != tokenRoles.Count || roles.Except(tokenRoles).Any()) && principal.Identity is ClaimsIdentity source)
+            {
+                var claims = source.Claims.Where(c => c.Type != ClaimTypes.Role && c.Type != "role" && c.Type != source.RoleClaimType).ToList();
+                claims.AddRange(roles.Select(r => new Claim(source.RoleClaimType, r)));
+                if (source.RoleClaimType != ClaimTypes.Role) claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
+                principal = new ClaimsPrincipal(new ClaimsIdentity(claims, source.AuthenticationType, source.NameClaimType, source.RoleClaimType));
+            }
             if (roles.Count == 0) return principal;
 
             var granted = await _permissions.GetPermissionsAsync(roles);
             if (granted.Count == 0) return principal;
 
-            var identity = new ClaimsIdentity(granted.Select(p => new Claim(Permissions.ClaimType, p)));
-            principal.AddIdentity(identity);
+            principal.AddIdentity(new ClaimsIdentity(granted.Select(p => new Claim(Permissions.ClaimType, p))));
             return principal;
         }
     }

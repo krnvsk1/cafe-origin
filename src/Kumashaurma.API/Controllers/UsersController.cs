@@ -163,6 +163,7 @@ namespace Kumashaurma.API.Controllers
             }
 
             var result = await _userManager.AddToRoleAsync(user, dto.Role);
+            _permissions.Invalidate();
 
             if (!result.Succeeded)
             {
@@ -199,6 +200,7 @@ namespace Kumashaurma.API.Controllers
             }
 
             var result = await _userManager.RemoveFromRoleAsync(user, role);
+            _permissions.Invalidate();
 
             if (!result.Succeeded)
             {
