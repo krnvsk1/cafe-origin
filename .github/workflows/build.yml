@@ -56,7 +56,8 @@ jobs:
         run: |
           { echo '## dotnet build (warnings/errors)'; grep -E "warning|error" build.txt | grep -v "^ *$" | sort -u | tail -150 || true;
             echo; echo '## EF has-pending-model-changes'; tail -60 ef.txt 2>/dev/null || true;
-            echo; echo '## Tests'; grep -E "Passed|Failed|Assert|Error Message|: [0-9]+ —|Total tests" test.txt 2>/dev/null | head -80 || true; } > report.md
+            echo; echo '## Tests'; grep -E "Failed |Error Message|Assert|Total tests|Passed!|Failed!" test.txt 2>/dev/null | head -60 || true;
+            grep -E "Passed|: [0-9]+ —" test.txt 2>/dev/null | head -80 || true; } > report.md
           gh api repos/${{ github.repository }}/check-runs -f name="backend-report" -f head_sha="${{ github.sha }}" \
             -f status=completed -f conclusion=neutral -f "output[title]=Backend report" -F "output[summary]=@report.md"
 
