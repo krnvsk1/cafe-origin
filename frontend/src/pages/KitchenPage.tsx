@@ -102,10 +102,12 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
     const toServe = ready - served;
     const done = served >= item.quantity;
     const allReady = ready >= item.quantity;
+    // Для кухни блюдо закончено, когда оно готово: зачёркиваем
+    const crossed = done || allReady;
     return (
-      <Box key={idx} sx={{ mb: 0.75, opacity: done ? 0.45 : 1 }}>
+      <Box key={idx} sx={{ mb: 0.75, opacity: crossed ? 0.45 : 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-          <Typography fontWeight={700} sx={{ fontSize: '1.05rem', flex: 1, textDecoration: done ? 'line-through' : 'none' }}>
+          <Typography fontWeight={700} sx={{ fontSize: '1.05rem', flex: 1, textDecoration: crossed ? 'line-through' : 'none' }}>
             {item.quantity} × {item.name}
           </Typography>
           {/* Техкарта — по запросу повара, чтобы не загромождать карточку */}
