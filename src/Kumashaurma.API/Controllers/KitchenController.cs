@@ -320,6 +320,16 @@ namespace Kumashaurma.API.Controllers
                 .Select(a => new { a.Id, a.Name })
                 .ToListAsync();
 
+            // Фото — у самого варианта, иначе у карточки (главное, иначе первое)
+            var photoOwners = dish.ParentId.HasValue ? new[] { dish.Id, dish.ParentId.Value } : new[] { dish.Id };
+            var photos = await _context.ShawarmaImages.AsNoTracking()
+                .Where(i => photoOwners.Contains(i.ShawarmaId))
+                .Select(i => new { i.ShawarmaId, i.FilePath, i.IsPrimary, i.Id })
+                .ToListAsync();
+            var image = photos
+                .OrderBy(p => p.ShawarmaId == dish.Id ? 0 : 1).ThenByDescending(p => p.IsPrimary).ThenBy(p => p.Id)
+                .Select(p => p.FilePath).FirstOrDefault();
+
             var calc = await _inventory.LoadCalculatorAsync();
             var title = dish.ParentName != null && dish.ParentName != dish.Name ? $"{dish.ParentName} · {dish.Name}" : dish.Name;
             // У варианта без своей карты берём карту карточки — как при списании со склада
@@ -333,6 +343,7 @@ namespace Kumashaurma.API.Controllers
             return Ok(new
             {
                 title,
+                image,
                 dish = dishCard,
                 addons = addonCards,
                 semis = KitchenTechCards.SemiCards(all, calc)

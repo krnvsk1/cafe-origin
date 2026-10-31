@@ -67,6 +67,8 @@ export interface KitchenTechCard {
 
 export interface KitchenTechCardResponse {
   title: string;
+  /** Фото блюда из карточки меню */
+  image: string | null;
   dish: KitchenTechCard | null;
   addons: KitchenTechCard[];
   semis: KitchenTechCard[];

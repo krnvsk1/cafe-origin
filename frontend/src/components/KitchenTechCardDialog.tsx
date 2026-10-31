@@ -6,6 +6,7 @@ import {
 import { MenuBookOutlined as RecipeIcon } from '@mui/icons-material';
 import { useKitchenTechCard, type KitchenOrderItem, type KitchenTechCard } from '../api/staff';
 import { fmtQty, fmtPortions, type StockUnit } from '../api/inventory';
+import { resolveMediaUrl } from '../utils/media';
 
 const qty = (value: number, unit: string) => (unit === 'portion' ? fmtPortions(value) : fmtQty(value, (unit || null) as StockUnit | null));
 
@@ -70,6 +71,11 @@ const KitchenTechCardDialog: React.FC<{ item: KitchenOrderItem | null; onClose: 
       <DialogContent>
         {isLoading && <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}><CircularProgress /></Box>}
         {error && <Alert severity="error">Не удалось загрузить техкарту</Alert>}
+        {/* Сначала фото блюда — повар сверяет подачу */}
+        {data?.image && (
+          <Box component="img" src={resolveMediaUrl(data.image)} alt={item?.name ?? 'Фото блюда'}
+            sx={{ width: '100%', maxHeight: { xs: 260, sm: 340 }, objectFit: 'cover', borderRadius: 3, mb: 2, display: 'block', bgcolor: 'action.hover' }} />
+        )}
         {empty && (
           <Box sx={{ textAlign: 'center', py: 5, color: 'text.secondary' }}>
             <RecipeIcon sx={{ fontSize: 44, mb: 1 }} />
