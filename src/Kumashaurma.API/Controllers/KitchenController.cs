@@ -250,6 +250,17 @@ namespace Kumashaurma.API.Controllers
             int ServedOf(OrderItem i) => Math.Min(ReadyOf(i), itemStates.GetValueOrDefault(i.Id)?.ServedQuantity ?? 0);
             int StationOf(int shawarmaId) => itemStations.GetValueOrDefault(shawarmaId, defaultStation);
 
+            // Заказы официантов: стол и кто принял
+            var checkIds = orders.Where(o => o.CheckId != null).Select(o => o.CheckId!.Value).Distinct().ToList();
+            var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table)
+                .Where(c => checkIds.Contains(c.Id))
+                .Select(c => new { c.Id, Table = c.Table!.Name })
+                .ToDictionaryAsync(c => c.Id, c => c.Table);
+            var staffIds = orders.Where(o => o.CashierId != null).Select(o => o.CashierId!.Value).Distinct().ToList();
+            var staff = (await _context.Users.AsNoTracking().Where(u => staffIds.Contains(u.Id))
+                    .Select(u => new { u.Id, u.FirstName, u.LastName }).ToListAsync())
+                .ToDictionary(u => u.Id, u => string.Join(' ', new[] { u.FirstName, u.LastName }.Where(x => !string.IsNullOrWhiteSpace(x))));
+
             var nowUtc = DateTime.UtcNow;
             var result = orders.Select(o =>
             {
@@ -279,6 +290,8 @@ namespace Kumashaurma.API.Controllers
                     // Заказ ко времени, до которого ещё далеко — показывается в колонке «Позже»
                     IsLater = scheduledUtc.HasValue && scheduledUtc.Value > nowUtc.AddMinutes(ScheduledLeadMinutes) && o.Status == OrderStatuses.New,
                     Stations = orderStations,
+                    TableName = o.CheckId != null ? checks.GetValueOrDefault(o.CheckId.Value) : null,
+                    WaiterName = o.CheckId != null && o.CashierId != null ? staff.GetValueOrDefault(o.CashierId.Value) : null,
                     Items = o.OrderItems.OrderBy(i => i.Id).Select(i => new
                     {
                         i.Id,

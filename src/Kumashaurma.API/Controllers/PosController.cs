@@ -77,47 +77,8 @@ namespace Kumashaurma.API.Controllers
             var payment = request.PaymentMethod?.Trim().ToLowerInvariant();
             if (payment is not ("cash" or "card")) return BadRequest(new { message = "Выберите способ оплаты" });
 
-            // Позиции: только продаваемые (вариант или карточка без вариантов) и не в стоп-листе
-            var ids = request.Items.Select(i => i.ShawarmaId).Distinct().ToList();
-            var dishes = await _context.Shawarmas.AsNoTracking()
-                .Include(s => s.Parent)
-                .Where(s => ids.Contains(s.Id))
-                .Select(s => new
-                {
-                    s.Id,
-                    s.Name,
-                    s.Price,
-                    s.IsAvailable,
-                    s.ParentId,
-                    ParentName = s.Parent != null ? s.Parent.Name : null,
-                    ParentAvailable = s.Parent == null || s.Parent.IsAvailable,
-                    HasChildren = s.Children.Any(),
-                    s.OrderTypes,
-                    ParentTypes = s.Parent != null ? s.Parent.OrderTypes : null
-                })
-                .ToDictionaryAsync(s => s.Id);
-
-            foreach (var id in ids)
-            {
-                if (!dishes.TryGetValue(id, out var d)) return BadRequest(new { message = "Позиция не найдена — обновите меню" });
-                if (!d.IsAvailable || !d.ParentAvailable) return BadRequest(new { message = $"«{d.ParentName ?? d.Name}» сейчас в стоп-листе" });
-                if (d.HasChildren) return BadRequest(new { message = $"Выберите вариант для «{d.Name}»" });
-                if (!SalesChannels.Allows(d.OrderTypes, d.ParentTypes, request.OrderType))
-                    return BadRequest(new { message = $"«{d.ParentName ?? d.Name}» нельзя продать {(request.OrderType == SalesChannels.DineIn ? "в зале" : "с собой")}" });
-            }
-
-            // Цены добавок — как в карточке товара: своя цена для блюда или базовая
-            var addonIds = request.Items.SelectMany(i => i.Addons).Select(a => a.AddonId).Distinct().ToList();
-            var addons = await _context.Addons.AsNoTracking().Include(a => a.Category)
-                .Where(a => addonIds.Contains(a.Id))
-                .ToDictionaryAsync(a => a.Id);
-            var lookupIds = ids.Concat(dishes.Values.Where(d => d.ParentId.HasValue).Select(d => d.ParentId!.Value)).Distinct().ToList();
-            var links = await _context.ShawarmaAddons.AsNoTracking()
-                .Where(sa => lookupIds.Contains(sa.ShawarmaId) && addonIds.Contains(sa.AddonId))
-                .ToListAsync();
-
-            if (addonIds.Any(id => !addons.TryGetValue(id, out var a) || !a.IsAvailable))
-                return BadRequest(new { message = "Одна из добавок сейчас недоступна" });
+            var (built, total, buildError) = await BuildItemsAsync(_context, request.Items, request.OrderType);
+            if (buildError != null) return BadRequest(new { message = buildError });
 
             var cashierId = User.GetUserId();
             var customerUserId = await FindCustomerAsync(request.Phone);
@@ -142,41 +103,7 @@ namespace Kumashaurma.API.Controllers
                 AccessToken = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant()
             };
 
-            decimal total = 0;
-            foreach (var item in request.Items)
-            {
-                var dish = dishes[item.ShawarmaId];
-                var name = dish.ParentName != null && dish.Name != "Стандарт" ? $"{dish.ParentName} {dish.Name}" : dish.ParentName ?? dish.Name;
-                var orderItem = new OrderItem
-                {
-                    ShawarmaId = dish.Id,
-                    Name = Truncate(string.IsNullOrWhiteSpace(item.Comment) ? name : $"{name} ({item.Comment.Trim()})", 100),
-                    Quantity = item.Quantity,
-                    Price = dish.Price
-                };
-
-                decimal addonsSum = 0;
-                foreach (var a in item.Addons)
-                {
-                    var addon = addons[a.AddonId];
-                    var link = links.FirstOrDefault(l => l.ShawarmaId == dish.Id && l.AddonId == a.AddonId)
-                               ?? (dish.ParentId.HasValue ? links.FirstOrDefault(l => l.ShawarmaId == dish.ParentId && l.AddonId == a.AddonId) : null);
-                    var price = link?.CustomPrice ?? addon.Price;
-                    orderItem.SelectedAddons.Add(new OrderItemAddon
-                    {
-                        AddonId = addon.Id,
-                        AddonName = addon.Name,
-                        AddonCategoryId = addon.AddonCategoryId,
-                        AddonCategoryName = addon.Category?.Name ?? "Добавки",
-                        Price = price,
-                        Quantity = a.Quantity
-                    });
-                    addonsSum += price * a.Quantity;
-                }
-
-                order.OrderItems.Add(orderItem);
-                total += (dish.Price + addonsSum) * item.Quantity;
-            }
+            foreach (var orderItem in built!) order.OrderItems.Add(orderItem);
 
             order.Total = total;
             if (payment == "cash" && request.CashReceived.HasValue && request.CashReceived.Value < total)
@@ -281,6 +208,95 @@ namespace Kumashaurma.API.Controllers
                 .Where(u => u.PhoneNumber == normalized)
                 .Select(u => (int?)u.Id)
                 .FirstOrDefaultAsync();
+        }
+
+        /// <summary>
+        /// Позиции заказа с ценами из меню (вариант, добавки со своей ценой для блюда) и проверками:
+        /// стоп-лист, выбран вариант, можно продать этим способом. Общая для кассы и официанта.
+        /// </summary>
+        public static async Task<(List<OrderItem>? Items, decimal Total, string? Error)> BuildItemsAsync(
+            ApplicationDbContext ctx, List<PosItemRequest> items, string orderType)
+        {
+            // Позиции: только продаваемые (вариант или карточка без вариантов) и не в стоп-листе
+            var ids = items.Select(i => i.ShawarmaId).Distinct().ToList();
+            var dishes = await ctx.Shawarmas.AsNoTracking()
+                .Include(s => s.Parent)
+                .Where(s => ids.Contains(s.Id))
+                .Select(s => new
+                {
+                    s.Id,
+                    s.Name,
+                    s.Price,
+                    s.IsAvailable,
+                    s.ParentId,
+                    ParentName = s.Parent != null ? s.Parent.Name : null,
+                    ParentAvailable = s.Parent == null || s.Parent.IsAvailable,
+                    HasChildren = s.Children.Any(),
+                    s.OrderTypes,
+                    ParentTypes = s.Parent != null ? s.Parent.OrderTypes : null
+                })
+                .ToDictionaryAsync(s => s.Id);
+
+            foreach (var id in ids)
+            {
+                if (!dishes.TryGetValue(id, out var d)) return (null, 0, "Позиция не найдена — обновите меню");
+                if (!d.IsAvailable || !d.ParentAvailable) return (null, 0, $"«{d.ParentName ?? d.Name}» сейчас в стоп-листе");
+                if (d.HasChildren) return (null, 0, $"Выберите вариант для «{d.Name}»");
+                if (!SalesChannels.Allows(d.OrderTypes, d.ParentTypes, orderType))
+                    return (null, 0, $"«{d.ParentName ?? d.Name}» нельзя продать {(orderType == SalesChannels.DineIn ? "в зале" : "с собой")}");
+            }
+
+            // Цены добавок — как в карточке товара: своя цена для блюда или базовая
+            var addonIds = items.SelectMany(i => i.Addons).Select(a => a.AddonId).Distinct().ToList();
+            var addons = await ctx.Addons.AsNoTracking().Include(a => a.Category)
+                .Where(a => addonIds.Contains(a.Id))
+                .ToDictionaryAsync(a => a.Id);
+            var lookupIds = ids.Concat(dishes.Values.Where(d => d.ParentId.HasValue).Select(d => d.ParentId!.Value)).Distinct().ToList();
+            var links = await ctx.ShawarmaAddons.AsNoTracking()
+                .Where(sa => lookupIds.Contains(sa.ShawarmaId) && addonIds.Contains(sa.AddonId))
+                .ToListAsync();
+
+            if (addonIds.Any(id => !addons.TryGetValue(id, out var a) || !a.IsAvailable))
+                return (null, 0, "Одна из добавок сейчас недоступна");
+
+            var result = new List<OrderItem>();
+            decimal total = 0;
+            foreach (var item in items)
+            {
+                var dish = dishes[item.ShawarmaId];
+                var name = dish.ParentName != null && dish.Name != "Стандарт" ? $"{dish.ParentName} {dish.Name}" : dish.ParentName ?? dish.Name;
+                var orderItem = new OrderItem
+                {
+                    ShawarmaId = dish.Id,
+                    Name = Truncate(string.IsNullOrWhiteSpace(item.Comment) ? name : $"{name} ({item.Comment.Trim()})", 100),
+                    Quantity = item.Quantity,
+                    Price = dish.Price
+                };
+
+                decimal addonsSum = 0;
+                foreach (var a in item.Addons)
+                {
+                    var addon = addons[a.AddonId];
+                    var link = links.FirstOrDefault(l => l.ShawarmaId == dish.Id && l.AddonId == a.AddonId)
+                               ?? (dish.ParentId.HasValue ? links.FirstOrDefault(l => l.ShawarmaId == dish.ParentId && l.AddonId == a.AddonId) : null);
+                    var price = link?.CustomPrice ?? addon.Price;
+                    orderItem.SelectedAddons.Add(new OrderItemAddon
+                    {
+                        AddonId = addon.Id,
+                        AddonName = addon.Name,
+                        AddonCategoryId = addon.AddonCategoryId,
+                        AddonCategoryName = addon.Category?.Name ?? "Добавки",
+                        Price = price,
+                        Quantity = a.Quantity
+                    });
+                    addonsSum += price * a.Quantity;
+                }
+
+                result.Add(orderItem);
+                total += (dish.Price + addonsSum) * item.Quantity;
+            }
+
+            return (result, total, null);
         }
 
         /// <summary>«8 (999) 123-45-67» → «+79991234567»; null, если номер не похож на телефон</summary>

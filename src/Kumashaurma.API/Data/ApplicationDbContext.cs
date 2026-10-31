@@ -61,6 +61,8 @@ namespace Kumashaurma.API.Data
         public DbSet<EdoDocument> EdoDocuments { get; set; } = null!;
         public DbSet<MercuryDocument> MercuryDocuments { get; set; } = null!;
         public DbSet<KitchenStation> KitchenStations { get; set; } = null!;
+        public DbSet<DiningTable> DiningTables { get; set; } = null!;
+        public DbSet<TableCheck> TableChecks { get; set; } = null!;
         public DbSet<OrderStationStatus> OrderStationStatuses { get; set; } = null!;
         public DbSet<OrderItemKitchenState> OrderItemKitchenStates { get; set; } = null!;
 
@@ -448,6 +450,15 @@ namespace Kumashaurma.API.Data
                 entity.HasOne<Order>().WithMany().HasForeignKey(e => e.OrderId).OnDelete(DeleteBehavior.Cascade);
                 entity.HasOne<KitchenStation>().WithMany().HasForeignKey(e => e.StationId).OnDelete(DeleteBehavior.Cascade);
             });
+
+            modelBuilder.Entity<TableCheck>(entity =>
+            {
+                entity.HasIndex(e => e.Status);
+                entity.HasOne(e => e.Table).WithMany().HasForeignKey(e => e.TableId).OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<Order>()
+                .HasOne<TableCheck>().WithMany().HasForeignKey(o => o.CheckId).OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<OrderItemKitchenState>(entity =>
             {

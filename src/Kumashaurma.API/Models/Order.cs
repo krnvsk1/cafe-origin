@@ -121,6 +121,10 @@ namespace Kumashaurma.API.Models
         [Column("cashier_id")]
         public int? CashierId { get; set; }
 
+        /// <summary>Чек стола, к которому относится заказ официанта (оплата — при закрытии чека)</summary>
+        [Column("check_id")]
+        public int? CheckId { get; set; }
+
         // Когда продукты списаны со склада по техкартам (null — не списаны или возвращены)
         [Column("stock_deducted_at")]
         [JsonIgnore]

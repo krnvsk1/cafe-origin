@@ -442,6 +442,34 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("delivery_zones");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.DiningTable", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("dining_tables");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.EdoDocument", b =>
                 {
                     b.Property<int>("Id")
@@ -1238,6 +1266,10 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("cashier_id");
 
+                    b.Property<int?>("CheckId")
+                        .HasColumnType("integer")
+                        .HasColumnName("check_id");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("completed_at");
@@ -1352,6 +1384,8 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("user_id");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CheckId");
 
                     b.HasIndex("CourierId");
 
@@ -2259,6 +2293,64 @@ namespace Kumashaurma.API.Migrations
                     b.ToTable("suppliers");
                 });
 
+            modelBuilder.Entity("Kumashaurma.API.Models.TableCheck", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("comment");
+
+                    b.Property<int?>("Guests")
+                        .HasColumnType("integer")
+                        .HasColumnName("guests");
+
+                    b.Property<DateTime>("OpenedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("opened_at");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_method");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TableId")
+                        .HasColumnType("integer")
+                        .HasColumnName("table_id");
+
+                    b.Property<decimal>("Total")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total");
+
+                    b.Property<int?>("WaiterId")
+                        .HasColumnType("integer")
+                        .HasColumnName("waiter_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TableId");
+
+                    b.ToTable("table_checks");
+                });
+
             modelBuilder.Entity("Kumashaurma.API.Models.TechCard", b =>
                 {
                     b.Property<int>("Id")
@@ -2704,6 +2796,11 @@ namespace Kumashaurma.API.Migrations
 
             modelBuilder.Entity("Kumashaurma.API.Models.Order", b =>
                 {
+                    b.HasOne("Kumashaurma.API.Models.TableCheck", null)
+                        .WithMany()
+                        .HasForeignKey("CheckId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Kumashaurma.API.Models.AppUser", "Courier")
                         .WithMany()
                         .HasForeignKey("CourierId")
@@ -2895,6 +2992,17 @@ namespace Kumashaurma.API.Migrations
                         .IsRequired();
 
                     b.Navigation("StockItem");
+                });
+
+            modelBuilder.Entity("Kumashaurma.API.Models.TableCheck", b =>
+                {
+                    b.HasOne("Kumashaurma.API.Models.DiningTable", "Table")
+                        .WithMany()
+                        .HasForeignKey("TableId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Table");
                 });
 
             modelBuilder.Entity("Kumashaurma.API.Models.TechCard", b =>
