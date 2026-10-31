@@ -160,7 +160,10 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
         <Typography variant="h5" fontWeight={800}>#{order.id}</Typography>
-        <Chip size="small" label={order.deliveryType} variant="outlined" />
+        {order.tableName
+          ? <Chip size="small" color="secondary" label={`Стол ${order.tableName}`} sx={{ fontWeight: 800 }} />
+          : <Chip size="small" label={order.deliveryType} variant="outlined" />}
+        {order.waiterName && <Typography variant="body2" color="text.secondary" noWrap sx={{ minWidth: 0 }}>{order.waiterName}</Typography>}
         <Box sx={{ flex: 1 }} />
         {order.scheduledFor ? (
           <Chip size="small" color="warning" icon={<ScheduleIcon />} label={formatScheduled(order.scheduledFor)} />

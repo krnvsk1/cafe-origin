@@ -16,6 +16,9 @@ export interface KitchenOrder {
   isLater: boolean;
   /** Кухни, на которые идут блюда заказа, и статус части заказа на каждой */
   stations: KitchenOrderStation[];
+  /** Заказ официанта: стол и кто принял */
+  tableName: string | null;
+  waiterName: string | null;
   items: KitchenOrderItem[];
 }
 

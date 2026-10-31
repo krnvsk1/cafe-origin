@@ -9,6 +9,7 @@ export const P = {
   OrdersView: 'orders.view',
   OrdersManage: 'orders.manage',
   Pos: 'pos',
+  Waiter: 'waiter',
   Kitchen: 'kitchen',
   Delivery: 'delivery',
   CouriersAssign: 'couriers.assign',
@@ -39,12 +40,13 @@ export const userCan = (user: User | null | undefined, ...permissions: string[])
   !!user && (user.roles?.includes('admin') || permissions.some(p => user.permissions?.includes(p)));
 
 /** Сотрудник, которому видны все заказы */
-export const STAFF_PERMISSIONS = [P.OrdersView, P.Pos, P.Kitchen, P.Delivery];
+export const STAFF_PERMISSIONS = [P.OrdersView, P.Pos, P.Waiter, P.Kitchen, P.Delivery];
 
 /** Куда вести из «Панели управления»: первый доступный раздел */
 const STAFF_HOME: [string[], string][] = [
   [[P.Dashboard], '/admin/dashboard'],
   [[P.Pos], '/pos'],
+  [[P.Waiter], '/waiter'],
   [[P.OrdersView, P.OrdersManage], '/orders'],
   [[P.Kitchen], '/kitchen'],
   [[P.Haccp, P.HaccpManage], '/haccp'],

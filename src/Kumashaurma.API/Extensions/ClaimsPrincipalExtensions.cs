@@ -14,6 +14,6 @@ namespace Kumashaurma.API.Extensions
 
         /// <summary>Сотрудник, которому видны все заказы: «Все заказы», «Касса», «Кухня» или «Доставка»</summary>
         public static bool IsStaff(this ClaimsPrincipal user) =>
-            user.HasAnyPermission(Permissions.OrdersView, Permissions.Kitchen, Permissions.Delivery, Permissions.Pos);
+            user.HasAnyPermission(Permissions.OrdersView, Permissions.Kitchen, Permissions.Delivery, Permissions.Pos, Permissions.Waiter);
     }
 }
