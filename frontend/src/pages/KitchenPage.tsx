@@ -11,7 +11,7 @@ import {
   MenuBookOutlined as RecipeIcon,
   Check as CheckIcon,
 } from '@mui/icons-material';
-import { useKitchenOrders, useSetOrderStatus, useKitchenStations, useSetStationStatus, useKitchenItem } from '../api/staff';
+import { useKitchenOrders, useSetOrderStatus, useKitchenStations, useSetStationStatus, useKitchenItem, useResolveVoid } from '../api/staff';
 import type { KitchenOrder, KitchenOrderItem } from '../api/staff';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
 import {
@@ -56,6 +56,10 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
   const setStatus = useSetOrderStatus();
   const setStation = useSetStationStatus();
   const itemMark = useKitchenItem();
+  const resolveVoid = useResolveVoid();
+  // Просьбы убрать блюда этой кухни (на общем экране — все)
+  const voidRequests = (order.voidRequests ?? []).filter(v => stationId == null
+    || order.items.some(i => i.id === v.orderItemId && i.stationId === stationId));
   const busy = setStatus.isPending || setStation.isPending || itemMark.isPending;
   const status = statusFor(order, stationId);
   // now обновляется раз в 30 с — заказ, пришедший между тиками, «моложе» now; без ограничения было «-1 мин»
@@ -199,6 +203,21 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
         <Alert severity="warning" icon={false} sx={{ mt: 1, py: 0 }}>{order.notes}</Alert>
       )}
 
+      {voidRequests.map(v => (
+        <Alert key={v.id} severity="error" icon={false} sx={{ mt: 1, '& .MuiAlert-message': { width: '100%' } }}>
+          <Typography sx={{ fontWeight: 800 }}>Официант просит убрать: {v.quantity} × {v.name}</Typography>
+          <Typography variant="body2">Причина: {v.reason}</Typography>
+          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 1 }}>
+            <Button size="small" variant="contained" color="error" disabled={resolveVoid.isPending}
+              onClick={() => resolveVoid.mutate({ id: v.id, decision: 'writeoff' })}>Убрать, списать продукты</Button>
+            <Button size="small" variant="outlined" color="error" disabled={resolveVoid.isPending}
+              onClick={() => resolveVoid.mutate({ id: v.id, decision: 'keep' })}>Убрать без списания</Button>
+            <Button size="small" color="inherit" disabled={resolveVoid.isPending}
+              onClick={() => resolveVoid.mutate({ id: v.id, decision: 'reject' })}>Отказать</Button>
+          </Box>
+        </Alert>
+      ))}
+
       <Divider sx={{ my: 1 }} />
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }} noWrap>{order.customerName}</Typography>
@@ -249,7 +268,7 @@ const KitchenPage: React.FC = () => {
   useEventStream('/api/events/orders', invalidate);
 
   // Сигнал звучит сразу и повторяется, пока в «Новых» есть заказ; приняли последний — звук пропадает
-  const ringing = soundOn && visible.some(o => statusFor(o, station) === 'Новый' && !o.isLater);
+  const ringing = soundOn && visible.some(o => (statusFor(o, station) === 'Новый' && !o.isLater) || (o.voidRequests ?? []).length > 0);
   React.useEffect(() => {
     if (!ringing) return;
     playChime(melody);

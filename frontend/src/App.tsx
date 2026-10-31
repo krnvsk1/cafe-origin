@@ -38,6 +38,8 @@ import {
   AdminPanelSettingsOutlined as RolesIcon,
   PointOfSaleOutlined as PosIcon,
   RoomServiceOutlined as WaiterIcon,
+  RemoveShoppingCartOutlined as VoidsIcon,
+  TableRestaurantOutlined as FloorIcon,
   AppsRounded as AppsIcon,
   RestaurantMenuOutlined as ProductsIcon,
   AccountBalanceWalletOutlined as FinanceIcon,
@@ -84,6 +86,8 @@ import { INVENTORY_SECTIONS } from './pages/inventory/sections';
 import RolesPage from './pages/RolesPage';
 import PosPage from './pages/PosPage';
 import WaiterPage from './pages/WaiterPage';
+import VoidsPage from './pages/VoidsPage';
+import FloorEditorPage from './pages/FloorEditorPage';
 import FinancePage from './pages/finance/FinancePage';
 import { P, useCan } from './auth/permissions';
 import { apiClient } from './api/client';
@@ -210,6 +214,8 @@ function App() {
   const staffLinks = ([
     { text: 'Касса', icon: <PosIcon />, path: '/pos', perms: [P.Pos], group: 'Смена', hint: 'Заказы у стойки: в зале и с собой' },
     { text: 'Официант', icon: <WaiterIcon />, path: '/waiter', perms: [P.Waiter], group: 'Смена', hint: 'Чеки на столы с телефона' },
+    { text: 'Зал и столы', icon: <FloorIcon />, path: '/admin/floor', perms: [P.TablesManage], group: 'Смена', hint: 'Расстановка столов и перегородок' },
+    { text: 'Отменённые блюда', icon: <VoidsIcon />, path: '/admin/voids', perms: [P.Voids], group: 'Смена', hint: 'Что убрали из счетов и почему' },
     { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', perms: [P.Kitchen], group: 'Смена', hint: 'Новые заказы, приготовление, техкарты' },
     { text: 'Журналы ХАССП', icon: <HaccpIcon />, path: '/haccp', perms: [P.Haccp, P.HaccpManage], group: 'Смена', hint: 'Холодильники, осмотр смены, бракераж, уборка' },
     { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', perms: [P.Delivery, P.CouriersAssign], group: 'Смена', hint: 'Заказы курьеров и маршруты' },
@@ -421,6 +427,8 @@ function App() {
                 {can(P.Pos) && <Route path="/pos" element={<PosPage />} />}
                 {can(P.Waiter) && <Route path="/waiter" element={<WaiterPage />} />}
                 {can(P.Waiter) && <Route path="/waiter/:checkId" element={<WaiterPage />} />}
+                {can(P.Voids) && <Route path="/admin/voids" element={<VoidsPage />} />}
+                {can(P.TablesManage) && <Route path="/admin/floor" element={<FloorEditorPage />} />}
                 {can(P.Kitchen) && <Route path="/kitchen" element={<KitchenPage />} />}
                 {can(P.Haccp, P.HaccpManage) && <Route path="/haccp" element={<HaccpPage />} />}
                 {can(P.Haccp, P.HaccpManage) && <Route path="/haccp/:section" element={<HaccpPage />} />}

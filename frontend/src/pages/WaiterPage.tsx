@@ -13,8 +13,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useShawarmas } from '../api/hooks';
 import {
   useWaiterTables, useTableCheck, useOpenCheck, useAddRound, useCancelRound, useCloseCheck, useCancelCheck,
-  useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck,
-  type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary,
+  useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
+  type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
 import { apiError } from '../api/inventory';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
@@ -32,7 +32,7 @@ const DINE_IN = 'В зале';
 const GUEST_FORMS: [string, string, string] = ['гость', 'гостя', 'гостей'];
 
 const sinceText = (iso: string) => {
-  const min = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  const min = Math.max(0, Math.floor((Date.now() - parseUtc(iso).getTime()) / 60000));
   return min < 60 ? `${min} мин` : `${Math.floor(min / 60)} ч ${min % 60} мин`;
 };
 
@@ -48,6 +48,46 @@ const useLiveWaiter = () => {
 
 // ==================== Столы ====================
 
+/** Схема зала для официанта: столы на своих местах, цвет — занят, мой, готово нести */
+export const FloorView: React.FC<{ plan: FloorPlan; tables: WaiterTable[]; highlightMine?: boolean; onTap: (t: WaiterTable) => void }> = ({ plan, tables, highlightMine, onTap }) => {
+  const theme = useTheme();
+  const byId = new Map(tables.map(t => [t.id, t]));
+  return (
+    <Box sx={{ position: 'relative', width: '100%', aspectRatio: `${plan.width} / ${plan.height}`, bgcolor: 'background.paper', borderRadius: '16px',
+      border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+      {plan.walls.map(w => (
+        <Box key={w.id} sx={{ position: 'absolute', left: `${(w.x / plan.width) * 100}%`, top: `${(w.y / plan.height) * 100}%`,
+          width: `${(w.w / plan.width) * 100}%`, height: `${(w.h / plan.height) * 100}%`, borderRadius: w.kind === 'plant' ? '50%' : '3px',
+          bgcolor: w.kind === 'bar' ? alpha(tokens.saffron, 0.5) : w.kind === 'plant' ? alpha(tokens.herb, 0.35) : theme.palette.text.secondary }} />
+      ))}
+      {plan.tables.map(pt => {
+        const t = byId.get(pt.tableId);
+        if (!t) return null;
+        const cs = t.checks;
+        const ready = cs.some(c => c.ready > 0);
+        const mine = cs.some(c => c.isMine);
+        const color = cs.length === 0 ? theme.palette.divider : ready ? tokens.herb : mine ? tokens.saffron : theme.palette.text.secondary;
+        const dim = highlightMine && !mine;
+        return (
+          <Box key={pt.tableId} component="button" type="button" onClick={() => onTap(t)}
+            sx={{ position: 'absolute', left: `${(pt.x / plan.width) * 100}%`, top: `${(pt.y / plan.height) * 100}%`,
+              width: `${(pt.w / plan.width) * 100}%`, height: `${(pt.h / plan.height) * 100}%`,
+              borderRadius: pt.shape === 'round' ? '50%' : '10px', border: '2px solid', borderColor: color, p: 0,
+              bgcolor: cs.length ? alpha(color, 0.18) : 'background.default', color: 'text.primary', font: 'inherit', cursor: 'pointer',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: dim ? 0.35 : 1, overflow: 'hidden' }}>
+            <Typography sx={{ fontWeight: 800, fontSize: { xs: '0.85rem', sm: '1.1rem' }, lineHeight: 1 }}>{t.name}</Typography>
+            {cs.length > 0 && (
+              <Typography sx={{ fontSize: { xs: '0.6rem', sm: '0.75rem' }, fontWeight: 700, lineHeight: 1.1 }}>
+                {money(cs.reduce((x, c) => x + c.total, 0))}
+              </Typography>
+            )}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+};
+
 const TablesView: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
@@ -55,6 +95,12 @@ const TablesView: React.FC = () => {
   const { data: tables = [], isLoading, error } = useWaiterTables();
   const open = useOpenCheck();
   const [mine, setMine] = React.useState(false);
+  const { data: floor } = useFloorPlan();
+  const hasPlan = !!floor && floor.tables.length > 0;
+  const [view, setView] = React.useState<'plan' | 'tiles'>(() => {
+    try { return (localStorage.getItem('waiter-view') as 'plan' | 'tiles') || 'plan'; } catch { return 'plan'; }
+  });
+  const chooseView = (v: 'plan' | 'tiles') => { setView(v); try { localStorage.setItem('waiter-view', v); } catch { /* ignore */ } };
   const [opening, setOpening] = React.useState<WaiterTable | null>(null);
   const [guests, setGuests] = React.useState(2);
   const [settings, setSettings] = React.useState(false);
@@ -85,14 +131,22 @@ const TablesView: React.FC = () => {
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <Typography variant="h5" sx={{ fontWeight: 800, flex: 1 }}>Столы</Typography>
         <Typography variant="body2" color="text.secondary">занято {busy} из {tables.length}</Typography>
-        {can(P.Settings) && <IconButton onClick={() => setSettings(true)} aria-label="Настроить столы"><SettingsIcon /></IconButton>}
+        {can(P.TablesManage) && <IconButton onClick={() => setSettings(true)} aria-label="Настроить столы"><SettingsIcon /></IconButton>}
       </Box>
       <Box sx={{ display: 'flex', gap: 1 }}>
         <Chip label="Все" color={!mine ? 'primary' : 'default'} onClick={() => setMine(false)} />
         <Chip label="Мои" color={mine ? 'primary' : 'default'} onClick={() => setMine(true)} />
+        <Box sx={{ flex: 1 }} />
+        {hasPlan && (
+          <ToggleButtonGroup size="small" exclusive value={view} onChange={(_, v) => v && chooseView(v)}>
+            <ToggleButton value="plan">Зал</ToggleButton>
+            <ToggleButton value="tiles">Плитки</ToggleButton>
+          </ToggleButtonGroup>
+        )}
       </Box>
       {error && <Alert severity="error">{apiError(error, 'Не удалось загрузить столы')}</Alert>}
-      {isLoading ? <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}><CircularProgress /></Box> : (
+      {!isLoading && hasPlan && view === 'plan' && <FloorView plan={floor!} tables={tables} highlightMine={mine} onTap={tap} />}
+      {isLoading ? <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}><CircularProgress /></Box> : (hasPlan && view === 'plan') ? null : (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(3, minmax(0, 1fr))', sm: 'repeat(4, minmax(0, 1fr))', md: 'repeat(6, minmax(0, 1fr))' }, gap: 1 }}>
           {shown.map(t => {
             const cs = t.checks;
@@ -164,7 +218,7 @@ const TablesView: React.FC = () => {
 };
 
 /** Настройка столов (администратор): названия, порядок, выключить */
-const TablesSettings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export const TablesSettings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { data } = useAllTables(true);
   const save = useSaveTables();
   const [list, setList] = React.useState<TableSetting[]>([]);
@@ -371,6 +425,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const [menu, setMenu] = React.useState<HTMLElement | null>(null);
   const [dialog, setDialog] = React.useState<'move' | 'split' | 'edit' | null>(null);
   const [toast, setToast] = React.useState('');
+  const [voiding, setVoiding] = React.useState<CheckItem | null>(null);
   const [closing, setClosing] = React.useState(false);
   const [method, setMethod] = React.useState<'cash' | 'card'>('card');
   const [cash, setCash] = React.useState('');
@@ -467,25 +522,27 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           <Box key={o.id} sx={{ bgcolor: 'background.paper', borderRadius: '16px', p: 1.5, opacity: cancelled ? 0.5 : 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
               <Typography sx={{ fontWeight: 700, flex: 1 }}>
-                {idx + 1}-я подача <Typography component="span" variant="body2" color="text.secondary">· №{o.id} · {new Date(o.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</Typography>
+                {idx + 1}-я подача <Typography component="span" variant="body2" color="text.secondary">· №{o.id} · {parseUtc(o.createdAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</Typography>
               </Typography>
               <Chip size="small" label={st.text} sx={{ bgcolor: alpha(st.color, 0.14), color: st.color, fontWeight: 700 }} />
             </Box>
             {o.items.map(i => (
-              <Box key={i.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25 }}>
+              <Box key={i.id} onClick={() => isOpen && !cancelled && i.quantity - i.pendingVoid > 0 && setVoiding(i)}
+                sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25, cursor: isOpen && !cancelled ? 'pointer' : 'default', borderRadius: 1, '&:active': { bgcolor: 'action.hover' } }}>
                 <ItemState ready={i.readyQuantity} served={i.servedQuantity} qty={i.quantity} cancelled={cancelled} />
                 <Typography sx={{ flex: 1, fontSize: '0.95rem', textDecoration: cancelled ? 'line-through' : 'none' }}>
                   {i.quantity} × {i.name}
                   {i.addons.length > 0 && <Typography component="span" variant="body2" color="text.secondary"> + {i.addons.map(a => a.addonName).join(', ')}</Typography>}
                 </Typography>
                 {i.moved && <Chip size="small" label="перенесено" sx={{ height: 20, fontSize: '0.7rem' }} />}
+                {i.pendingVoid > 0 && <Chip size="small" color="error" variant="outlined" label={`убрать ${i.pendingVoid} — ждёт кухню`} sx={{ height: 20, fontSize: '0.7rem' }} />}
                 {i.quantity > 1 && i.readyQuantity > 0 && i.servedQuantity < i.quantity && (
                   <Typography variant="caption" sx={{ color: tokens.herb, fontWeight: 700 }}>готово {i.readyQuantity}/{i.quantity}</Typography>
                 )}
               </Box>
             ))}
             {o.notes && <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mt: 0.5 }}>«{o.notes}»</Typography>}
-            {isOpen && (o.status === 'Новый' || o.status === 'Принят') && (
+            {isOpen && o.status === 'Новый' && (
               <Button size="small" color="error" onClick={() => cancelRound.mutate({ checkId: check.id, orderId: o.id })} disabled={cancelRound.isPending} sx={{ mt: 0.5 }}>
                 Отменить подачу
               </Button>
@@ -493,6 +550,17 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           </Box>
         );
       })}
+
+      {check.voids.length > 0 && (
+        <Box sx={{ bgcolor: 'background.paper', borderRadius: '16px', p: 1.5 }}>
+          <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Убрано из счёта</Typography>
+          {check.voids.map(v => (
+            <Typography key={v.id} variant="body2" color="text.secondary">
+              {v.quantity} × {v.name} — {v.reason} · {v.status === 'pending' ? 'ждёт кухню' : v.status === 'rejected' ? 'кухня отказала' : v.writeOff ? 'списано' : 'без списания'}
+            </Typography>
+          ))}
+        </Box>
+      )}
 
       {isOpen && (
         <Box sx={{ position: 'fixed', left: 0, right: 0, bottom: 0, p: 1.5, pb: 'calc(12px + env(safe-area-inset-bottom))', bgcolor: 'background.paper',
@@ -517,6 +585,10 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       }} />}
       {dialog === 'move' && <MoveDialog check={check} onClose={() => setDialog(null)} onDone={name => { setDialog(null); setToast(`Счёт перенесён на стол ${name}`); }} />}
       {dialog === 'edit' && <EditCheckDialog check={check} onClose={() => setDialog(null)} />}
+      {voiding && <VoidDialog item={voiding} onClose={() => setVoiding(null)} onDone={needsKitchen => {
+        setVoiding(null);
+        setToast(needsKitchen ? 'Блюдо уже готовят — кухня подтвердит отмену' : 'Блюдо убрано из счёта');
+      }} />}
       <Snackbar open={!!toast} autoHideDuration={3000} onClose={() => setToast('')} message={toast} anchorOrigin={{ vertical: 'top', horizontal: 'center' }} />
 
       <Dialog open={closing} onClose={() => setClosing(false)} maxWidth="xs" fullWidth>
@@ -558,6 +630,51 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         </DialogActions>
       </Dialog>
     </Box>
+  );
+};
+
+// ==================== Отмена блюда ====================
+
+const VOID_REASONS = ['Гость передумал', 'Ошибка официанта', 'Долго ждали', 'Гостю не понравилось', 'Нет в наличии'];
+
+/** Убрать блюдо из счёта: сколько штук и почему. Если блюдо уже готовят — решает кухня */
+const VoidDialog: React.FC<{ item: CheckItem; onClose: () => void; onDone: (needsKitchen: boolean) => void }> = ({ item, onClose, onDone }) => {
+  const voidItem = useVoidItem();
+  const max = item.quantity - item.pendingVoid;
+  const [qty, setQty] = React.useState(1);
+  const [reason, setReason] = React.useState('');
+  const [err, setErr] = React.useState('');
+  const submit = async () => {
+    setErr('');
+    try {
+      const r = await voidItem.mutateAsync({ itemId: item.id, quantity: qty, reason: reason.trim() });
+      onDone(r.needsKitchen);
+    } catch (e) { setErr(apiError(e)); }
+  };
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Убрать из счёта</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
+        {max > 1 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <IconButton onClick={() => setQty(q => Math.max(1, q - 1))} sx={{ bgcolor: 'action.hover' }} aria-label="Меньше"><RemoveIcon /></IconButton>
+            <Typography sx={{ fontWeight: 800, fontSize: '1.4rem' }}>{qty} из {max}</Typography>
+            <IconButton onClick={() => setQty(q => Math.min(max, q + 1))} sx={{ bgcolor: 'action.hover' }} aria-label="Больше"><AddIcon /></IconButton>
+          </Box>
+        )}
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+          {VOID_REASONS.map(r => <Chip key={r} label={r} color={reason === r ? 'primary' : 'default'} onClick={() => setReason(r)} />)}
+        </Box>
+        <TextField size="small" label="Причина" value={reason} onChange={e => setReason(e.target.value)} slotProps={{ htmlInput: { maxLength: 300 } }} />
+        <Typography variant="caption" color="text.secondary">Если кухня уже готовит — она подтвердит отмену. Всё видно администратору в «Отменённых блюдах».</Typography>
+        {err && <Alert severity="error">{err}</Alert>}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button onClick={onClose} sx={{ color: 'text.secondary' }}>Назад</Button>
+        <Button variant="contained" color="error" onClick={submit} disabled={!reason.trim() || voidItem.isPending}>Убрать</Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

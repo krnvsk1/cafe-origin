@@ -16,6 +16,8 @@ export interface KitchenOrder {
   isLater: boolean;
   /** Кухни, на которые идут блюда заказа, и статус части заказа на каждой */
   stations: KitchenOrderStation[];
+  /** Официант просит убрать блюдо, которое уже готовят — кухня решает */
+  voidRequests: { id: number; orderItemId: number | null; name: string; quantity: number; reason: string }[];
   /** Заказ официанта: стол и кто принял */
   tableName: string | null;
   waiterName: string | null;
@@ -135,6 +137,18 @@ export const useKitchenItem = () => {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+};
+
+/** Решение кухни по просьбе убрать блюдо: списать продукты, без списания или отказать */
+export const useResolveVoid = () => {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, { id: number; decision: 'writeoff' | 'keep' | 'reject' }>({
+    mutationFn: ({ id, decision }) => apiClient.post(`/api/kitchen/voids/${id}`, { decision }).then(res => res.data),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['waiter'] });
     },
   });
 };
