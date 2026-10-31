@@ -45,7 +45,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React, { useState, useEffect } from 'react';
 import { useTheme } from './hooks/useTheme';
 import { createAppTheme } from './theme';
-import BrandLogo from './components/BrandLogo';
+import BrandLogo, { BrandName, BrandTitle } from './components/BrandLogo';
 import WorkingHours from './components/WorkingHours';
 import type { PromoCodeValidation } from './types';
 import { useCartStore, useTotalItems, useTotalPrice } from './store/cartStore';
@@ -248,6 +248,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        <BrandTitle />
         <Router>
           <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
             {/* На весь экран (кухня, касса) шапку и подвал не показываем */}
@@ -482,7 +483,7 @@ function App() {
                 <BrandLogo />
                 <WorkingHours />
                 <Typography variant="body2" color="text.secondary">
-                  © {new Date().getFullYear()} Кума Шаурма
+                  © {new Date().getFullYear()} <BrandName />
                 </Typography>
               </Container>
             </Box>

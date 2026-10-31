@@ -356,4 +356,7 @@ export interface Shawarma {
     isOpenNow: boolean;
     onlinePaymentEnabled: boolean;
     serverTimeUtc: string;
+    /** Название заведения (задаётся в «Настройке интеграций») */
+    brandName: string;
+    brandTagline: string | null;
   }

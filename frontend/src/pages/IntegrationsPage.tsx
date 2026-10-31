@@ -1,5 +1,7 @@
 import * as React from 'react';
-import { Box, Typography, Button, CircularProgress } from '@mui/material';
+import { Box, Typography, Button, CircularProgress, TextField, Alert } from '@mui/material';
+import { useRestaurantSettings, useSaveBrand } from '../api/hooks';
+import { apiError } from '../api/inventory';
 import { useLocation } from 'react-router-dom';
 import {
   CheckCircleOutline as OkIcon, ErrorOutline as ErrIcon, RemoveCircleOutline as OffIcon, SettingsOutlined as SettingsIcon,
@@ -57,6 +59,45 @@ const Card: React.FC<{
   </Panel>
 );
 
+/** Название заведения: на сайте, во вкладке браузера, в описании онлайн-оплаты и в Telegram-боте */
+const BrandCard: React.FC = () => {
+  const { data } = useRestaurantSettings();
+  const save = useSaveBrand();
+  const [name, setName] = React.useState('');
+  const [tagline, setTagline] = React.useState('');
+  const [message, setMessage] = React.useState<{ ok: boolean; text: string } | null>(null);
+
+  React.useEffect(() => {
+    if (data) { setName(data.brandName ?? ''); setTagline(data.brandTagline ?? ''); }
+  }, [data?.brandName, data?.brandTagline]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const submit = async () => {
+    setMessage(null);
+    try {
+      await save.mutateAsync({ name: name.trim(), tagline: tagline.trim() || null });
+      setMessage({ ok: true, text: 'Сохранено — название обновится на сайте' });
+    } catch (e) { setMessage({ ok: false, text: apiError(e) }); }
+  };
+
+  return (
+    <Panel sx={{ scrollMarginTop: 96 }}>
+      <Box id="brand" sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        <Box>
+          <Typography sx={{ fontWeight: 800, fontSize: '1.15rem' }}>Название заведения</Typography>
+          <Typography variant="body2" color="text.secondary">На сайте и во вкладке браузера, в описании онлайн-оплаты и в Telegram-боте</Typography>
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 2fr auto' }, gap: 1.5, alignItems: 'start' }}>
+          <TextField size="small" label="Название" value={name} onChange={e => setName(e.target.value)} slotProps={{ htmlInput: { maxLength: 60 } }} />
+          <TextField size="small" label="Подзаголовок на главной" value={tagline} onChange={e => setTagline(e.target.value)}
+            placeholder="Привезём горячим или соберём к вашему приходу" slotProps={{ htmlInput: { maxLength: 200 } }} />
+          <Button variant="contained" color="secondary" onClick={submit} disabled={!name.trim() || save.isPending}>Сохранить</Button>
+        </Box>
+        {message && <Alert severity={message.ok ? 'success' : 'error'} onClose={() => setMessage(null)}>{message.text}</Alert>}
+      </Box>
+    </Panel>
+  );
+};
+
 /** Настройка интеграций: ЕГАИС, Честный знак, СБИС — подключение и статус в одном месте */
 const IntegrationsPage: React.FC = () => {
   const location = useLocation();
@@ -88,6 +129,8 @@ const IntegrationsPage: React.FC = () => {
         <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.6rem', sm: '2rem' } }}>Настройка интеграций</Typography>
         <Typography color="text.secondary">Подключение к государственным системам (ЕГАИС, Честный знак, Меркурий) и ЭДО. Работа с документами — во вкладках склада.</Typography>
       </Box>
+
+      <BrandCard />
 
       <Card
         id="egais"

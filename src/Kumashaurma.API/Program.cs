@@ -223,6 +223,9 @@ builder.Services.AddHttpClient<Kumashaurma.API.Services.Edo.SbisClient>(client =
 builder.Services.AddScoped<Kumashaurma.API.Services.Edo.EdoService>();
 builder.Services.AddHostedService<Kumashaurma.API.Services.Edo.SbisSyncWorker>();
 
+// Название заведения (сайт, оплата, Telegram-бот)
+builder.Services.AddSingleton<Kumashaurma.API.Services.BrandSettingsProvider>();
+
 // Импорт меню с kumashaurma.ru
 builder.Services.AddHttpClient<MenuImportService>(client =>
 {

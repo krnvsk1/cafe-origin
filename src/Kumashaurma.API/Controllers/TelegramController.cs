@@ -234,7 +234,7 @@ namespace Kumashaurma.API.Controllers
                         break;
                     default:
                         await _telegram.SendMessageAsync(chatId,
-                            "Я бот Кума Шаурмы 🌯\n\n/menu — открыть меню\n/orders — мои заказы\n\nУведомления о заказах приходят сюда, если вы привязали Telegram в профиле на сайте.",
+                            $"Я бот «{await BrandNameAsync()}» 🌯\n\n/menu — открыть меню\n/orders — мои заказы\n\nУведомления о заказах приходят сюда, если вы привязали Telegram в профиле на сайте.",
                             _telegram.WebAppKeyboard("🌯 Открыть меню"));
                         break;
                 }
@@ -247,6 +247,9 @@ namespace Kumashaurma.API.Controllers
 
             return Ok();
         }
+
+        private async Task<string> BrandNameAsync() =>
+            (await HttpContext.RequestServices.GetRequiredService<BrandSettingsProvider>().GetAsync()).DisplayName;
 
         private async Task HandleStartAsync(long chatId, long fromId, string? chatType, string argument)
         {
@@ -279,7 +282,7 @@ namespace Kumashaurma.API.Controllers
             }
 
             await _telegram.SendMessageAsync(chatId,
-                "Привет! Это Кума Шаурма 🌯\nЗаказывайте прямо здесь — нажмите кнопку ниже.",
+                $"Привет! Это «{await BrandNameAsync()}» 🌯\nЗаказывайте прямо здесь — нажмите кнопку ниже.",
                 _telegram.WebAppKeyboard("🌯 Открыть меню"));
         }
 

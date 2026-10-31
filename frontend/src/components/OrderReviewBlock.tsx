@@ -38,7 +38,7 @@ const OrderReviewBlock: React.FC<{ order: Order }> = ({ order }) => {
         )}
         {review.adminReply && (
           <Alert severity="info" icon={false} sx={{ mt: 1, py: 0 }}>
-            <Typography variant="body2"><strong>Ответ Кума Шаурмы:</strong> {review.adminReply}</Typography>
+            <Typography variant="body2"><strong>Ответ заведения:</strong> {review.adminReply}</Typography>
           </Alert>
         )}
       </Box>

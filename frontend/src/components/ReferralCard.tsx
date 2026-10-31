@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useBrand } from '../api/hooks';
 import { Paper, Box, Typography, TextField, Button, Snackbar, Skeleton, InputAdornment, IconButton, Tooltip } from '@mui/material';
 import { ContentCopy as CopyIcon, Share as ShareIcon, CardGiftcard as GiftIcon } from '@mui/icons-material';
 import { useQuery } from '@tanstack/react-query';
@@ -17,6 +18,7 @@ interface ReferralInfo {
 
 /** «Пригласи друга»: персональная ссылка и статистика приглашений */
 const ReferralCard: React.FC = () => {
+  const brand = useBrand();
   const { data, isLoading } = useQuery<ReferralInfo>({
     queryKey: ['referral'],
     queryFn: () => apiClient.get('/api/referrals/me').then(res => res.data),
@@ -27,7 +29,7 @@ const ReferralCard: React.FC = () => {
   if (!data?.enabled || !data.code) return null;
 
   const link = `${window.location.origin}/?ref=${data.code}`;
-  const text = `Попробуй Кума Шаурму! По моей ссылке получишь ${data.inviteeBonus} баллов после первого заказа 🌯`;
+  const text = `Попробуй «${brand.name}»! По моей ссылке получишь ${data.inviteeBonus} баллов после первого заказа 🌯`;
 
   const copy = async () => {
     try {
@@ -40,7 +42,7 @@ const ReferralCard: React.FC = () => {
 
   const share = async () => {
     if (navigator.share) {
-      try { await navigator.share({ title: 'Кума Шаурма', text, url: link }); } catch { /* отменено */ }
+      try { await navigator.share({ title: brand.name, text, url: link }); } catch { /* отменено */ }
     } else {
       void copy();
     }

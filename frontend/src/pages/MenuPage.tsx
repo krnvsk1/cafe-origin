@@ -26,7 +26,7 @@ import MenuItemCard from '../components/MenuItemCard';
 import RepeatLastOrderBanner from '../components/RepeatLastOrderBanner';
 import CartPanel, { MobileCartBar } from '../components/CartPanel';
 import { useFavoriteIds, useToggleFavorite } from '../api/favorites';
-import { useShawarmas, useRestaurantSettings } from '../api/hooks';
+import { useShawarmas, useRestaurantSettings, useBrand } from '../api/hooks';
 import type { Shawarma, SelectedAddon } from '../types';
 import ProductModal from '../components/ProductModal';
 import { useCartStore } from '../store/cartStore';
@@ -45,6 +45,7 @@ const gridSx = {
 /** «Обложка» заведения — как карточка ресторана в сервисах доставки */
 const RestaurantHero: React.FC = () => {
   const { data: settings } = useRestaurantSettings();
+  const brand = useBrand();
   const facts: { icon: React.ReactNode; text: string }[] = [
     { icon: <TimeIcon fontSize="small" />, text: 'Доставка 30–45 мин' },
     { icon: <PickupIcon fontSize="small" />, text: 'Самовывоз и в зале' },
@@ -99,10 +100,10 @@ const RestaurantHero: React.FC = () => {
           maxWidth: { xs: '75%', md: '60%' },
         }}
       >
-        Кума Шаурма
+        {brand.name}
       </Typography>
       <Typography sx={{ mt: 1.5, fontSize: { xs: '1rem', md: '1.15rem' }, fontWeight: 500, maxWidth: { xs: '70%', md: 520 } }}>
-        Шаурма, фалафель и картошка — привезём горячим или соберём к вашему приходу
+        {brand.tagline}
       </Typography>
 
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: { xs: 2, md: 3 }, maxWidth: { xs: '80%', md: '70%' } }}>

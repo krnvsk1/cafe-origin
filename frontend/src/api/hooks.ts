@@ -476,6 +476,23 @@ export const useRestaurantSettings = () => {
   });
 };
 
+export const DEFAULT_BRAND = 'Доставка еды';
+export const DEFAULT_TAGLINE = 'Привезём горячим или соберём к вашему приходу';
+
+/** Название заведения и подзаголовок; пока настройки грузятся — нейтральные */
+export const useBrand = () => {
+  const { data } = useRestaurantSettings();
+  return { name: data?.brandName || DEFAULT_BRAND, tagline: data?.brandTagline || DEFAULT_TAGLINE, loaded: !!data };
+};
+
+export const useSaveBrand = () => {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, { name: string; tagline: string | null }>({
+    mutationFn: (data) => apiClient.put('/api/settings/brand', data).then(res => res.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['restaurant-settings'] }),
+  });
+};
+
 // ==================== PAYMENTS (ЮKassa) ====================
 
 export const usePaymentStatus = (orderId: number, enabled: boolean) => {

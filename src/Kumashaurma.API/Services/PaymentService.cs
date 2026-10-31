@@ -27,6 +27,7 @@ namespace Kumashaurma.API.Services
         private readonly IOrderEventBus _events;
         private readonly YooKassaOptions _options;
         private readonly ILogger<PaymentService> _logger;
+        private readonly BrandSettingsProvider _brand;
 
         public PaymentService(
             ApplicationDbContext context,
@@ -34,13 +35,15 @@ namespace Kumashaurma.API.Services
             IOrderStatusService statusService,
             IOrderEventBus events,
             IOptions<YooKassaOptions> options,
-            ILogger<PaymentService> logger)
+            ILogger<PaymentService> logger,
+            BrandSettingsProvider brand)
         {
             _context = context;
             _yooKassa = yooKassa;
             _statusService = statusService;
             _events = events;
             _options = options.Value;
+            _brand = brand;
             _logger = logger;
         }
 
@@ -55,7 +58,7 @@ namespace Kumashaurma.API.Services
             // Новый ключ на каждую попытку: повторная оплата после отмены создаёт новый платёж
             var attempt = DateTime.UtcNow.Ticks;
             var payment = await _yooKassa.CreatePaymentAsync(
-                order.Id, order.Total, $"Заказ #{order.Id} в Кума Шаурме", returnUrl, order.Phone,
+                order.Id, order.Total, $"Заказ #{order.Id} — {(await _brand.GetAsync()).DisplayName}", returnUrl, order.Phone,
                 $"order-{order.Id}-{attempt}", ct);
 
             if (payment == null) return null;
