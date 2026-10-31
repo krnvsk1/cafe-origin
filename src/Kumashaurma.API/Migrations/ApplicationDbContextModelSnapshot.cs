@@ -1411,6 +1411,10 @@ namespace Kumashaurma.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("CheckId")
+                        .HasColumnType("integer")
+                        .HasColumnName("check_id");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1434,6 +1438,8 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnName("shawarma_id");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CheckId");
 
                     b.HasIndex("OrderId");
 
@@ -2315,6 +2321,11 @@ namespace Kumashaurma.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("guests");
 
+                    b.Property<string>("Label")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("label");
+
                     b.Property<DateTime>("OpenedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("opened_at");
@@ -2825,6 +2836,11 @@ namespace Kumashaurma.API.Migrations
 
             modelBuilder.Entity("Kumashaurma.API.Models.OrderItem", b =>
                 {
+                    b.HasOne("Kumashaurma.API.Models.TableCheck", null)
+                        .WithMany()
+                        .HasForeignKey("CheckId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Kumashaurma.API.Models.Order", "Order")
                         .WithMany("OrderItems")
                         .HasForeignKey("OrderId")

@@ -47,12 +47,38 @@ namespace Kumashaurma.API.Controllers
             public int TableId { get; set; }
             public int? Guests { get; set; }
             public string? Comment { get; set; }
+            public string? Label { get; set; }
         }
 
         public class RoundRequest
         {
             public List<PosController.PosItemRequest> Items { get; set; } = new();
             public string? Comment { get; set; }
+        }
+
+        public class SplitLine
+        {
+            public int ItemId { get; set; }
+            public int Quantity { get; set; }
+        }
+
+        public class SplitRequest
+        {
+            public List<SplitLine> Items { get; set; } = new();
+            /// <summary>В какой счёт перенести; null — новый счёт за этим же столом</summary>
+            public int? TargetCheckId { get; set; }
+            public string? Label { get; set; }
+        }
+
+        public class MoveRequest
+        {
+            public int TableId { get; set; }
+        }
+
+        public class UpdateCheckRequest
+        {
+            public string? Label { get; set; }
+            public int? Guests { get; set; }
         }
 
         public class CloseRequest
@@ -77,43 +103,58 @@ namespace Kumashaurma.API.Controllers
             return await q.OrderBy(t => t.SortOrder).ThenBy(t => t.Id).ToListAsync();
         }
 
-        // GET: api/waiter/tables — столы и открытые на них чеки
+        // GET: api/waiter/tables — столы и открытые на них счета (за столом их может быть несколько)
         [HttpGet("tables")]
         public async Task<IActionResult> Tables()
         {
             var me = User.GetUserId();
             var tables = await TablesAsync(onlyActive: true);
-            var open = await _context.TableChecks.AsNoTracking().Where(c => c.Status == CheckStatuses.Open).ToListAsync();
+            var open = await _context.TableChecks.AsNoTracking().Where(c => c.Status == CheckStatuses.Open).OrderBy(c => c.OpenedAt).ToListAsync();
             var waiterNames = await NamesAsync(open.Select(c => c.WaiterId));
-            var checkIds = open.Select(c => c.Id).ToList();
-            var orders = await _context.Orders.AsNoTracking()
-                .Where(o => o.CheckId != null && checkIds.Contains(o.CheckId.Value) && o.Status != OrderStatuses.Cancelled)
-                .Select(o => new { o.CheckId, o.Status, o.Total })
-                .ToListAsync();
+            var lines = await LinesAsync(open.Select(c => c.Id).ToList());
 
-            return Ok(tables.Select(t =>
+            return Ok(tables.Select(t => new
             {
-                var c = open.FirstOrDefault(x => x.TableId == t.Id);
-                var co = c == null ? null : orders.Where(o => o.CheckId == c.Id).ToList();
-                return new
+                t.Id,
+                t.Name,
+                checks = open.Where(c => c.TableId == t.Id).Select(c =>
                 {
-                    t.Id,
-                    t.Name,
-                    check = c == null ? null : new
+                    var mine = lines.Where(l => l.CheckId == c.Id && l.Order.Status != OrderStatuses.Cancelled).ToList();
+                    return new
                     {
                         c.Id,
+                        c.Label,
                         c.OpenedAt,
                         c.Guests,
                         waiter = waiterNames.GetValueOrDefault(c.WaiterId ?? 0),
                         isMine = c.WaiterId == me,
-                        total = co!.Sum(o => o.Total),
-                        // Блюда готовы — пора нести
-                        ready = co!.Count(o => o.Status == OrderStatuses.Ready),
-                        cooking = co!.Count(o => o.Status is OrderStatuses.New or OrderStatuses.Accepted or OrderStatuses.Preparing)
-                    }
-                };
+                        total = mine.Sum(l => LineTotal(l.Item)),
+                        // Есть готовые, но не отданные блюда — пора нести
+                        ready = mine.Count(l => l.Order.Status == OrderStatuses.Ready),
+                        cooking = mine.Select(l => l.Order).Distinct().Count(o => o.Status is OrderStatuses.New or OrderStatuses.Accepted or OrderStatuses.Preparing)
+                    };
+                })
             }));
         }
+
+        /// <summary>Позиция заказа и счёт, к которому она относится (перенесённая при делении — к своему)</summary>
+        private record CheckLine(OrderItem Item, Order Order, int CheckId);
+
+        /// <summary>Все позиции указанных счетов (с заказами), включая перенесённые из других счетов</summary>
+        private async Task<List<CheckLine>> LinesAsync(List<int> checkIds)
+        {
+            if (checkIds.Count == 0) return new();
+            var orders = await _context.Orders.AsNoTracking()
+                .Include(o => o.OrderItems).ThenInclude(i => i.SelectedAddons)
+                .Where(o => (o.CheckId != null && checkIds.Contains(o.CheckId.Value))
+                            || o.OrderItems.Any(i => i.CheckId != null && checkIds.Contains(i.CheckId.Value)))
+                .ToListAsync();
+            return orders.SelectMany(o => o.OrderItems.Select(i => new CheckLine(i, o, i.CheckId ?? o.CheckId ?? 0)))
+                .Where(l => checkIds.Contains(l.CheckId))
+                .ToList();
+        }
+
+        public static decimal LineTotal(OrderItem i) => (i.Price + i.SelectedAddons.Sum(a => a.Price * a.Quantity)) * i.Quantity;
 
         // GET: api/waiter/tables/all — все столы для настройки
         [HttpGet("tables/all")]
@@ -163,14 +204,16 @@ namespace Kumashaurma.API.Controllers
             var table = await _context.DiningTables.FirstOrDefaultAsync(t => t.Id == r.TableId && t.IsActive);
             if (table == null) return BadRequest(new { message = "Стол не найден" });
             if (r.Guests is < 1 or > 100) return BadRequest(new { message = "Гостей — от 1 до 100" });
-            var existing = await _context.TableChecks.FirstOrDefaultAsync(c => c.TableId == r.TableId && c.Status == CheckStatuses.Open);
-            if (existing != null) return Ok(new { existing.Id, alreadyOpen = true });
+            // За столом может быть несколько счетов: второй и следующие подписываем «Счёт N»
+            var openHere = await _context.TableChecks.CountAsync(c => c.TableId == r.TableId && c.Status == CheckStatuses.Open);
+            var label = string.IsNullOrWhiteSpace(r.Label) ? (openHere > 0 ? $"Счёт {openHere + 1}" : null) : Trunc(r.Label.Trim(), 40);
 
             var check = new TableCheck
             {
                 TableId = table.Id,
                 WaiterId = User.GetUserId(),
                 Guests = r.Guests,
+                Label = label,
                 Comment = string.IsNullOrWhiteSpace(r.Comment) ? null : r.Comment.Trim(),
                 OpenedAt = DateTime.UtcNow
             };
@@ -187,19 +230,25 @@ namespace Kumashaurma.API.Controllers
             var c = await _context.TableChecks.AsNoTracking().Include(x => x.Table).FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Чек не найден" });
             var waiter = (await NamesAsync(new[] { c.WaiterId })).GetValueOrDefault(c.WaiterId ?? 0);
-            var orders = await _context.Orders.AsNoTracking()
-                .Where(o => o.CheckId == id)
-                .Include(o => o.OrderItems).ThenInclude(i => i.SelectedAddons)
-                .OrderBy(o => o.CreatedAt)
-                .ToListAsync();
-            var itemIds = orders.SelectMany(o => o.OrderItems).Select(i => i.Id).ToList();
+            var lines = await LinesAsync(new List<int> { id });
+            var itemIds = lines.Select(l => l.Item.Id).ToList();
             var states = await _context.OrderItemKitchenStates.AsNoTracking().Where(x => itemIds.Contains(x.OrderItemId)).ToDictionaryAsync(x => x.OrderItemId);
-            var active = orders.Where(o => o.Status != OrderStatuses.Cancelled).ToList();
+            var active = lines.Where(l => l.Order.Status != OrderStatuses.Cancelled).ToList();
+            int Ready(CheckLine l) => l.Order.Status is OrderStatuses.Ready or OrderStatuses.Completed
+                ? l.Item.Quantity : Math.Min(l.Item.Quantity, states.GetValueOrDefault(l.Item.Id)?.ReadyQuantity ?? 0);
+            int Served(CheckLine l) => l.Order.Status == OrderStatuses.Completed
+                ? l.Item.Quantity : Math.Min(l.Item.Quantity, states.GetValueOrDefault(l.Item.Id)?.ServedQuantity ?? 0);
+
+            // Другие открытые счета за этим столом — для деления и объединения
+            var siblings = await _context.TableChecks.AsNoTracking()
+                .Where(x => x.TableId == c.TableId && x.Status == CheckStatuses.Open && x.Id != id)
+                .OrderBy(x => x.OpenedAt).Select(x => new { x.Id, x.Label }).ToListAsync();
 
             return Ok(new
             {
                 c.Id,
                 c.Status,
+                c.Label,
                 table = new { c.Table!.Id, c.Table.Name },
                 waiter,
                 isMine = c.WaiterId == User.GetUserId(),
@@ -208,28 +257,29 @@ namespace Kumashaurma.API.Controllers
                 c.OpenedAt,
                 c.ClosedAt,
                 c.PaymentMethod,
-                total = c.Status == CheckStatuses.Closed ? c.Total : active.Sum(o => o.Total),
-                // Всё ли отдано гостям (иначе при закрытии предупреждаем)
-                notServed = active.Where(o => o.Status != OrderStatuses.Completed)
-                    .SelectMany(o => o.OrderItems).Sum(i => i.Quantity - Math.Min(i.Quantity, states.GetValueOrDefault(i.Id)?.ServedQuantity ?? 0)),
-                orders = orders.Select(o => new
+                total = c.Status == CheckStatuses.Closed ? c.Total : active.Sum(l => LineTotal(l.Item)),
+                // Сколько блюд ещё не отдано (при закрытии предупреждаем)
+                notServed = active.Sum(l => l.Item.Quantity - Served(l)),
+                siblings,
+                orders = lines.GroupBy(l => l.Order).OrderBy(g => g.Key.CreatedAt).Select(g => new
                 {
-                    o.Id,
-                    o.Status,
-                    o.Total,
-                    o.Notes,
-                    o.CreatedAt,
-                    items = o.OrderItems.OrderBy(i => i.Id).Select(i => new
+                    g.Key.Id,
+                    g.Key.Status,
+                    total = g.Sum(l => LineTotal(l.Item)),
+                    g.Key.Notes,
+                    g.Key.CreatedAt,
+                    items = g.OrderBy(l => l.Item.Id).Select(l => new
                     {
-                        i.Id,
-                        i.Name,
-                        i.Quantity,
-                        i.Price,
-                        addons = i.SelectedAddons.Select(a => new { a.AddonName, a.Quantity, a.Price }),
-                        readyQuantity = o.Status is OrderStatuses.Ready or OrderStatuses.Completed
-                            ? i.Quantity : Math.Min(i.Quantity, states.GetValueOrDefault(i.Id)?.ReadyQuantity ?? 0),
-                        servedQuantity = o.Status == OrderStatuses.Completed
-                            ? i.Quantity : Math.Min(i.Quantity, states.GetValueOrDefault(i.Id)?.ServedQuantity ?? 0)
+                        l.Item.Id,
+                        l.Item.Name,
+                        l.Item.Quantity,
+                        l.Item.Price,
+                        lineTotal = LineTotal(l.Item),
+                        addons = l.Item.SelectedAddons.Select(a => new { a.AddonName, a.Quantity, a.Price }),
+                        readyQuantity = Ready(l),
+                        servedQuantity = Served(l),
+                        // Перенесена из другого счёта или в этот счёт пришла не своей подачей
+                        moved = l.Item.CheckId != null && l.Order.CheckId != id
                     })
                 })
             });
@@ -301,33 +351,43 @@ namespace Kumashaurma.API.Controllers
             if (c == null) return NotFound(new { message = "Чек не найден" });
             if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Чек уже закрыт" });
 
-            var orders = await _context.Orders.Where(o => o.CheckId == id && o.Status != OrderStatuses.Cancelled).ToListAsync();
-            if (orders.Count == 0) return BadRequest(new { message = "В чеке нет заказов — его можно просто отменить" });
-            var total = orders.Sum(o => o.Total);
+            var lines = (await LinesAsync(new List<int> { id })).Where(l => l.Order.Status != OrderStatuses.Cancelled).ToList();
+            if (lines.Count == 0) return BadRequest(new { message = "В счёте нет блюд — его можно просто отменить" });
+            var total = lines.Sum(l => LineTotal(l.Item));
             if (method == "cash" && r.CashReceived.HasValue && r.CashReceived.Value < total)
-                return BadRequest(new { message = $"Получено меньше суммы чека ({total:0.##} ₽)" });
+                return BadRequest(new { message = $"Получено меньше суммы счёта ({total:0.##} ₽)" });
 
             var now = DateTime.UtcNow;
-            foreach (var o in orders)
-            {
-                o.PaymentMethod = method;
-                o.PaymentStatus = "paid";
-                o.PaidAt = now;
-            }
             c.Status = CheckStatuses.Closed;
             c.ClosedAt = now;
             c.PaymentMethod = method;
             c.Total = total;
             await _context.SaveChangesAsync();
+
+            // Заказ кухни оплачен, когда закрыты все счета, куда попали его блюда
+            var orderIds = lines.Select(l => l.Order.Id).Distinct().ToList();
+            var orders = await _context.Orders.Include(o => o.OrderItems).Where(o => orderIds.Contains(o.Id)).ToListAsync();
+            var related = orders.SelectMany(o => o.OrderItems.Select(i => i.CheckId ?? o.CheckId)).Where(x => x != null).Select(x => x!.Value).Distinct().ToList();
+            var relatedChecks = await _context.TableChecks.AsNoTracking().Where(x => related.Contains(x.Id)).ToDictionaryAsync(x => x.Id);
+            foreach (var o in orders)
+            {
+                var checks = o.OrderItems.Select(i => i.CheckId ?? o.CheckId).Where(x => x != null).Select(x => relatedChecks[x!.Value]).Distinct().ToList();
+                if (checks.Any(x => x.Status == CheckStatuses.Open)) continue;
+                var methods = checks.Where(x => x.Status == CheckStatuses.Closed).Select(x => x.PaymentMethod).Distinct().ToList();
+                o.PaymentMethod = methods.Count == 1 ? methods[0] ?? method : "mixed";
+                o.PaymentStatus = "paid";
+                o.PaidAt = now;
+            }
+            await _context.SaveChangesAsync();
             foreach (var o in orders)
                 _events.Publish(new OrderEvent("updated", o.Id, o.UserId, o.Status, null, now));
-            _logger.LogInformation("🍽 Чек #{CheckId} закрыт: {Total} ₽ ({Method})", c.Id, total, method);
+            _logger.LogInformation("🍽 Счёт #{CheckId} закрыт: {Total} ₽ ({Method})", c.Id, total, method);
             return Ok(new
             {
                 c.Id,
                 total,
                 change = method == "cash" && r.CashReceived.HasValue ? r.CashReceived.Value - total : (decimal?)null,
-                orderIds = orders.Select(o => o.Id)
+                orderIds
             });
         }
 
@@ -339,13 +399,131 @@ namespace Kumashaurma.API.Controllers
             var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Чек не найден" });
             if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Чек уже закрыт" });
-            if (await _context.Orders.AnyAsync(o => o.CheckId == id && o.Status != OrderStatuses.Cancelled))
-                return BadRequest(new { message = "В чеке есть заказы — отмените их или закройте чек оплатой" });
+            if ((await LinesAsync(new List<int> { id })).Any(l => l.Order.Status != OrderStatuses.Cancelled))
+                return BadRequest(new { message = "В счёте есть блюда — перенесите их, отмените подачу или закройте счёт оплатой" });
             c.Status = CheckStatuses.Cancelled;
             c.ClosedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
+        // PUT: api/waiter/checks/{id} — подпись счёта и число гостей
+        [HttpPut("checks/{id:int}")]
+        [HasPermission(Permissions.Waiter)]
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateCheckRequest r)
+        {
+            var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (r.Guests is < 1 or > 100) return BadRequest(new { message = "Гостей — от 1 до 100" });
+            c.Label = string.IsNullOrWhiteSpace(r.Label) ? null : Trunc(r.Label.Trim(), 40);
+            if (r.Guests.HasValue) c.Guests = r.Guests;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // POST: api/waiter/checks/{id}/move — пересадить гостей: счёт переходит на другой стол
+        [HttpPost("checks/{id:int}/move")]
+        [HasPermission(Permissions.Waiter)]
+        public async Task<IActionResult> Move(int id, [FromBody] MoveRequest r)
+        {
+            var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт уже закрыт" });
+            var table = await _context.DiningTables.FirstOrDefaultAsync(t => t.Id == r.TableId && t.IsActive);
+            if (table == null) return BadRequest(new { message = "Стол не найден" });
+            if (table.Id == c.TableId) return NoContent();
+            c.TableId = table.Id;
+            // Подписи заказов на кухне и в кассе
+            var orders = await _context.Orders.Where(o => o.CheckId == id).ToListAsync();
+            foreach (var o in orders) o.CustomerName = $"Стол {table.Name}";
+            await _context.SaveChangesAsync();
+            foreach (var o in orders) _events.Publish(new OrderEvent("updated", o.Id, o.UserId, o.Status, null, DateTime.UtcNow));
+            return NoContent();
+        }
+
+        // POST: api/waiter/checks/{id}/split — разделить счёт: перенести блюда (можно часть штук) в другой или новый счёт
+        [HttpPost("checks/{id:int}/split")]
+        [HasPermission(Permissions.Waiter)]
+        public async Task<IActionResult> Split(int id, [FromBody] SplitRequest r)
+        {
+            var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт уже закрыт" });
+            var moves = r.Items.Where(x => x.Quantity > 0).GroupBy(x => x.ItemId).Select(g => (ItemId: g.Key, Quantity: g.Sum(x => x.Quantity))).ToList();
+            if (moves.Count == 0) return BadRequest(new { message = "Выберите, что перенести" });
+
+            TableCheck target;
+            if (r.TargetCheckId.HasValue)
+            {
+                if (r.TargetCheckId == id) return BadRequest(new { message = "Это тот же счёт" });
+                target = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == r.TargetCheckId) ?? null!;
+                if (target == null || target.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт, куда переносим, не найден или закрыт" });
+            }
+            else
+            {
+                var openHere = await _context.TableChecks.CountAsync(x => x.TableId == c.TableId && x.Status == CheckStatuses.Open);
+                target = new TableCheck
+                {
+                    TableId = c.TableId,
+                    WaiterId = User.GetUserId(),
+                    Label = string.IsNullOrWhiteSpace(r.Label) ? $"Счёт {openHere + 1}" : Trunc(r.Label.Trim(), 40),
+                    OpenedAt = DateTime.UtcNow
+                };
+                _context.TableChecks.Add(target);
+                await _context.SaveChangesAsync();
+            }
+
+            var lines = await LinesAsync(new List<int> { id });
+            var itemIds = moves.Select(m => m.ItemId).ToList();
+            var items = await _context.OrderItems.Include(i => i.SelectedAddons).Include(i => i.Order).Where(i => itemIds.Contains(i.Id)).ToListAsync();
+            var states = await _context.OrderItemKitchenStates.Where(x => itemIds.Contains(x.OrderItemId)).ToDictionaryAsync(x => x.OrderItemId);
+            foreach (var (itemId, qty) in moves)
+            {
+                var item = items.FirstOrDefault(i => i.Id == itemId);
+                if (item == null || lines.All(l => l.Item.Id != itemId)) return BadRequest(new { message = "Позиция не из этого счёта" });
+                if (item.Order!.Status == OrderStatuses.Cancelled) return BadRequest(new { message = $"«{item.Name}» — подача отменена" });
+                if (qty > item.Quantity) return BadRequest(new { message = $"«{item.Name}»: в счёте только {item.Quantity} шт." });
+
+                if (qty == item.Quantity)
+                {
+                    item.CheckId = target.Id;
+                    continue;
+                }
+                // Часть штук — отдельной строкой того же заказа; готовность делим между строками
+                var copy = new OrderItem
+                {
+                    OrderId = item.OrderId,
+                    ShawarmaId = item.ShawarmaId,
+                    Name = item.Name,
+                    Quantity = qty,
+                    Price = item.Price,
+                    CheckId = target.Id
+                };
+                foreach (var a in item.SelectedAddons)
+                    copy.SelectedAddons.Add(new OrderItemAddon
+                    {
+                        AddonId = a.AddonId, AddonName = a.AddonName, AddonCategoryId = a.AddonCategoryId,
+                        AddonCategoryName = a.AddonCategoryName, Price = a.Price, Quantity = a.Quantity
+                    });
+                item.Quantity -= qty;
+                _context.OrderItems.Add(copy);
+                await _context.SaveChangesAsync();
+                if (states.TryGetValue(item.Id, out var st))
+                {
+                    var ready = Math.Min(qty, st.ReadyQuantity);
+                    var served = Math.Min(ready, st.ServedQuantity);
+                    st.ReadyQuantity -= ready;
+                    st.ServedQuantity = Math.Min(st.ServedQuantity - served, st.ReadyQuantity);
+                    _context.OrderItemKitchenStates.Add(new OrderItemKitchenState { OrderItemId = copy.Id, ReadyQuantity = ready, ServedQuantity = served });
+                }
+            }
+            await _context.SaveChangesAsync();
+            foreach (var o in items.Select(i => i.Order!).Distinct())
+                _events.Publish(new OrderEvent("updated", o.Id, o.UserId, o.Status, null, DateTime.UtcNow));
+            return Ok(new { targetCheckId = target.Id });
+        }
+
+        private static string Trunc(string s, int max) => s.Length <= max ? s : s[..max];
 
         private async Task<Dictionary<int, string>> NamesAsync(IEnumerable<int?> ids)
         {

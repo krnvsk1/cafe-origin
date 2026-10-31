@@ -460,6 +460,9 @@ namespace Kumashaurma.API.Data
             modelBuilder.Entity<Order>()
                 .HasOne<TableCheck>().WithMany().HasForeignKey(o => o.CheckId).OnDelete(DeleteBehavior.SetNull);
 
+            modelBuilder.Entity<OrderItem>()
+                .HasOne<TableCheck>().WithMany().HasForeignKey(i => i.CheckId).OnDelete(DeleteBehavior.SetNull);
+
             modelBuilder.Entity<OrderItemKitchenState>(entity =>
             {
                 entity.HasIndex(e => e.OrderItemId).IsUnique();

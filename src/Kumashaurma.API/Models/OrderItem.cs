@@ -36,6 +36,11 @@ namespace Kumashaurma.API.Models
         [Column("subtotal", TypeName = "decimal(10,2)")]
         public decimal Subtotal => Price * Quantity;
         
+        /// <summary>Счёт стола, куда перенесли позицию при делении счёта; null — счёт заказа</summary>
+        [Column("check_id")]
+        [JsonIgnore]
+        public int? CheckId { get; set; }
+
         // 👇 ДОБАВЛЯЕМ: связь с выбранными добавками
         public ICollection<OrderItemAddon> SelectedAddons { get; set; } = new List<OrderItemAddon>();
     }

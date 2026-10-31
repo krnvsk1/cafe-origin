@@ -55,6 +55,11 @@ namespace Kumashaurma.API.Models
         [Column("guests")]
         public int? Guests { get; set; }
 
+        /// <summary>Подпись счёта, когда за столом их несколько: «Счёт 2», «Анна»</summary>
+        [MaxLength(40)]
+        [Column("label")]
+        public string? Label { get; set; }
+
         [Required]
         [MaxLength(20)]
         [Column("status")]
