@@ -14,7 +14,7 @@ namespace Kumashaurma.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/kitchen")]
-    [HasPermission(Permissions.Kitchen, Permissions.Menu)]
+    [HasPermission(Permissions.Kitchen, Permissions.Menu, Permissions.Waiter, Permissions.ChecksAll)]
     public class KitchenController : ControllerBase
     {
         // Заказ ко времени появляется в работе за столько минут до срока
@@ -156,9 +156,21 @@ namespace Kumashaurma.API.Controllers
         public Task<IActionResult> ItemReady(int itemId, [FromBody] ItemCountRequest r) => ChangeItemAsync(itemId, r.Delta, served: false);
 
         // POST: api/kitchen/items/{itemId}/served — блюдо отдано гостю (по мере готовности)
+        // Блюда в зале отдаёт официант — только по своему счёту (менеджер — по любому)
         [HttpPost("items/{itemId:int}/served")]
-        [HasPermission(Permissions.Kitchen)]
-        public Task<IActionResult> ItemServed(int itemId, [FromBody] ItemCountRequest r) => ChangeItemAsync(itemId, r.Delta, served: true);
+        [HasPermission(Permissions.Kitchen, Permissions.Waiter, Permissions.ChecksAll)]
+        public async Task<IActionResult> ItemServed(int itemId, [FromBody] ItemCountRequest r, [FromServices] ShiftService shifts)
+        {
+            if (!await shifts.HasAsync(User, Permissions.Kitchen) && !await shifts.HasAsync(User, Permissions.ChecksAll))
+            {
+                var item = await _context.OrderItems.AsNoTracking().Include(i => i.Order).FirstOrDefaultAsync(i => i.Id == itemId);
+                var checkId = item?.CheckId ?? item?.Order?.CheckId;
+                var me = User.GetUserId();
+                if (checkId == null || !await _context.TableChecks.AnyAsync(c => c.Id == checkId && c.WaiterId == me))
+                    return StatusCode(403, new { message = "Это блюдо не из вашего счёта" });
+            }
+            return await ChangeItemAsync(itemId, r.Delta, served: true);
+        }
 
         private async Task<IActionResult> ChangeItemAsync(int itemId, int? delta, bool served)
         {
@@ -170,6 +182,8 @@ namespace Kumashaurma.API.Controllers
             var readyBefore = served ? null : await _notifier.SnapshotAsync(order);
             var states = await StatesAsync(new[] { itemId });
             var st = State(states, itemId);
+            // Заказ целиком отмечен готовым — все его блюда готовы, даже без поштучных отметок
+            if (KitchenFlow.Rank(order.Status) >= 3 && st.ReadyQuantity < item.Quantity) st.ReadyQuantity = item.Quantity;
             var (ready, servedQty) = served
                 ? KitchenFlow.Clamp(item.Quantity, st.ReadyQuantity, delta.HasValue ? st.ServedQuantity + delta.Value : st.ReadyQuantity)
                 : KitchenFlow.Clamp(item.Quantity, delta.HasValue ? st.ReadyQuantity + delta.Value : item.Quantity, st.ServedQuantity);
@@ -267,7 +281,9 @@ namespace Kumashaurma.API.Controllers
             var itemIds = orders.SelectMany(o => o.OrderItems).Select(i => i.Id).ToList();
             var itemStates = await _context.OrderItemKitchenStates.AsNoTracking().Where(x => itemIds.Contains(x.OrderItemId))
                 .ToDictionaryAsync(x => x.OrderItemId);
-            int ReadyOf(OrderItem i) => Math.Min(i.Quantity, itemStates.GetValueOrDefault(i.Id)?.ReadyQuantity ?? 0);
+            // Заказ целиком готов — все его блюда готовы, даже без поштучных отметок
+            var orderStatus = orders.ToDictionary(o => o.Id, o => o.Status);
+            int ReadyOf(OrderItem i) => KitchenFlow.Rank(orderStatus.GetValueOrDefault(i.OrderId, "")) >= 3 ? i.Quantity : Math.Min(i.Quantity, itemStates.GetValueOrDefault(i.Id)?.ReadyQuantity ?? 0);
             int ServedOf(OrderItem i) => Math.Min(ReadyOf(i), itemStates.GetValueOrDefault(i.Id)?.ServedQuantity ?? 0);
             int StationOf(int shawarmaId) => itemStations.GetValueOrDefault(shawarmaId, defaultStation);
 

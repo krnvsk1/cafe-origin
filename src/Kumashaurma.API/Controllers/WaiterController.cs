@@ -640,6 +640,54 @@ namespace Kumashaurma.API.Controllers
             return NoContent();
         }
 
+        // GET: api/waiter/my-checks — мои счета за текущую (или последнюю) смену: открытые и закрытые
+        [HttpGet("my-checks")]
+        [HasPermission(Permissions.Waiter)]
+        public async Task<IActionResult> MyChecks()
+        {
+            var me = User.GetUserId();
+            if (me == null) return Unauthorized();
+            var shift = await _shifts.CurrentWaiterAsync(me.Value)
+                        ?? await _context.WaiterShifts.AsNoTracking().Where(w => w.UserId == me).OrderByDescending(w => w.OpenedAt).FirstOrDefaultAsync();
+            var shiftId = shift?.Id;
+            var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table)
+                .Where(c => c.WaiterId == me && ((shiftId != null && c.WaiterShiftId == shiftId) || c.Status == CheckStatuses.Open))
+                .OrderByDescending(c => c.OpenedAt).ToListAsync();
+            var openIds = checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList();
+            var lines = await LinesAsync(openIds);
+            decimal Total(TableCheck c) => c.Status switch
+            {
+                CheckStatuses.Open => lines.Where(l => l.CheckId == c.Id && l.Order.Status != OrderStatuses.Cancelled).Sum(l => LineTotal(l.Item)),
+                CheckStatuses.Closed => c.Total,
+                _ => 0
+            };
+            var closed = checks.Where(c => c.Status == CheckStatuses.Closed).ToList();
+            return Ok(new
+            {
+                shift = shift == null ? null : new { shift.Id, shift.OpenedAt, shift.ClosedAt },
+                summary = new
+                {
+                    closed = closed.Count,
+                    revenue = closed.Sum(c => c.Total),
+                    cash = closed.Where(c => c.PaymentMethod == "cash").Sum(c => c.Total),
+                    card = closed.Where(c => c.PaymentMethod == "card").Sum(c => c.Total),
+                    open = openIds.Count,
+                },
+                checks = checks.Select(c => new
+                {
+                    c.Id,
+                    table = c.Table?.Name,
+                    c.Label,
+                    c.Status,
+                    c.Guests,
+                    c.OpenedAt,
+                    c.ClosedAt,
+                    c.PaymentMethod,
+                    total = Total(c),
+                })
+            });
+        }
+
         // ==================== Схема зала ====================
 
         public const string FloorKey = "floor_plan";

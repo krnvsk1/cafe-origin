@@ -66,6 +66,8 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
   const minutes = Math.max(0, Math.floor((now - new Date(order.createdAt).getTime()) / 60000));
   const late = status !== 'Готов' && !order.scheduledFor && minutes >= 20;
   const isPickup = order.deliveryType !== 'Доставка';
+  // Заказ официанта: блюда гостям отдаёт сам официант со своего экрана
+  const byWaiter = !!order.tableName;
   const accepted = status === 'Принят';
   // Новый заказ (не «ко времени») звенит и мигает, пока его не примут
   const ringing = status === 'Новый' && !order.isLater;
@@ -84,7 +86,7 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
       : status === 'Принят' ? { label: 'Начать готовить', status: 'Готовится' }
       : status === 'Готовится' ? { label: 'Готово', status: 'Готов' }
       // Выдать можно, когда готов весь заказ; самовывоз/в зале кухня выдаёт сама, доставку забирает курьер
-      : order.status === 'Готов' && isPickup ? { label: 'Выдан', status: 'Выполнен' }
+      : order.status === 'Готов' && isPickup && !byWaiter ? { label: 'Выдан', status: 'Выполнен' }
       : null;
 
   const items = stationId == null ? order.items : order.items.filter(i => i.stationId === stationId);
@@ -92,8 +94,10 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
 
   // Отметки по блюдам — после того как заказ приняли
   const canMark = status !== 'Новый';
+  // Часть кухни (или заказ) уже «Готов» — отмечать готовность больше нечего
+  const partReady = status === 'Готов' || status === 'Выполнен';
   const renderItem = (item: KitchenOrderItem, idx: number) => {
-    const ready = item.readyQuantity;
+    const ready = partReady ? item.quantity : item.readyQuantity;
     const served = item.servedQuantity;
     const toServe = ready - served;
     const done = served >= item.quantity;
@@ -118,7 +122,10 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
         )}
         {canMark && !done && (
           <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center', mt: 0.5, pl: 2 }}>
-            {ready > 0 && (
+            {ready > 0 && partReady && (
+              <Chip size="small" color="success" variant="outlined" icon={<CheckIcon />} label="готово" />
+            )}
+            {ready > 0 && !partReady && (
               <Tooltip title="Нажмите, чтобы снять одну отметку «готово»">
                 <Chip size="small" color="success" variant="outlined" icon={<CheckIcon />}
                   label={item.quantity > 1 ? `готово ${ready}/${item.quantity}` : 'готово'}
@@ -137,7 +144,7 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
                 все готовы
               </Button>
             )}
-            {toServe > 0 && isPickup && (
+            {toServe > 0 && isPickup && !byWaiter && (
               <Button size="small" variant="contained" color="success" disabled={busy}
                 onClick={() => itemMark.mutate({ itemId: item.id, action: 'served', delta: null })}>
                 Отдать{toServe > 1 ? ` ${toServe}` : ''}

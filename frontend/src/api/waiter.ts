@@ -278,3 +278,26 @@ export const useShiftDetails = (id: number | null) =>
     queryFn: () => apiClient.get(`/api/shifts/${id}`).then(r => r.data),
     enabled: id != null,
   });
+
+// ==================== Отдать блюдо, мои чеки ====================
+
+/** Официант отдал гостю готовое блюдо (delta null — все готовые штуки) */
+export const useServeItem = () =>
+  useWaiterMutation<{ itemId: number; delta: number | null }>(({ itemId, delta }) =>
+    apiClient.post(`/api/kitchen/items/${itemId}/served`, { delta }).then(r => r.data));
+
+export interface MyChecks {
+  shift: { id: number; openedAt: string; closedAt: string | null } | null;
+  summary: { closed: number; revenue: number; cash: number; card: number; open: number };
+  checks: {
+    id: number; table: string | null; label: string | null; status: 'open' | 'closed' | 'cancelled'; guests: number | null;
+    openedAt: string; closedAt: string | null; paymentMethod: string | null; total: number;
+  }[];
+}
+
+export const useMyChecks = (enabled: boolean) =>
+  useQuery<MyChecks>({
+    queryKey: [KEY, 'my-checks'],
+    queryFn: () => apiClient.get('/api/waiter/my-checks').then(r => r.data),
+    enabled,
+  });

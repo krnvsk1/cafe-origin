@@ -16,6 +16,7 @@ import { useShawarmas } from '../api/hooks';
 import {
   useWaiterTables, useTableCheck, useOpenCheck, useAddRound, useCancelRound, useCloseCheck, useCancelCheck,
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
+  useServeItem, useMyChecks,
   useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
   type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
@@ -249,6 +250,7 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
   const closeMine = useCloseMyShift();
   const [err, setErr] = React.useState('');
   const [confirm, setConfirm] = React.useState<'venue' | 'mine' | null>(null);
+  const [myChecks, setMyChecks] = React.useState(false);
   const run = async (fn: () => Promise<unknown>) => {
     setErr('');
     try { await fn(); setConfirm(null); } catch (e) { setErr(apiError(e)); setConfirm(null); }
@@ -275,11 +277,15 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
           Начать мою смену
         </Button>
       )}
+      {venue && isWaiter && !mine && (
+        <Button size="small" onClick={() => setMyChecks(true)} sx={{ alignSelf: 'flex-start' }}>Мои чеки за прошлую смену</Button>
+      )}
       {venue && (mine && isWaiter || shift.canManageVenue) && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', bgcolor: 'background.paper', borderRadius: '12px', px: 1.5, py: 0.75 }}>
           {mine && isWaiter && (
             <>
               <Typography variant="body2" sx={{ fontWeight: 700 }}>Моя смена с {timeOf(mine.openedAt)}</Typography>
+              <Button size="small" onClick={() => setMyChecks(true)}>Мои чеки</Button>
               <Button size="small" color="inherit" onClick={() => setConfirm('mine')} disabled={busy}>Закончить</Button>
             </>
           )}
@@ -290,6 +296,7 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
         </Box>
       )}
       {err && <Alert severity="error" onClose={() => setErr('')}>{err}</Alert>}
+      {myChecks && <MyChecksDialog onClose={() => setMyChecks(false)} />}
 
       <Dialog open={!!confirm} onClose={() => setConfirm(null)} maxWidth="xs" fullWidth>
         <DialogTitle>{confirm === 'venue' ? 'Закрыть смену заведения?' : 'Закончить смену?'}</DialogTitle>
@@ -521,6 +528,9 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const [dialog, setDialog] = React.useState<'move' | 'split' | 'edit' | 'assign' | null>(null);
   const [toast, setToast] = React.useState('');
   const [voiding, setVoiding] = React.useState<CheckItem | null>(null);
+  const serve = useServeItem();
+  const serveItem = (itemId: number, delta: number | null) =>
+    serve.mutate({ itemId, delta }, { onError: e => setToast(apiError(e)) });
   const [closing, setClosing] = React.useState(false);
   const [method, setMethod] = React.useState<'cash' | 'card'>('card');
   const [cash, setCash] = React.useState('');
@@ -618,6 +628,8 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       {check.orders.map((o, idx) => {
         const st = roundStatus(o);
         const cancelled = o.status === 'Отменён';
+        // Готовые, но ещё не отданные гостю блюда этой подачи
+        const toServe = isOpen && !cancelled ? o.items.filter(i => i.readyQuantity > i.servedQuantity) : [];
         return (
           <Box key={o.id} sx={{ bgcolor: 'background.paper', borderRadius: '16px', p: 1.5, opacity: cancelled ? 0.5 : 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
@@ -626,6 +638,16 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
               </Typography>
               <Chip size="small" label={st.text} sx={{ bgcolor: alpha(st.color, 0.14), color: st.color, fontWeight: 700 }} />
             </Box>
+            {toServe.length > 1 && (
+              <Button fullWidth variant="contained" color="success" startIcon={<ServedIcon />} disabled={serve.isPending} sx={{ mb: 1 }}
+                onClick={async () => {
+                  // По очереди: каждая отметка пересчитывает статус подачи
+                  try { for (const i of toServe) await serve.mutateAsync({ itemId: i.id, delta: null }); }
+                  catch (e) { setToast(apiError(e)); }
+                }}>
+                Отдать всё готовое
+              </Button>
+            )}
             {o.items.map(i => (
               <Box key={i.id} onClick={() => isOpen && !cancelled && i.quantity - i.pendingVoid > 0 && setVoiding(i)}
                 sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25, cursor: isOpen && !cancelled ? 'pointer' : 'default', borderRadius: 1, '&:active': { bgcolor: 'action.hover' } }}>
@@ -638,6 +660,12 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
                 {i.pendingVoid > 0 && <Chip size="small" color="error" variant="outlined" label={`убрать ${i.pendingVoid} — ждёт кухню`} sx={{ height: 20, fontSize: '0.7rem' }} />}
                 {i.quantity > 1 && i.readyQuantity > 0 && i.servedQuantity < i.quantity && (
                   <Typography variant="caption" sx={{ color: tokens.herb, fontWeight: 700 }}>готово {i.readyQuantity}/{i.quantity}</Typography>
+                )}
+                {isOpen && !cancelled && i.readyQuantity > i.servedQuantity && (
+                  <Button size="small" variant="contained" color="success" disabled={serve.isPending} sx={{ minWidth: 0, px: 1.25, py: 0.25 }}
+                    onClick={e => { e.stopPropagation(); serveItem(i.id, null); }}>
+                    Отдать{i.readyQuantity - i.servedQuantity > 1 ? ` ${i.readyQuantity - i.servedQuantity}` : ''}
+                  </Button>
                 )}
               </Box>
             ))}
@@ -875,6 +903,66 @@ const MoveDialog: React.FC<{ check: TableCheck; onClose: () => void; onDone: (ta
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
         <Button onClick={onClose} sx={{ color: 'text.secondary' }}>Отмена</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const CHECK_STATUS: Record<string, { text: string; color: 'default' | 'success' | 'warning' }> = {
+  open: { text: 'открыт', color: 'warning' },
+  closed: { text: 'оплачен', color: 'success' },
+  cancelled: { text: 'отменён', color: 'default' },
+};
+
+/** Мои счета за смену: открытые и закрытые, выручка наличными и картой */
+const MyChecksDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const navigate = useNavigate();
+  const { data, isLoading, error } = useMyChecks(true);
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Мои чеки за смену</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        {isLoading && <Box sx={{ display: 'grid', placeItems: 'center', py: 3 }}><CircularProgress /></Box>}
+        {error && <Alert severity="error">{apiError(error, 'Не удалось загрузить чеки')}</Alert>}
+        {data && (
+          <>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
+              {[
+                ['Выручка', money(data.summary.revenue)],
+                ['Наличные', money(data.summary.cash)],
+                ['Карта', money(data.summary.card)],
+              ].map(([label, value]) => (
+                <Box key={label} sx={{ bgcolor: 'action.hover', borderRadius: '12px', p: 1 }}>
+                  <Typography variant="caption" color="text.secondary">{label}</Typography>
+                  <Typography sx={{ fontWeight: 800 }}>{value}</Typography>
+                </Box>
+              ))}
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              Закрыто {data.summary.closed}{data.summary.open ? ` · открыто ${data.summary.open}` : ''}
+              {data.shift ? ` · смена с ${timeOf(data.shift.openedAt)}${data.shift.closedAt ? ` до ${timeOf(data.shift.closedAt)}` : ''}` : ''}
+            </Typography>
+            {data.checks.length === 0 && <Typography color="text.secondary">Чеков пока нет</Typography>}
+            {data.checks.map(c => (
+              <Box key={c.id} component="button" type="button" onClick={() => { onClose(); navigate(`/waiter/${c.id}`); }}
+                sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', textAlign: 'left', font: 'inherit', color: 'text.primary',
+                  bgcolor: 'transparent', border: 0, borderBottom: '1px solid', borderColor: 'divider', py: 1, cursor: 'pointer' }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 700 }} noWrap>Стол {c.table}{c.label ? ` · ${c.label}` : ''}</Typography>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    {timeOf(c.openedAt)}{c.closedAt ? `–${timeOf(c.closedAt)}` : ''}
+                    {c.paymentMethod ? ` · ${c.paymentMethod === 'cash' ? 'наличные' : 'карта'}` : ''}
+                  </Typography>
+                </Box>
+                <Chip size="small" color={CHECK_STATUS[c.status].color} label={CHECK_STATUS[c.status].text} />
+                <Typography sx={{ fontWeight: 700, minWidth: 72, textAlign: 'right' }}>{money(c.total)}</Typography>
+              </Box>
+            ))}
+          </>
+        )}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button onClick={onClose}>Закрыть</Button>
       </DialogActions>
     </Dialog>
   );
