@@ -10,6 +10,14 @@ namespace Cafe.API.Services.Printing
     public class PrintSettings
     {
         public bool Enabled { get; set; }
+        /// <summary>
+        /// agent — принтер по USB к кассовому ПК, печатает программа на ПК;
+        /// network — принтер подключён к роутеру (LAN), сервер печатает прямо на него (порт 9100)
+        /// </summary>
+        public string Mode { get; set; } = "agent";
+        /// <summary>IP принтера в сети (режим network)</summary>
+        public string? Host { get; set; }
+        public int Port { get; set; } = 9100;
         /// <summary>Имя принтера в Windows на кассовом ПК (в Interpos — «Printer bar»)</summary>
         public string PrinterName { get; set; } = "Printer bar";
         /// <summary>Символов в строке: 80 мм — 48, 58 мм — 32</summary>

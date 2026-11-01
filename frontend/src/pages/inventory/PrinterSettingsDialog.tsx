@@ -20,6 +20,9 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
   const test = useTestPrint();
   const newToken = useNewPrintToken();
   const [enabled, setEnabled] = React.useState(state.enabled);
+  const [mode, setMode] = React.useState<'agent' | 'network'>(state.mode ?? 'agent');
+  const [host, setHost] = React.useState(state.host ?? '');
+  const [port, setPort] = React.useState(String(state.port ?? 9100));
   const [printerName, setPrinterName] = React.useState(state.printerName);
   const [width, setWidth] = React.useState(String(state.width));
   const [codePage, setCodePage] = React.useState(`${state.codeTable}-${state.encoding}`);
@@ -29,6 +32,9 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
   React.useEffect(() => {
     if (!open) return;
     setEnabled(state.enabled);
+    setMode(state.mode ?? 'agent');
+    setHost(state.host ?? '');
+    setPort(String(state.port ?? 9100));
     setPrinterName(state.printerName);
     setWidth(String(state.width));
     setCodePage(CODE_PAGES.some(c => c.key === `${state.codeTable}-${state.encoding}`) ? `${state.codeTable}-${state.encoding}` : '17-866');
@@ -38,7 +44,7 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
   }, [open]);
 
   const cp = CODE_PAGES.find(c => c.key === codePage) ?? CODE_PAGES[0];
-  const input = () => ({ enabled, printerName: printerName.trim(), width: Number(width) || 48, codeTable: cp.codeTable, encoding: cp.encoding, footer: footer.trim() || null });
+  const input = () => ({ enabled, mode, host: host.trim() || null, port: Number(port) || 9100, printerName: printerName.trim(), width: Number(width) || 48, codeTable: cp.codeTable, encoding: cp.encoding, footer: footer.trim() || null });
 
   const handleSave = async (thenTest = false) => {
     setMsg(null);
@@ -56,12 +62,23 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
       <DialogTitle>Принтер счетов</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <Typography variant="body2" color="text.secondary">
-          Официант печатает счёт для гостя перед оплатой. Чековый принтер (RONGTA) подключён по USB к кассовому ПК, печатает на нём
-          небольшая программа: она забирает счета с сервера и отправляет их на принтер.
+          Официант печатает счёт для гостя перед оплатой на чековом принтере (RONGTA RP33x: USB и LAN).
         </Typography>
         <FormControlLabel control={<Switch checked={enabled} onChange={e => setEnabled(e.target.checked)} />} label="Печатать счета для гостей" />
-        <TextField label="Имя принтера в Windows" value={printerName} onChange={e => setPrinterName(e.target.value)}
-          helperText="Как в «Параметры → Принтеры и сканеры» на кассовом ПК. В Interpos он назывался «Printer bar»." />
+        <TextField select label="Как подключён принтер" value={mode} onChange={e => setMode(e.target.value as 'agent' | 'network')}>
+          <MenuItem value="network">Сетевой кабель в роутер (LAN) — печатает сервер</MenuItem>
+          <MenuItem value="agent">USB к кассовому ПК — печатает программа на ПК</MenuItem>
+        </TextField>
+        {mode === 'network' ? (
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField label="IP-адрес принтера" value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.1.87" sx={{ flex: 1 }}
+              helperText="Есть на тестовой странице: выключите принтер, зажмите FEED и включите" />
+            <TextField label="Порт" value={port} onChange={e => setPort(e.target.value.replace(/\D/g, ''))} sx={{ width: 110 }} />
+          </Box>
+        ) : (
+          <TextField label="Имя принтера в Windows" value={printerName} onChange={e => setPrinterName(e.target.value)}
+            helperText="Как в «Параметры → Принтеры и сканеры» на кассовом ПК. В Interpos он назывался «Printer bar»." />
+        )}
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <TextField select label="Ширина ленты" value={width} onChange={e => setWidth(e.target.value)} sx={{ minWidth: 200 }}>
             <MenuItem value="48">80 мм — 48 символов</MenuItem>
@@ -75,7 +92,13 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
         </Box>
         <TextField label="Текст внизу счёта" value={footer} onChange={e => setFooter(e.target.value)} inputProps={{ maxLength: 200 }} />
 
-        <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2 }}>
+        {mode === 'network' && (
+          <Alert severity="info">
+            Сервер должен быть в той же сети, что и принтер (сейчас — ваш Мак в сети кафе). Когда сервер переедет в интернет,
+            переключитесь на «USB к кассовому ПК» или оставьте принтер в сети и запустите программу печати на кассовом ПК.
+          </Alert>
+        )}
+        {mode === 'agent' && <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2 }}>
           <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Программа печати на кассовом ПК</Typography>
           <Typography variant="body2" component="ol" sx={{ pl: 2.5, m: 0 }}>
             <li>Скачайте её здесь и перенесите на кассовый ПК (флешкой или почтой), например в папку C:\Cafe.</li>
@@ -94,14 +117,14 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
               try { await newToken.mutateAsync(); setMsg({ ok: true, text: 'Ключ сменён — скачайте программу заново' }); } catch (e) { setMsg({ ok: false, text: apiError(e) }); }
             }}>Сменить ключ</Button>
           </Box>
-        </Box>
+        </Box>}
         {msg && <Alert severity={msg.ok ? 'success' : 'error'}>{msg.text}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Button startIcon={<PrintIcon />} onClick={() => handleSave(true)} disabled={!enabled || save.isPending || test.isPending}>Проверить печать</Button>
         <Box sx={{ flex: 1 }} />
         <Button onClick={onClose}>Отмена</Button>
-        <Button variant="contained" onClick={() => handleSave(false)} disabled={save.isPending || !printerName.trim()}>Сохранить</Button>
+        <Button variant="contained" onClick={() => handleSave(false)} disabled={save.isPending || (mode === 'agent' ? !printerName.trim() : !host.trim())}>Сохранить</Button>
       </DialogActions>
     </Dialog>
   );

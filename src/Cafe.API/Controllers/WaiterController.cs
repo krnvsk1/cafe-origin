@@ -426,7 +426,7 @@ namespace Cafe.API.Controllers
             await _print.ExpireStaleAsync();
             var j = await _context.PrintJobs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
             if (j == null) return NotFound(new { message = "Задание не найдено" });
-            var agentOnline = PrintSettingsProvider.AgentSeenAt > DateTime.UtcNow.AddSeconds(-60);
+            var agentOnline = (await _print.SettingsAsync()).Mode == "network" || PrintSettingsProvider.AgentSeenAt > DateTime.UtcNow.AddSeconds(-60);
             return Ok(new { j.Id, j.Status, j.Error, agentOnline });
         }
 

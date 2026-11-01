@@ -59,7 +59,8 @@ namespace Cafe.API.Controllers
             var deadline = DateTime.UtcNow.AddSeconds(Math.Clamp(wait, 0, 25));
             while (true)
             {
-                var jobs = s.Enabled
+                // В режиме «по сети» задания печатает сам сервер — программе на ПК их не отдаём
+                var jobs = s.Enabled && s.Mode == "agent"
                     ? await _context.PrintJobs.Where(j => j.Status == PrintJobStatuses.Pending).OrderBy(j => j.Id).Take(5).ToListAsync(ct)
                     : new List<PrintJob>();
                 if (jobs.Count > 0)
@@ -114,6 +115,9 @@ namespace Cafe.API.Controllers
         public class SaveRequest
         {
             public bool Enabled { get; set; }
+            public string Mode { get; set; } = "agent";
+            public string? Host { get; set; }
+            public int Port { get; set; } = 9100;
             public string PrinterName { get; set; } = string.Empty;
             public int Width { get; set; } = 48;
             public int CodeTable { get; set; } = 17;
@@ -128,7 +132,7 @@ namespace Cafe.API.Controllers
                 .Select(j => new { j.Id, j.Kind, j.Title, j.Status, j.Error, j.CreatedAt, j.DoneAt }).ToListAsync();
             return new
             {
-                s.Enabled, s.PrinterName, s.Width, s.CodeTable, s.Encoding, s.Footer,
+                s.Enabled, s.Mode, s.Host, s.Port, s.PrinterName, s.Width, s.CodeTable, s.Encoding, s.Footer,
                 agentSeenAt = PrintSettingsProvider.AgentSeenAt,
                 agentHost = PrintSettingsProvider.AgentHost,
                 recent
@@ -143,7 +147,11 @@ namespace Cafe.API.Controllers
         [HttpPut]
         public async Task<IActionResult> Save([FromBody] SaveRequest r)
         {
-            if (string.IsNullOrWhiteSpace(r.PrinterName)) return BadRequest(new { message = "Укажите имя принтера в Windows" });
+            if (r.Mode is not ("agent" or "network")) return BadRequest(new { message = "Неизвестный способ подключения" });
+            if (r.Mode == "network" && !System.Net.IPAddress.TryParse(r.Host?.Trim(), out _))
+                return BadRequest(new { message = "Укажите IP-адрес принтера, например 192.168.1.87" });
+            if (r.Port is < 1 or > 65535) return BadRequest(new { message = "Порт — от 1 до 65535 (обычно 9100)" });
+            if (r.Mode == "agent" && string.IsNullOrWhiteSpace(r.PrinterName)) return BadRequest(new { message = "Укажите имя принтера в Windows" });
             if (r.Width is < 24 or > 64) return BadRequest(new { message = "Ширина строки — от 24 до 64 символов" });
             if (r.CodeTable is < 0 or > 255) return BadRequest(new { message = "Кодовая таблица — число от 0 до 255" });
             if (r.Encoding is not (866 or 1251)) return BadRequest(new { message = "Кодировка — 866 или 1251" });
@@ -151,7 +159,10 @@ namespace Cafe.API.Controllers
             await _settings.SaveAsync(new PrintSettings
             {
                 Enabled = r.Enabled,
-                PrinterName = r.PrinterName.Trim(),
+                Mode = r.Mode,
+                Host = string.IsNullOrWhiteSpace(r.Host) ? null : r.Host.Trim(),
+                Port = r.Port,
+                PrinterName = string.IsNullOrWhiteSpace(r.PrinterName) ? s.PrinterName : r.PrinterName.Trim(),
                 Width = r.Width,
                 CodeTable = r.CodeTable,
                 Encoding = r.Encoding,

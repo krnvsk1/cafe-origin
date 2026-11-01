@@ -54,5 +54,33 @@ namespace Cafe.Tests
             Assert.Contains("$Token = 'abc123'", script);
             Assert.Contains("/api/print-agent/jobs", script);
         }
+    
+        [Fact]
+        public async Task NetworkSend_DeliversBytesToPort9100Style()
+        {
+            var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            listener.Start();
+            var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+            var accept = Task.Run(async () =>
+            {
+                using var c = await listener.AcceptTcpClientAsync();
+                using var ms = new MemoryStream();
+                await c.GetStream().CopyToAsync(ms);
+                return ms.ToArray();
+            });
+            await NetworkPrintWorker.SendAsync("127.0.0.1", port, new byte[] { 1, 2, 3 }, CancellationToken.None);
+            Assert.Equal(new byte[] { 1, 2, 3 }, await accept);
+            listener.Stop();
+        }
+
+        [Fact]
+        public async Task NetworkSend_UnreachablePrinter_Throws()
+        {
+            var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            listener.Start();
+            var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+            listener.Stop(); // порт закрыт — соединения не будет
+            await Assert.ThrowsAnyAsync<Exception>(() => NetworkPrintWorker.SendAsync("127.0.0.1", port, new byte[] { 1 }, CancellationToken.None));
+        }
     }
 }

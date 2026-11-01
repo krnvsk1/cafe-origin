@@ -136,7 +136,8 @@ const IntegrationsPage: React.FC = () => {
   const mercuryStatus: Status = !mercuryConfigured ? 'off' : mercury!.lastError ? 'error' : 'ok';
   const printerOnline = agentOnline(printing);
   const lastPrint = printing?.recent[0];
-  const printerStatus: Status = !printing?.enabled ? 'off' : printerOnline && lastPrint?.status !== 'error' ? 'ok' : 'error';
+  const networkPrinter = printing?.mode === 'network';
+  const printerStatus: Status = !printing?.enabled ? 'off' : (networkPrinter || printerOnline) && lastPrint?.status !== 'error' ? 'ok' : 'error';
 
   return (
     <Box sx={{ py: { xs: 2, sm: 3 }, maxWidth: 1000, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -241,9 +242,10 @@ const IntegrationsPage: React.FC = () => {
         loading={printingLoading}
         status={printerStatus}
         statusText={printerStatus === 'off' ? 'Не подключено'
+          : networkPrinter ? `По сети · ${printing?.host}:${printing?.port}`
           : printerOnline ? `Программа печати на связи${printing?.agentHost ? ` · ${printing.agentHost}` : ''}` : 'Программа печати на кассовом ПК не запущена'}
         details={printing?.enabled ? [
-          `Принтер: ${printing.printerName} · ${printing.width} символов в строке`,
+          networkPrinter ? `Принтер в сети: ${printing.host}:${printing.port} · ${printing.width} символов в строке` : `Принтер: ${printing.printerName} · ${printing.width} символов в строке`,
           lastPrint && `Последняя печать: ${lastPrint.title} — ${lastPrint.status === 'done' ? 'напечатано' : lastPrint.status === 'error' ? 'ошибка' : 'в очереди'} (${fmtDateTime(lastPrint.createdAt)})`,
         ] : undefined}
         error={printing?.enabled && lastPrint?.status === 'error' ? lastPrint.error : null}

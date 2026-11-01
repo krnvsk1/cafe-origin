@@ -283,6 +283,7 @@ builder.Services.AddHostedService<Cafe.API.Services.Edo.SbisSyncWorker>();
 builder.Services.AddSingleton<Cafe.API.Services.BrandSettingsProvider>();
 builder.Services.AddSingleton<Cafe.API.Services.Printing.PrintSettingsProvider>();
 builder.Services.AddScoped<Cafe.API.Services.Printing.PrintService>();
+builder.Services.AddHostedService<Cafe.API.Services.Printing.NetworkPrintWorker>();
 
 // Отмена блюд из чека официантом (с подтверждением кухни)
 builder.Services.AddScoped<Cafe.API.Services.VoidService>();
