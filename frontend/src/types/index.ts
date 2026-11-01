@@ -168,6 +168,8 @@ export interface Dish {
     totalOrders: number;
     totalRevenue: number;
     todayOrders: number;
+    todayRevenue: number;
+    activeOrders: number;
     averageOrderValue: number;
   }
 

@@ -42,16 +42,38 @@ namespace Cafe.API.Controllers
             _events = events;
         }
 
+        /// <summary>
+        /// Период в днях по Москве: from и to включительно (yyyy-MM-dd). Без дат — последние 7 дней.
+        /// </summary>
+        public static (DateTime FromUtc, DateTime ToUtc)? PeriodUtc(DateOnly? from, DateOnly? to, int defaultDays = 7)
+        {
+            var today = DateOnly.FromDateTime(ShiftService.BusinessDate(DateTime.UtcNow));
+            var t = to ?? today;
+            var f = from ?? t.AddDays(-(defaultDays - 1));
+            if (f > t) return null;
+            // Полночь по Москве = 21:00 UTC предыдущего дня
+            var fromUtc = DateTime.SpecifyKind(f.ToDateTime(TimeOnly.MinValue).AddHours(-3), DateTimeKind.Utc);
+            var toUtc = DateTime.SpecifyKind(t.AddDays(1).ToDateTime(TimeOnly.MinValue).AddHours(-3), DateTimeKind.Utc);
+            return (fromUtc, toUtc);
+        }
+
+        // GET: api/orders?from=2026-10-01&to=2026-10-31 — заказы за период; активные (не завершённые) видны всегда
         [HttpGet]
         [HasPermission(Permissions.OrdersView, Permissions.Kitchen, Permissions.Delivery)]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] DateOnly? from, [FromQuery] DateOnly? to)
         {
+            var period = PeriodUtc(from, to);
+            if (period == null) return BadRequest(new { message = "Начало периода позже конца" });
+            var (fromUtc, toUtc) = period.Value;
             try
             {
                 var orders = await _context.Orders
                     .Include(o => o.OrderItems)
                         .ThenInclude(oi => oi.SelectedAddons)
+                    .Where(o => (o.CreatedAt >= fromUtc && o.CreatedAt < toUtc) ||
+                                (o.Status != OrderStatuses.Delivered && o.Status != OrderStatuses.Completed && o.Status != OrderStatuses.Cancelled))
                     .OrderByDescending(o => o.CreatedAt)
+                    .AsSplitQuery()
                     .ToListAsync();
                     
                 return Ok(orders);
@@ -656,25 +678,35 @@ namespace Cafe.API.Controllers
             }
         }
 
+        // GET: api/orders/stats?from=&to= — сводка за период (без отменённых) и на сегодня
         [HttpGet("stats")]
         [HasPermission(Permissions.Dashboard, Permissions.OrdersManage)]
-        public async Task<IActionResult> GetStats()
+        public async Task<IActionResult> GetStats([FromQuery] DateOnly? from, [FromQuery] DateOnly? to)
         {
+            var period = PeriodUtc(from, to);
+            if (period == null) return BadRequest(new { message = "Начало периода позже конца" });
+            var (fromUtc, toUtc) = period.Value;
+            var (todayFrom, todayTo) = PeriodUtc(null, null, 1)!.Value;
             try
             {
-                var totalOrders = await _context.Orders.CountAsync();
-                var totalRevenue = await _context.Orders.SumAsync(o => o.Total);
-                var today = DateTime.UtcNow.Date;
-                var todayOrders = await _context.Orders
-                    .Where(o => o.CreatedAt.Date == today)
-                    .CountAsync();
-                    
+                var valid = _context.Orders.Where(o => o.Status != OrderStatuses.Cancelled);
+                var inPeriod = valid.Where(o => o.CreatedAt >= fromUtc && o.CreatedAt < toUtc);
+                var totalOrders = await inPeriod.CountAsync();
+                var totalRevenue = await inPeriod.SumAsync(o => (decimal?)o.Total) ?? 0;
+                var today = valid.Where(o => o.CreatedAt >= todayFrom && o.CreatedAt < todayTo);
+                var todayOrders = await today.CountAsync();
+                var todayRevenue = await today.SumAsync(o => (decimal?)o.Total) ?? 0;
+                var activeOrders = await _context.Orders.CountAsync(o =>
+                    o.Status != OrderStatuses.Delivered && o.Status != OrderStatuses.Completed && o.Status != OrderStatuses.Cancelled);
+
                 return Ok(new
                 {
                     TotalOrders = totalOrders,
                     TotalRevenue = totalRevenue,
                     TodayOrders = todayOrders,
-                    AverageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
+                    TodayRevenue = todayRevenue,
+                    ActiveOrders = activeOrders,
+                    AverageOrderValue = totalOrders > 0 ? Math.Round(totalRevenue / totalOrders, 2) : 0
                 });
             }
             catch (Exception ex)

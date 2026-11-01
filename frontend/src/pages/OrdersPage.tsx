@@ -41,6 +41,7 @@ import {
   Replay as ReplayIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
+import PeriodPicker, { lastDays, type Period } from '../components/PeriodPicker';
 import { useOrders, useMyOrders, useUpdateOrderStatus, useDeleteOrder, useUpdateOrder } from '../api/hooks';
 import { formatScheduled } from '../utils/schedule';
 import { useRepeatOrder, describeRepeatResult } from '../api/reorder';
@@ -405,7 +406,8 @@ const OrdersPage: React.FC = () => {
   const isAdmin = isAuthenticated && can(P.OrdersView, P.OrdersManage, P.Kitchen, P.Delivery);
   
   // Используем разные хуки в зависимости от роли
-  const allOrdersQuery = useOrders(isAdmin);
+  const [period, setPeriod] = React.useState<Period>(() => lastDays(7));
+  const allOrdersQuery = useOrders(period, isAdmin);
   const myOrdersQuery = useMyOrders(!isAdmin && isAuthenticated);
   
   // Выбираем данные в зависимости от роли
@@ -560,6 +562,12 @@ const OrdersPage: React.FC = () => {
       {/* Фильтры - только для админов */}
       {isAdmin && (
         <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ mb: 2 }}>
+            <PeriodPicker value={period} onChange={setPeriod} />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+              Заказы за выбранные дни; заказы в работе видны всегда
+            </Typography>
+          </Box>
           <Grid container spacing={2} alignItems="center">
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
               <TextField

@@ -123,11 +123,11 @@ export const useCategories = () => {
 
 // ==================== ORDER HOOKS ====================
 
-// Все заказы (только для админов)
-export const useOrders = (enabled = true) => {
+// Заказы за период (только для персонала); незавершённые приходят всегда
+export const useOrders = (period: { from: string; to: string }, enabled = true) => {
   return useQuery<Order[]>({
-    queryKey: ['orders'],
-    queryFn: () => apiClient.get('/api/orders').then(res => res.data),
+    queryKey: ['orders', period.from, period.to],
+    queryFn: () => apiClient.get('/api/orders', { params: period }).then(res => res.data),
     staleTime: 2 * 60 * 1000,
     enabled,
   });
@@ -218,10 +218,10 @@ export const useDeleteOrder = () => {
 };
 
 // Статистика заказов
-export const useOrderStats = () => {
+export const useOrderStats = (period: { from: string; to: string }) => {
   return useQuery<OrderStats>({
-    queryKey: ['order-stats'],
-    queryFn: () => apiClient.get('/api/orders/stats').then(res => res.data),
+    queryKey: ['order-stats', period.from, period.to],
+    queryFn: () => apiClient.get('/api/orders/stats', { params: period }).then(res => res.data),
     staleTime: 60 * 1000,
   });
 };

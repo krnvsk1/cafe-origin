@@ -14,6 +14,7 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
+import PeriodPicker, { lastDays, type Period } from '../components/PeriodPicker';
 import { useDishes, useOrders, useOrderStats } from '../api/hooks';
 import { getStatusColor } from '../utils/statusColors';
 import type { Order, Dish } from '../types';
@@ -171,6 +172,7 @@ const PopularItems: React.FC<{ orders: Order[]; dishes?: Dish[] }> = ({ orders }
 };
 
 const DashboardPage: React.FC = () => {
+  const [period, setPeriod] = React.useState<Period>(() => lastDays(7));
   const { 
     data: dishes = [], 
     isLoading: dishesLoading, 
@@ -183,7 +185,7 @@ const DashboardPage: React.FC = () => {
     isLoading: ordersLoading, 
     error: ordersError,
     refetch: refetchOrders 
-  } = useOrders();
+  } = useOrders(period);
 
   // Статистика заказов с бэкенда
   const { 
@@ -191,7 +193,7 @@ const DashboardPage: React.FC = () => {
     isLoading: statsLoading, 
     error: statsError,
     refetch: refetchStats 
-  } = useOrderStats();
+  } = useOrderStats(period);
 
   const [refreshing, setRefreshing] = React.useState(false);
 
@@ -209,24 +211,12 @@ const DashboardPage: React.FC = () => {
     const totalDishes = dishes.length;
     const availableDishes = dishes.filter(s => s.isAvailable).length;
     
-    // Активные заказы (Новый, Принят или Готовится) - вычисляем локально
-    const activeOrders = orders.filter(o => 
-      o.status === 'Новый' || o.status === 'Принят' || o.status === 'Готовится'
-    ).length;
-
-    // Берем статистику с бэкенда, если доступна
-    const totalOrders = orderStats?.totalOrders ?? orders.length;
-    const totalRevenue = orderStats?.totalRevenue ?? orders.reduce((sum, order) => sum + order.total, 0);
+    const activeOrders = orderStats?.activeOrders ?? 0;
+    const totalOrders = orderStats?.totalOrders ?? 0;
+    const totalRevenue = orderStats?.totalRevenue ?? 0;
     const todayOrders = orderStats?.todayOrders ?? 0;
-    const todayRevenue = orderStats?.todayOrders 
-      ? orders
-          .filter(o => {
-            const today = new Date().toDateString();
-            return new Date(o.createdAt).toDateString() === today;
-          })
-          .reduce((sum, order) => sum + order.total, 0)
-      : 0;
-    const averageOrderValue = orderStats?.averageOrderValue ?? (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+    const todayRevenue = orderStats?.todayRevenue ?? 0;
+    const averageOrderValue = orderStats?.averageOrderValue ?? 0;
 
     return {
       totalDishes,
@@ -238,9 +228,9 @@ const DashboardPage: React.FC = () => {
       todayRevenue,
       averageOrderValue
     };
-  }, [dishes, orders, orderStats]);
+  }, [dishes, orderStats]);
 
-  const recentOrders = orders
+  const recentOrders = [...orders]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 5);
 
@@ -281,6 +271,10 @@ const DashboardPage: React.FC = () => {
         </Button>
       </Box>
 
+      <Box sx={{ mb: 3 }}>
+        <PeriodPicker value={period} onChange={setPeriod} />
+      </Box>
+
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
@@ -308,17 +302,17 @@ const DashboardPage: React.FC = () => {
             value={stats.todayOrders}
             icon={<ScheduleIcon />}
             color="#9c27b0"
-            subtitle={`На сумму ${stats.todayRevenue.toLocaleString('ru-RU')} ₽`}
+            subtitle={`На сумму ${Math.round(stats.todayRevenue).toLocaleString('ru-RU')} ₽`}
             loading={loading}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <StatCard
-            title="Выручка"
-            value={`${stats.totalRevenue.toLocaleString('ru-RU')} ₽`}
+            title="Выручка за период"
+            value={`${Math.round(stats.totalRevenue).toLocaleString('ru-RU')} ₽`}
             icon={<MoneyIcon />}
             color="#2e7d32"
-            subtitle="За всё время"
+            subtitle={`${stats.totalOrders} зак. · средний чек ${Math.round(stats.averageOrderValue).toLocaleString('ru-RU')} ₽`}
             loading={loading}
           />
         </Grid>
@@ -366,7 +360,7 @@ const DashboardPage: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                 <TrendingUpIcon sx={{ color: 'primary.main' }} />
                 <Typography variant="h6">
-                  Популярные товары
+                  Популярные за период
                 </Typography>
               </Box>
               
