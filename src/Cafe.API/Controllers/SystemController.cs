@@ -80,6 +80,22 @@ namespace Cafe.API.Controllers
             });
         }
 
+        // GET: api/admin/system/endpoints?minutes=60 — стабильность ручек API за окно (до суток)
+        [HttpGet("api/admin/system/endpoints")]
+        [HasPermission(Permissions.Settings)]
+        public IActionResult Endpoints([FromServices] EndpointStats stats, [FromQuery] int minutes = 60)
+        {
+            var window = TimeSpan.FromMinutes(Math.Clamp(minutes, 5, 24 * 60));
+            return Ok(new
+            {
+                minutes = (int)window.TotalMinutes,
+                // Данные копятся с момента запуска сервера
+                since = StartedAt,
+                alertRule = new { minRequests = EndpointsHealthCheck.MinRequests, maxErrorRate = EndpointsHealthCheck.MaxErrorRate, windowMinutes = 15 },
+                items = stats.Summary(window).OrderByDescending(e => e.Errors5xx).ThenByDescending(e => e.P95Ms),
+            });
+        }
+
         public class AlertsRequest
         {
             /// <summary>ID Telegram-чата для тревог; null — выключить</summary>

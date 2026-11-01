@@ -30,6 +30,7 @@ builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection("
 var recentLogs = new RecentLogSink();
 builder.Services.AddSingleton(recentLogs);
 builder.Services.AddSingleton<JobMonitor>();
+builder.Services.AddSingleton<EndpointStats>();
 builder.Host.UseSerilog((ctx, services, log) =>
 {
     log.ReadFrom.Configuration(ctx.Configuration)
@@ -53,7 +54,8 @@ builder.Host.UseSerilog((ctx, services, log) =>
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>("database", HealthStatus.Unhealthy, new[] { "ready" })
     .AddCheck<DiskSpaceHealthCheck>("disk", tags: new[] { "ready" })
-    .AddCheck<JobsHealthCheck>("jobs");
+    .AddCheck<JobsHealthCheck>("jobs")
+    .AddCheck<EndpointsHealthCheck>("endpoints");
 builder.Services.AddSingleton<AlertSettingsProvider>();
 builder.Services.AddSingleton<StatusReport>();
 builder.Services.AddHostedService<AlertService>();
@@ -325,6 +327,19 @@ app.Use(async (context, next) =>
     context.Response.Headers["X-Request-Id"] = requestId;
     using (Serilog.Context.LogContext.PushProperty("RequestId", requestId))
         await next();
+});
+
+// Стабильность ручек: шаблон маршрута, статус и время ответа каждого запроса — для вкладки «Ручки» и тревог
+app.Use(async (context, next) =>
+{
+    var started = System.Diagnostics.Stopwatch.GetTimestamp();
+    try { await next(); }
+    finally
+    {
+        // Ошибку внутри превращает в ответ 500 обработчик ниже — сюда приходит уже готовый статус
+        var stats = context.RequestServices.GetRequiredService<EndpointStats>();
+        stats.Record(context, System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+    }
 });
 
 // Журнал запросов: метод, путь (без параметров — в них бывают токены), статус, время, пользователь

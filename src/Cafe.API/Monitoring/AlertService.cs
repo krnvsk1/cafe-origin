@@ -121,6 +121,7 @@ namespace Cafe.API.Monitoring
             "database" => "База данных",
             "disk" => "Место на диске",
             "jobs" => "Фоновые задачи",
+            "endpoints" => "Ручки API",
             _ => check
         };
 

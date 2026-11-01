@@ -10,9 +10,11 @@ namespace Cafe.API.Monitoring
         private readonly HealthCheckService _health;
         private readonly JobMonitor _jobs;
         private readonly RecentLogSink _logs;
+        private readonly EndpointStats _endpoints;
 
-        public StatusReport(HealthCheckService health, JobMonitor jobs, RecentLogSink logs)
+        public StatusReport(HealthCheckService health, JobMonitor jobs, RecentLogSink logs, EndpointStats endpoints)
         {
+            _endpoints = endpoints;
             _health = health;
             _jobs = jobs;
             _logs = logs;
@@ -60,6 +62,17 @@ namespace Cafe.API.Monitoring
                     lines.Add($"{(ok ? "🟢" : j.FailuresInRow >= 3 ? "🔴" : "🟡")} {H(j.Name)}: " +
                               (ok ? $"успешно {(j.LastSuccess is { } s ? Ago(s) : "—")}" : $"ошибок подряд {j.FailuresInRow} — {H(j.LastError ?? "")}"));
                 }
+            }
+
+            var hour = _endpoints.Summary(TimeSpan.FromHours(1));
+            if (hour.Count > 0)
+            {
+                lines.Add("");
+                lines.Add($"<b>Ручки за час</b>: запросов {hour.Sum(e => e.Count)}, ошибок сервера {hour.Sum(e => e.Errors5xx)}");
+                foreach (var e in hour.Where(e => e.Errors5xx > 0).OrderByDescending(e => e.Errors5xx).Take(3))
+                    lines.Add($"🔴 {H(e.Method)} {H(e.Route)} — {e.Errors5xx} из {e.Count} ({e.ErrorRate:0.#}%)");
+                foreach (var e in hour.Where(e => e.Errors5xx == 0 && e.P95Ms >= 1000).OrderByDescending(e => e.P95Ms).Take(2))
+                    lines.Add($"🐢 {H(e.Method)} {H(e.Route)} — 95% быстрее {e.P95Ms} мс");
             }
 
             var errors = _logs.Snapshot(300).Where(l => l.Level is "Error" or "Fatal").ToList();

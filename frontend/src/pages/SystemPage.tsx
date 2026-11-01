@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Box, Typography, Paper, Chip, Alert, CircularProgress, ToggleButtonGroup, ToggleButton, Collapse, ButtonBase, TextField, Button,
+  Box, Typography, Paper, Chip, Alert, CircularProgress, ToggleButtonGroup, ToggleButton, Collapse, ButtonBase, TextField, Button, Tabs, Tab,
 } from '@mui/material';
 import { apiClient } from '../api/client';
 import { apiError } from '../api/inventory';
@@ -76,10 +76,120 @@ const AlertsSettings: React.FC = () => {
   );
 };
 
+interface EndpointRow {
+  method: string; route: string; count: number; errors5xx: number; errors4xx: number; errorRate: number;
+  p50Ms: number; p95Ms: number; maxMs: number; lastError: string | null; lastErrorStatus: number | null; lastErrorRequestId: string | null;
+}
+interface EndpointsInfo {
+  minutes: number; since: string;
+  alertRule: { minRequests: number; maxErrorRate: number; windowMinutes: number };
+  items: EndpointRow[];
+}
+
+const WINDOWS = [{ v: 15, label: '15 мин' }, { v: 60, label: 'Час' }, { v: 1440, label: 'Сутки' }];
+const SORTS: { v: 'errors' | 'slow' | 'busy'; label: string }[] = [{ v: 'errors', label: 'Ошибки' }, { v: 'slow', label: 'Медленные' }, { v: 'busy', label: 'Частые' }];
+const ms = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)} с` : `${v} мс`);
+
+/** Ручки API: сколько запросов, сколько ошибок, как быстро отвечают — за 15 минут, час или сутки */
+const EndpointsView: React.FC = () => {
+  const [minutes, setMinutes] = React.useState(60);
+  const [sort, setSort] = React.useState<'errors' | 'slow' | 'busy'>('errors');
+  const [q, setQ] = React.useState('');
+  const { data, isLoading, error } = useQuery<EndpointsInfo>({
+    queryKey: ['system-endpoints', minutes],
+    queryFn: () => apiClient.get('/api/admin/system/endpoints', { params: { minutes } }).then(r => r.data),
+    refetchInterval: 30_000,
+  });
+  if (isLoading) return <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}><CircularProgress /></Box>;
+  if (error || !data) return <Alert severity="error">{apiError(error, 'Не удалось получить статистику ручек')}</Alert>;
+
+  const query = q.trim().toLowerCase();
+  const rows = data.items
+    .filter(r => !query || `${r.method} ${r.route}`.toLowerCase().includes(query))
+    .sort((a, b) => sort === 'errors' ? (b.errors5xx - a.errors5xx) || (b.errorRate - a.errorRate) || (b.p95Ms - a.p95Ms)
+      : sort === 'slow' ? b.p95Ms - a.p95Ms : b.count - a.count);
+  const total = data.items.reduce((x, r) => x + r.count, 0);
+  const errors = data.items.reduce((x, r) => x + r.errors5xx, 0);
+  const slow = data.items.filter(r => r.p95Ms >= 1000).length;
+  const rule = data.alertRule;
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+        <ToggleButtonGroup size="small" exclusive value={minutes} onChange={(_, v) => v && setMinutes(v)}>
+          {WINDOWS.map(w => <ToggleButton key={w.v} value={w.v}>{w.label}</ToggleButton>)}
+        </ToggleButtonGroup>
+        <ToggleButtonGroup size="small" exclusive value={sort} onChange={(_, v) => v && setSort(v)}>
+          {SORTS.map(s => <ToggleButton key={s.v} value={s.v}>{s.label}</ToggleButton>)}
+        </ToggleButtonGroup>
+        <TextField size="small" placeholder="Поиск ручки" value={q} onChange={e => setQ(e.target.value)} sx={{ flex: '1 1 180px' }} />
+      </Box>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1.5 }}>
+        {[
+          ['Запросов', total.toLocaleString('ru-RU')],
+          ['Ошибок сервера', `${errors}${total ? ` · ${(100 * errors / total).toFixed(1)}%` : ''}`],
+          ['Медленных ручек', String(slow)],
+        ].map(([label, value]) => (
+          <Paper key={label} variant="outlined" sx={{ p: 1.5, borderRadius: '16px' }}>
+            <Typography variant="body2" color="text.secondary">{label}</Typography>
+            <Typography sx={{ fontWeight: 800 }}>{value}</Typography>
+          </Paper>
+        ))}
+      </Box>
+
+      <Paper variant="outlined" sx={{ borderRadius: '16px', overflow: 'hidden' }}>
+        <Box sx={{ display: { xs: 'none', md: 'grid' }, gridTemplateColumns: '1fr 80px 120px 90px 90px 150px', gap: 1, px: 2, py: 1,
+          bgcolor: 'action.hover', fontSize: '0.8rem', color: 'text.secondary', fontWeight: 600 }}>
+          <span>Ручка</span><span>Запросов</span><span>Ошибки 5xx / 4xx</span><span>Обычно</span><span>95%</span><span>Последняя ошибка</span>
+        </Box>
+        {rows.length === 0 && <Typography color="text.secondary" sx={{ p: 2 }}>За это время запросов не было</Typography>}
+        {rows.map(r => {
+          const bad = r.errors5xx > 0 && r.errorRate > rule.maxErrorRate;
+          const warn = r.errors5xx > 0 || r.p95Ms >= 1000;
+          return (
+            <Box key={`${r.method} ${r.route}`} sx={{
+              display: 'grid', gridTemplateColumns: { xs: '1fr auto', md: '1fr 80px 120px 90px 90px 150px' }, gap: 1, px: 2, py: 1,
+              borderTop: '1px solid', borderColor: 'divider', alignItems: 'center',
+              bgcolor: bad ? 'rgba(211,47,47,0.08)' : warn ? 'rgba(237,108,2,0.06)' : 'transparent',
+            }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                  <b>{r.method}</b> {r.route}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: { md: 'none' } }}>
+                  {r.count} запр. · 5xx {r.errors5xx} ({r.errorRate}%) · 4xx {r.errors4xx} · обычно {ms(r.p50Ms)} · 95% {ms(r.p95Ms)}
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ display: { xs: 'none', md: 'block' } }}>{r.count}</Typography>
+              <Typography variant="body2" sx={{ display: { xs: 'none', md: 'block' }, color: r.errors5xx ? 'error.main' : 'text.secondary', fontWeight: r.errors5xx ? 700 : 400 }}>
+                {r.errors5xx} ({r.errorRate}%) / {r.errors4xx}
+              </Typography>
+              <Typography variant="body2" sx={{ display: { xs: 'none', md: 'block' } }}>{ms(r.p50Ms)}</Typography>
+              <Typography variant="body2" sx={{ display: { xs: 'none', md: 'block' }, color: r.p95Ms >= 1000 ? 'warning.main' : 'text.primary', fontWeight: r.p95Ms >= 1000 ? 700 : 400 }}>
+                {ms(r.p95Ms)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {r.lastError ? `${when(r.lastError)} · ${r.lastErrorStatus}${r.lastErrorRequestId ? ` · ${r.lastErrorRequestId}` : ''}` : ''}
+              </Typography>
+            </Box>
+          );
+        })}
+      </Paper>
+      <Typography variant="body2" color="text.secondary">
+        Считается с запуска сервера ({when(data.since)}); после перезапуска начинается заново. «Обычно» — половина запросов быстрее,
+        «95%» — почти все. Тревога в Telegram, если за {rule.windowMinutes} мин у ручки больше {rule.maxErrorRate}% ошибок сервера
+        (при {rule.minRequests}+ запросах). Номер запроса из последней ошибки ищется в журнале.
+      </Typography>
+    </Box>
+  );
+};
+
 /** Состояние системы: сервер, база, фоновые задачи, последние ошибки — обновляется раз в 30 секунд */
 const SystemPage: React.FC = () => {
   const [level, setLevel] = React.useState<'all' | 'Error'>('all');
   const [openLog, setOpenLog] = React.useState<number | null>(null);
+  const [tab, setTab] = React.useState<'overview' | 'endpoints'>('overview');
   const { data, isLoading, error } = useQuery<SystemInfo>({
     queryKey: ['system'],
     queryFn: () => apiClient.get('/api/admin/system', { params: { take: 200 } }).then(r => r.data),
@@ -98,6 +208,12 @@ const SystemPage: React.FC = () => {
         <Typography variant="h4" sx={{ fontWeight: 800, flex: 1 }}>Состояние системы</Typography>
         <Chip color={st.color} label={st.text} sx={{ fontWeight: 700 }} />
       </Box>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tab value="overview" label="Обзор" />
+        <Tab value="endpoints" label="Ручки" />
+      </Tabs>
+      {tab === 'endpoints' && <EndpointsView />}
+      {tab === 'overview' && (<>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 1.5 }}>
         {[
@@ -180,6 +296,7 @@ const SystemPage: React.FC = () => {
       <Typography variant="body2" color="text.secondary">
         Полный журнал — в папке logs на сервере (файл за каждый день).
       </Typography>
+      </>)}
     </Box>
   );
 };
