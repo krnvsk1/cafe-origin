@@ -359,7 +359,7 @@ app.UseSerilogRequestLogging(o =>
     {
         var userId = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         if (userId != null) diag.Set("UserId", userId);
-        diag.Set("ClientIp", ctx.Connection.RemoteIpAddress?.ToString());
+        if (ctx.Connection.RemoteIpAddress is { } ip) diag.Set("ClientIp", ip.ToString());
     };
 });
 
