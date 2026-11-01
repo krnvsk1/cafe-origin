@@ -136,6 +136,22 @@ namespace Cafe.API.Controllers
             return Ok(items);
         }
 
+        // GET: api/inventory/documents/semi-breakdown?stockItemId=&quantity= — из чего состоит указанный вес полуфабриката
+        [HttpGet("semi-breakdown")]
+        public async Task<IActionResult> SemiBreakdown([FromQuery] int stockItemId, [FromQuery] decimal quantity)
+        {
+            var semi = await _context.StockItems.AsNoTracking().FirstOrDefaultAsync(i => i.Id == stockItemId);
+            if (semi == null || semi.Kind != StockItemKinds.Semi) return BadRequest(new { message = "Это не полуфабрикат" });
+            var calc = await _inventory.LoadCalculatorAsync();
+            try
+            {
+                var raw = InventoryService.SemiToRaw(calc, semi, quantity);
+                return Ok(raw.Select(r => new { stockItemId = r.Key, name = calc.Item(r.Key)?.Name, unit = calc.Item(r.Key)?.Unit, quantity = Math.Round(r.Value, 3) })
+                    .OrderByDescending(r => r.quantity).ToList());
+            }
+            catch (InventoryException ex) { return BadRequest(new { message = ex.Message }); }
+        }
+
         // POST: api/inventory/documents
         [HasPermission(Permissions.InventoryManage)]
         [HttpPost]
@@ -330,8 +346,9 @@ namespace Cafe.API.Controllers
             var items = await _context.StockItems.AsNoTracking().Where(i => ids.Contains(i.Id)).ToDictionaryAsync(i => i.Id);
             if (items.Count != ids.Count) return "Некоторые позиции не найдены — обновите страницу";
 
+            // Полуфабрикат можно пересчитать только в инвентаризации: его вес разложится на товары по техкарте
             var semi = items.Values.FirstOrDefault(i => i.Kind == StockItemKinds.Semi);
-            if (semi != null)
+            if (semi != null && doc.Type != StockDocumentTypes.Inventory)
                 return $"«{semi.Name}» — полуфабрикат и не хранится на складе. Укажите сырьё.";
 
             if (doc.Type == StockDocumentTypes.Inventory && ids.Count != r.Lines.Count)
@@ -424,12 +441,14 @@ namespace Cafe.API.Controllers
                 stockItemName = l.StockItem?.Name,
                 unit = l.StockItem?.Unit,
                 // Для черновика инвентаризации — текущий учётный остаток
-                currentQuantity = l.StockItem?.Quantity,
+                currentQuantity = l.StockItem?.Kind == StockItemKinds.Semi ? null : l.StockItem?.Quantity,
+                isSemi = l.StockItem?.Kind == StockItemKinds.Semi,
                 l.Quantity,
+                l.SemiQuantity,
                 l.Price,
                 l.Sum,
                 l.ExpectedQuantity,
-                difference = l.ExpectedQuantity.HasValue ? l.Quantity - l.ExpectedQuantity.Value : (decimal?)null
+                difference = l.ExpectedQuantity.HasValue ? l.Quantity + (l.SemiQuantity ?? 0) - l.ExpectedQuantity.Value : (decimal?)null
             })
         };
     }

@@ -11,7 +11,7 @@ import {
 import {
   useStockDocument, useStockItems, useSuppliers, useSaveStockDocument, usePostStockDocument,
   useCancelStockDocument, useDeleteStockDocument, uploadDocumentAttachment, deleteDocumentAttachment,
-  fetchInventorySheet, apiError, fmtQty, fmtMoney, fmtDate, toDateInput, UNIT_LABELS, DOCUMENT_TITLES, WRITEOFF_REASONS,
+  fetchInventorySheet, useSemiBreakdowns, apiError, fmtQty, fmtMoney, fmtDate, toDateInput, UNIT_LABELS, DOCUMENT_TITLES, WRITEOFF_REASONS,
   type StockDocumentType, type StockItem, type Supplier, type StockDocumentInput,
 } from '../../api/inventory';
 import { useQueryClient } from '@tanstack/react-query';
@@ -41,6 +41,10 @@ interface LineState {
   sum: string;
   /** Инвентаризация: учётный остаток */
   expected: number | null;
+  /** Инвентаризация: строка полуфабриката — его вес разложится на товары по техкарте */
+  isSemi?: boolean;
+  /** Проведённая инвентаризация: сколько товара было в п/ф */
+  semiQuantity?: number | null;
 }
 
 type CreateOption = { create: true; inputValue: string };
@@ -68,7 +72,11 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
   const { data: doc, isLoading } = useStockDocument(open ? id : null);
   // Тип берём из документа, если он уже загружен (открыт из истории позиции)
   const type: StockDocumentType = doc?.type ?? initialType;
-  const { data: allItems = [] } = useStockItems({ kind: 'raw' });
+  // В инвентаризации можно пересчитать и полуфабрикаты (с техкартой): их вес разложится на товары
+  const { data: stockItems = [] } = useStockItems(type === 'inventory' ? {} : { kind: 'raw' });
+  const allItems = React.useMemo(
+    () => stockItems.filter(i => i.kind === 'raw' || (type === 'inventory' && i.hasTechCard)),
+    [stockItems, type]);
   const { data: suppliers = [] } = useSuppliers();
   const save = useSaveStockDocument();
   const post = usePostStockDocument();
@@ -130,6 +138,8 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
       price: l.price ? String(l.price) : '',
       sum: l.sum ? String(l.sum) : '',
       expected: doc.status === 'draft' ? l.currentQuantity : l.expectedQuantity,
+      isSemi: !!l.isSemi,
+      semiQuantity: l.semiQuantity ?? null,
     })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc, open]);
@@ -155,7 +165,8 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
       setError(`«${item.name}» уже есть в документе`);
       return;
     }
-    const patch: Partial<LineState> = { stockItemId: item.id, name: item.name, unit: item.unit, expected: item.quantity };
+    const semi = item.kind === 'semi';
+    const patch: Partial<LineState> = { stockItemId: item.id, name: item.name, unit: item.unit, expected: semi ? null : item.quantity, isSemi: semi };
     if (type === 'receipt' && !l.price && item.lastPrice > 0) {
       patch.price = String(item.lastPrice);
       if (l.quantity) patch.sum = String(round(num(l.quantity) * item.lastPrice));
@@ -302,12 +313,21 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
     else onClose();
   };
 
+  // Полуфабрикаты в черновике инвентаризации: из каких товаров состоит их вес
+  const semiLines = type === 'inventory' && isDraft
+    ? lines.filter(l => l.isSemi && l.stockItemId && num(l.quantity) > 0).map(l => ({ key: l.key, stockItemId: l.stockItemId!, quantity: num(l.quantity) }))
+    : [];
+  const semis = useSemiBreakdowns(semiLines);
+  const inSemi = (l: LineState) => (isDraft ? semis.total.get(l.stockItemId ?? 0) ?? 0 : l.semiQuantity ?? 0);
+  // Товары из п/ф, которых нет в списке: добавятся при проведении
+  const missingFromSemis = [...semis.total.keys()].filter(id => !lines.some(l => l.stockItemId === id && !l.isSemi));
+
   const total = lines.reduce((s, l) => s + (type === 'receipt' ? num(l.sum) : 0), 0);
   const inventoryDiffValue = type === 'inventory'
     ? lines.reduce((s, l) => {
-        if (!l.stockItemId || l.quantity.trim() === '' || l.expected === null) return s;
+        if (!l.stockItemId || l.isSemi || l.expected === null || (l.quantity.trim() === '' && !inSemi(l))) return s;
         const item = allItems.find(i => i.id === l.stockItemId);
-        return s + (num(l.quantity) - l.expected) * (item?.unitCost ?? 0);
+        return s + (num(l.quantity) + inSemi(l) - l.expected) * (item?.unitCost ?? 0);
       }, 0)
     : 0;
 
@@ -321,7 +341,26 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
     const selected = l.stockItemId
       ? allItems.find(i => i.id === l.stockItemId) ?? ({ id: l.stockItemId, name: l.name, unit: l.unit ?? 'kg' } as StockItem)
       : null;
-    const diff = type === 'inventory' && l.quantity.trim() !== '' && l.expected !== null ? num(l.quantity) - l.expected : null;
+    const fromSemi = type === 'inventory' && !l.isSemi ? inSemi(l) : 0;
+    const diff = type === 'inventory' && !l.isSemi && (l.quantity.trim() !== '' || fromSemi > 0) && l.expected !== null
+      ? round(num(l.quantity) + fromSemi - l.expected, 3) : null;
+    const breakdown = l.isSemi ? semis.byLine.get(l.key) : undefined;
+    const semiNote = breakdown && (breakdown.error
+      ? <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5, ml: 0.5 }}>{breakdown.error}</Typography>
+      : breakdown.rows.length > 0 && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, ml: 0.5 }}>
+          Это ≈ {breakdown.rows.map(r => `${r.name} ${fmtQty(r.quantity, r.unit ?? undefined)}`).join(', ')}
+        </Typography>
+      ));
+
+    if (readOnly && l.isSemi) {
+      return (
+        <Box key={l.key} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 1.25, borderTop: index ? '1px solid' : 0, borderColor: 'divider' }}>
+          <Typography sx={{ flex: 1, fontWeight: 500 }}>{l.name} <Typography component="span" variant="caption" color="text.secondary">полуфабрикат</Typography></Typography>
+          <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}>{fmtQty(num(l.quantity), l.unit)} → в товарах</Typography>
+        </Box>
+      );
+    }
 
     if (readOnly) {
       return (
@@ -330,8 +369,11 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
           {type === 'inventory' ? (
             <Box sx={{ textAlign: 'right' }}>
               <Typography sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                {fmtQty(l.expected)} → <b>{fmtQty(num(l.quantity), l.unit)}</b>
+                {fmtQty(l.expected)} → <b>{fmtQty(round(num(l.quantity) + fromSemi, 3), l.unit)}</b>
               </Typography>
+              {fromSemi > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>в т. ч. в полуфабрикатах {fmtQty(fromSemi, l.unit)}</Typography>
+              )}
               {diff !== null && diff !== 0 && (
                 <Typography variant="body2" sx={{ color: diff < 0 ? tokens.chili : tokens.herb, fontWeight: 600 }}>
                   {diff > 0 ? '+' : ''}{fmtQty(diff, l.unit)}
@@ -398,7 +440,7 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography noWrap>{o.name}</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {o.category || 'Без категории'} · остаток {fmtQty(o.quantity, o.unit)}
+                      {o.kind === 'semi' ? 'Полуфабрикат · вес разложится на товары по техкарте' : `${o.category || 'Без категории'} · остаток ${fmtQty(o.quantity, o.unit)}`}
                     </Typography>
                   </Box>
                 </li>
@@ -412,11 +454,17 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
               По учёту: {fmtQty(l.expected, l.unit)}
             </Typography>
           )}
+          {fromSemi > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, ml: 0.5 }}>
+              + {fmtQty(fromSemi, l.unit)} в полуфабрикатах
+            </Typography>
+          )}
+          {semiNote}
         </Box>
 
         {type === 'inventory' && (
           <Box sx={{ gridArea: { xs: 'a', md: 'auto' }, display: { xs: 'none', md: 'flex' }, alignItems: 'center', height: 40, justifyContent: 'flex-end', color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
-            {l.expected !== null ? fmtQty(l.expected, l.unit) : '—'}
+            {l.isSemi ? 'п/ф' : l.expected !== null ? fmtQty(l.expected, l.unit) : '—'}
           </Box>
         )}
 
@@ -593,6 +641,17 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
                 </Box>
               )}
               {lines.map(renderLine)}
+              {!readOnly && missingFromSemis.length > 0 && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  В полуфабрикатах есть товары, которых нет в списке: {missingFromSemis.map(id => allItems.find(i => i.id === id)?.name ?? `#${id}`).join(', ')}.
+                  При проведении они добавятся — их остаток будет равен количеству в полуфабрикатах. Если они лежат и отдельно, добавьте строку и укажите, сколько.
+                </Alert>
+              )}
+              {!readOnly && type === 'inventory' && (
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                  Можно добавить полуфабрикат (маринованное мясо, соус) и указать его вес — товары посчитаются по техкарте и прибавятся к факту.
+                </Typography>
+              )}
               {!readOnly && (
                 <Button startIcon={<AddIcon />} onClick={addLine} sx={{ mt: 1, bgcolor: t.surfaceMuted }}>
                   Добавить строку

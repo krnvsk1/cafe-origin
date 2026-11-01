@@ -261,6 +261,13 @@ namespace Cafe.API.Models
         [Column("expected_quantity", TypeName = "decimal(14,3)")]
         public decimal? ExpectedQuantity { get; set; }
 
+        /// <summary>
+        /// Инвентаризация: сколько этого товара нашлось в пересчитанных полуфабрикатах (по их техкартам).
+        /// Фактический остаток = Quantity (лежит как есть) + SemiQuantity. У строки самого п/ф — null.
+        /// </summary>
+        [Column("semi_quantity", TypeName = "decimal(14,3)")]
+        public decimal? SemiQuantity { get; set; }
+
         [Column("sort_order")]
         public int SortOrder { get; set; }
     }

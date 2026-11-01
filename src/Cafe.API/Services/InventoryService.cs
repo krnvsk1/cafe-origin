@@ -73,7 +73,8 @@ namespace Cafe.API.Services
             {
                 if (!items.TryGetValue(line.StockItemId, out var item))
                     throw new InventoryException($"Позиция #{line.StockItemId} не найдена");
-                if (item.Kind == StockItemKinds.Semi)
+                // В инвентаризации п/ф можно пересчитать: его вес раскладывается на товары по техкарте
+                if (item.Kind == StockItemKinds.Semi && document.Type != StockDocumentTypes.Inventory)
                     throw new InventoryException($"«{item.Name}» — полуфабрикат: он не хранится на складе, учитывается сырьё из его техкарты");
             }
 
@@ -106,13 +107,18 @@ namespace Cafe.API.Services
                     break;
 
                 case StockDocumentTypes.Inventory:
+                    var inSemis = await ExpandSemiLinesAsync(document, items);
                     foreach (var line in document.Lines)
                     {
                         if (line.Quantity < 0) throw new InventoryException("Фактический остаток не может быть отрицательным");
                         var item = items[line.StockItemId];
+                        if (item.Kind == StockItemKinds.Semi) continue;
+                        var fromSemis = Math.Round(inSemis.GetValueOrDefault(item.Id), 3);
+                        line.SemiQuantity = fromSemis > 0 ? fromSemis : null;
                         line.ExpectedQuantity = item.Quantity;
                         line.Price = Math.Round(TechCardCalculator.CostOf(item), 4);
-                        var diff = line.Quantity - item.Quantity;
+                        // Факт = лежит как есть + сколько этого товара в пересчитанных полуфабрикатах
+                        var diff = line.Quantity + fromSemis - item.Quantity;
                         line.Sum = Math.Round(diff * line.Price, 2);
                         if (diff != 0)
                             Apply(item, diff, line.Price, StockMovementTypes.Inventory, document.Id, null, comment, affectsAvg: false);
@@ -127,6 +133,55 @@ namespace Cafe.API.Services
             document.Total = Math.Round(total, 2);
             document.Status = StockDocumentStatuses.Posted;
             document.PostedAt = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Инвентаризация: строки полуфабрикатов (их пересчитали по весу) раскладываются на товары по техкартам.
+        /// Товары, которых нет в документе, добавляются строкой с нулём «как есть» — весь их остаток в п/ф.
+        /// Возвращает, сколько каждого товара нашлось в п/ф.
+        /// </summary>
+        private async Task<Dictionary<int, decimal>> ExpandSemiLinesAsync(StockDocument document, Dictionary<int, StockItem> items)
+        {
+            var result = new Dictionary<int, decimal>();
+            var semiLines = document.Lines.Where(l => items[l.StockItemId].Kind == StockItemKinds.Semi).ToList();
+            if (semiLines.Count == 0) return result;
+
+            var calc = await LoadCalculatorAsync(tracking: true);
+            foreach (var line in semiLines)
+            {
+                var semi = items[line.StockItemId];
+                result = MergeInto(result, SemiToRaw(calc, semi, line.Quantity));
+                line.ExpectedQuantity = null;
+                line.SemiQuantity = null;
+                line.Price = Math.Round(calc.UnitCost(semi.Id), 4);
+                line.Sum = 0;
+            }
+
+            var order = document.Lines.Count == 0 ? 0 : document.Lines.Max(l => l.SortOrder) + 1;
+            foreach (var rawId in result.Keys)
+            {
+                if (document.Lines.Any(l => l.StockItemId == rawId)) continue;
+                var raw = calc.Item(rawId) ?? throw new InventoryException($"Позиция #{rawId} из техкарты не найдена");
+                items[rawId] = raw;
+                document.Lines.Add(new StockDocumentLine { StockItemId = rawId, Quantity = 0, SortOrder = order++ });
+            }
+            return result;
+        }
+
+        private static Dictionary<int, decimal> MergeInto(Dictionary<int, decimal> into, Dictionary<int, decimal> add)
+        {
+            foreach (var (id, qty) in add) into[id] = into.GetValueOrDefault(id) + qty;
+            return into;
+        }
+
+        /// <summary>Сколько товаров в указанном количестве полуфабриката (в его единицах)</summary>
+        public static Dictionary<int, decimal> SemiToRaw(TechCardCalculator calc, StockItem semi, decimal quantity)
+        {
+            var card = calc.ForSemi(semi.Id);
+            if (card == null || card.Lines.Count == 0)
+                throw new InventoryException($"У полуфабриката «{semi.Name}» нет техкарты — не из чего посчитать товары");
+            var yield = card.YieldQuantity > 0 ? card.YieldQuantity : 1;
+            return quantity <= 0 ? new Dictionary<int, decimal>() : calc.ExpandToRaw(card, quantity / yield);
         }
 
         public async Task CancelDocumentAsync(StockDocument document)

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useQueries, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { apiClient } from './client';
 
 // ================= Типы =================
@@ -96,7 +96,11 @@ export interface StockDocumentLine {
   stockItemName: string | null;
   unit: StockUnit | null;
   currentQuantity: number | null;
+  /** Строка полуфабриката (инвентаризация): его вес раскладывается на товары */
+  isSemi?: boolean;
   quantity: number;
+  /** Инвентаризация: сколько товара нашлось в пересчитанных п/ф (факт = quantity + semiQuantity) */
+  semiQuantity?: number | null;
   price: number;
   sum: number;
   expectedQuantity: number | null;
@@ -417,6 +421,37 @@ export const useStockDocument = (id: number | null) =>
     queryFn: () => apiClient.get(`/api/inventory/documents/${id}`).then(r => r.data),
     enabled: !!id,
   });
+
+export interface SemiBreakdownRow {
+  stockItemId: number;
+  name: string | null;
+  unit: StockUnit | null;
+  quantity: number;
+}
+
+/**
+ * Инвентаризация: из каких товаров состоят пересчитанные полуфабрикаты.
+ * Возвращает раскладку по каждой строке п/ф и сумму по товарам.
+ */
+export const useSemiBreakdowns = (lines: { key: string; stockItemId: number; quantity: number }[]) => {
+  const results = useQueries({
+    queries: lines.map(l => ({
+      queryKey: [KEY, 'semi-breakdown', l.stockItemId, l.quantity],
+      queryFn: () => apiClient.get<SemiBreakdownRow[]>('/api/inventory/documents/semi-breakdown', { params: { stockItemId: l.stockItemId, quantity: l.quantity } }).then(r => r.data),
+      staleTime: 60_000,
+      retry: false,
+    })),
+  });
+  const byLine = new Map<string, { rows: SemiBreakdownRow[]; error: string | null }>();
+  const total = new Map<number, number>();
+  lines.forEach((l, i) => {
+    const r = results[i];
+    const rows = r?.data ?? [];
+    byLine.set(l.key, { rows, error: r?.error ? apiError(r.error) : null });
+    rows.forEach(x => total.set(x.stockItemId, (total.get(x.stockItemId) ?? 0) + x.quantity));
+  });
+  return { byLine, total };
+};
 
 export const fetchInventorySheet = (category?: string) =>
   apiClient.get<InventorySheetRow[]>('/api/inventory/documents/inventory-sheet', { params: { category } }).then(r => r.data);

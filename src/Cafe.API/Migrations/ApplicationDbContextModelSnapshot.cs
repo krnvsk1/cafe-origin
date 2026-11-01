@@ -2263,6 +2263,10 @@ namespace Cafe.API.Migrations
                         .HasColumnType("decimal(14,3)")
                         .HasColumnName("quantity");
 
+                    b.Property<decimal?>("SemiQuantity")
+                        .HasColumnType("decimal(14,3)")
+                        .HasColumnName("semi_quantity");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer")
                         .HasColumnName("sort_order");
