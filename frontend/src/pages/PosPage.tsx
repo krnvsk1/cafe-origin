@@ -25,6 +25,7 @@ import { useIsFullscreen, useWorkScreen } from '../hooks/useFullscreen';
 import type { Dish, SelectedAddon } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import { tokens } from '../theme';
+import { isWeightedDish, priceForWeight, weightLabel } from '../utils/weight';
 import { allowedOrderTypes, isAllowedFor, describeOrderTypes } from '../utils/orderTypes';
 
 interface TicketLine {
@@ -38,12 +39,14 @@ interface TicketLine {
   comment: string;
   /** Где можно продать (null — везде), например пиво — только в зале */
   allowed: string[] | null;
+  /** Вес весового блюда, г (unitPrice — уже за этот вес) */
+  weight?: number;
 }
 
 const money = (v: number) => `${Math.round(v * 100) / 100} ₽`.replace('.', ',');
 const lineTotal = (l: TicketLine) => (l.unitPrice + l.addons.reduce((s, a) => s + a.price * a.quantity, 0)) * l.quantity;
-const lineKey = (id: number, addons: SelectedAddon[], comment: string) =>
-  `${id}|${addons.map(a => `${a.addonId}x${a.quantity}`).sort().join(',')}|${comment}`;
+const lineKey = (id: number, addons: SelectedAddon[], comment: string, weight?: number) =>
+  `${id}|${weight ?? ''}|${addons.map(a => `${a.addonId}x${a.quantity}`).sort().join(',')}|${comment}`;
 
 /** Есть ли у позиции добавки (тогда нужно окно выбора) */
 const hasAddons = (s: Dish) => ((s as unknown as { addons?: unknown[] }).addons?.length ?? 0) > 0;
@@ -138,7 +141,7 @@ const PosMenu: React.FC<{ onPick: (card: Dish) => void }> = ({ onPick }) => {
                     {card.name}
                   </Typography>
                   <Typography sx={{ fontWeight: 800, fontSize: '0.92rem', mt: 0.25 }}>
-                    {card.children.length > 1 && min !== Math.max(...prices) ? 'от ' : ''}{money(min)}
+                    {card.children.length > 1 && min !== Math.max(...prices) ? 'от ' : ''}{money(min)}{card.isWeighted ? ' / 100 г' : ''}
                   </Typography>
                 </Box>
               </Box>
@@ -243,6 +246,7 @@ const Ticket: React.FC<{
         items: lines.map(l => ({
           dishId: l.dishId,
           quantity: l.quantity,
+          weight: l.weight,
           addons: l.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })),
           comment: l.comment || undefined,
         })),
@@ -706,8 +710,9 @@ const PosPage: React.FC = () => {
   const qc = useQueryClient();
   const [toast, setToast] = React.useState('');
 
-  const addLine = (card: Dish, child: Dish, quantity: number, addons: SelectedAddon[], comment: string) => {
-    const key = lineKey(child.id, addons, comment);
+  const addLine = (card: Dish, child: Dish, quantity: number, addons: SelectedAddon[], comment: string, weight?: number) => {
+    const key = lineKey(child.id, addons, comment, weight);
+    const baseVariant = card.children && card.children.length > 1 ? child.name : child.name !== 'Стандарт' && child.name !== card.name ? child.name : null;
     setLines(prev => {
       const existing = prev.find(l => l.key === key);
       if (existing) return prev.map(l => (l.key === key ? { ...l, quantity: l.quantity + quantity } : l));
@@ -715,8 +720,9 @@ const PosPage: React.FC = () => {
         key,
         dishId: child.id,
         title: card.name,
-        variant: card.children && card.children.length > 1 ? child.name : child.name !== 'Стандарт' && child.name !== card.name ? child.name : null,
-        unitPrice: child.price,
+        variant: weight ? [baseVariant, weightLabel(weight)].filter(Boolean).join(', ') : baseVariant,
+        unitPrice: weight ? priceForWeight(child.price, weight) : child.price,
+        weight,
         quantity,
         addons,
         comment,
@@ -729,7 +735,7 @@ const PosPage: React.FC = () => {
   const pick = (card: Dish) => {
     const children = card.children ?? [];
     // Один вариант и нет добавок — сразу в чек, без лишних окон
-    if (children.length === 1 && !hasAddons(card) && !hasAddons(children[0])) {
+    if (children.length === 1 && !hasAddons(card) && !hasAddons(children[0]) && !isWeightedDish(card, children[0])) {
       addLine(card, children[0], 1, [], '');
       return;
     }
@@ -794,8 +800,8 @@ const PosPage: React.FC = () => {
         open={!!picking}
         product={picking}
         onClose={() => setPicking(null)}
-        onAddToCart={(product, quantity, addons, instructions, child) => {
-          addLine(product, child ?? product, quantity, addons, instructions);
+        onAddToCart={(product, quantity, addons, instructions, child, weight) => {
+          addLine(product, child ?? product, quantity, addons, instructions, weight);
         }}
       />
 

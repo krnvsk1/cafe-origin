@@ -351,6 +351,7 @@ namespace Cafe.API.Controllers
                         l.Item.Id,
                         l.Item.Name,
                         l.Item.Quantity,
+                        l.Item.Weight,
                         l.Item.Price,
                         lineTotal = LineTotal(l.Item),
                         addons = l.Item.SelectedAddons.Select(a => new { a.AddonName, a.Quantity, a.Price }),

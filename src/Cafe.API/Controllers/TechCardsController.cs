@@ -275,14 +275,16 @@ namespace Cafe.API.Controllers
                     i.DishId,
                     i.Name,
                     i.Quantity,
+                    i.Weight,
                     i.Price,
                     ParentId = _context.Dishes.Where(s => s.Id == i.DishId).Select(s => s.ParentId).FirstOrDefault(),
                     Addons = i.SelectedAddons.Select(a => new { a.AddonId, a.Quantity, a.Price }).ToList()
                 })
                 .ToListAsync();
 
+            // Весовые позиции разного веса — одна строка отчёта
             var rows = items
-                .GroupBy(i => new { i.DishId, i.Name })
+                .GroupBy(i => new { i.DishId, Name = i.Weight.HasValue ? Weighing.StripWeight(i.Name) : i.Name })
                 .Select(g =>
                 {
                     var first = g.First();
@@ -296,7 +298,8 @@ namespace Cafe.API.Controllers
                         var ac = calc.ForAddon(a.AddonId);
                         return ac != null ? calc.CardCost(ac) * a.Quantity : 0;
                     }) * i.Quantity);
-                    var cost = unitCost.HasValue ? unitCost.Value * qty + addonsCost : (decimal?)null;
+                    var portions = g.Sum(i => Weighing.Portions(i.Quantity, i.Weight));
+                    var cost = unitCost.HasValue ? unitCost.Value * portions + addonsCost : (decimal?)null;
                     var totalRevenue = revenue + addonsRevenue;
                     return new
                     {

@@ -11,6 +11,8 @@ export interface Dish {
   isSpicy: boolean;
   isAvailable: boolean;
   isPromo?: boolean;
+  /** Продаётся на вес: цена за 100 г, вес выбирают при заказе */
+  isWeighted?: boolean;
   category?: string;          // Раздел меню (Пиццы, Бургеры…)
   badge?: 'hit' | 'new' | 'promo' | 'lean' | null;
   /** Где можно заказать: «Доставка», «Самовывоз», «В зале»; null — везде */
@@ -45,6 +47,7 @@ export interface Dish {
     isSpicy?: boolean;
     isAvailable?: boolean;
     isPromo?: boolean;
+    isWeighted?: boolean;
     parentId?: number | null;
     sortOrder?: number;
     category?: string;
@@ -60,6 +63,8 @@ export interface Dish {
     uniqueKey?: string;
     // Выбранный дочерний вариант (если товар — карточка с детьми)
     selectedChild?: Dish;
+    /** Вес весового блюда, г (цена варианта в корзине — уже за этот вес) */
+    weight?: number;
   }
   
   // Для обновления (все опционально, кроме id)
@@ -89,7 +94,9 @@ export interface Dish {
     dishId: number;
     name: string;               // Название на момент заказа
     quantity: number;
-    price: number;              // Цена на момент заказа
+    price: number;              // Цена на момент заказа (у весового — за его вес)
+    /** Вес весового блюда, г */
+    weight?: number | null;
     subtotal: number;           // Вычисляемое поле Price * Quantity
     selectedAddons?: OrderItemAddon[];
   }
@@ -135,6 +142,8 @@ export interface Dish {
       quantity: number;
       name?: string;            // опционально, бэкенд сам подставит
       price?: number;
+      /** Вес весового блюда, г */
+      weight?: number;
       selectedAddons?: {
         addonId: number;
         quantity: number;

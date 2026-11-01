@@ -225,8 +225,8 @@ const MenuPage: React.FC = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const handleAddToCart = (product: Dish, quantity: number, selectedAddons: SelectedAddon[], instructions: string, selectedChild?: Dish) => {
-    addToCart(product, quantity, selectedAddons, instructions, selectedChild);
+  const handleAddToCart = (product: Dish, quantity: number, selectedAddons: SelectedAddon[], instructions: string, selectedChild?: Dish, weight?: number) => {
+    addToCart(product, quantity, selectedAddons, instructions, selectedChild, weight);
   };
 
   return (

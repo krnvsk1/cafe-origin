@@ -113,6 +113,7 @@ namespace Cafe.API.Controllers
                 IsSpicy = dto.IsSpicy,
                 IsAvailable = dto.IsAvailable,
                 IsPromo = dto.IsPromo,
+                IsWeighted = dto.IsWeighted,
                 ParentId = dto.ParentId,
                 SortOrder = dto.SortOrder,
                 Category = dto.Category?.Trim() ?? string.Empty,
@@ -147,6 +148,7 @@ namespace Cafe.API.Controllers
             if (dto.IsSpicy.HasValue) dish.IsSpicy = dto.IsSpicy.Value;
             if (dto.IsAvailable.HasValue) dish.IsAvailable = dto.IsAvailable.Value;
             if (dto.IsPromo.HasValue) dish.IsPromo = dto.IsPromo.Value;
+            if (dto.IsWeighted.HasValue) dish.IsWeighted = dto.IsWeighted.Value;
             if (dto.ParentId.HasValue) dish.ParentId = dto.ParentId;
             if (dto.SortOrder.HasValue) dish.SortOrder = dto.SortOrder.Value;
             if (dto.Category != null) dish.Category = dto.Category.Trim();
@@ -212,6 +214,8 @@ namespace Cafe.API.Controllers
         public bool IsSpicy { get; set; }
         public bool IsAvailable { get; set; } = true;
         public bool IsPromo { get; set; }
+        /// <summary>Весовое: цена за 100 г</summary>
+        public bool IsWeighted { get; set; }
         public int? ParentId { get; set; }
         public int SortOrder { get; set; }
         public string? Category { get; set; }
@@ -230,6 +234,7 @@ namespace Cafe.API.Controllers
         public bool? IsSpicy { get; set; }
         public bool? IsAvailable { get; set; }
         public bool? IsPromo { get; set; }
+        public bool? IsWeighted { get; set; }
         public int? ParentId { get; set; }
         public int? SortOrder { get; set; }
         public string? Category { get; set; }

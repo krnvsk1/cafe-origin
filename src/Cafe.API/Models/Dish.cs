@@ -57,6 +57,13 @@ namespace Cafe.API.Models
         [Column("is_promo")]
         public bool IsPromo { get; set; } = false;
 
+        /// <summary>
+        /// Продаётся на вес: цена указана за 100 г, вес в граммах вводят при заказе.
+        /// Достаточно отметить карточку — признак действует на все её варианты.
+        /// </summary>
+        [Column("is_weighted")]
+        public bool IsWeighted { get; set; }
+
         // Метка на карточке: hit | new | promo | lean (null — без метки)
         [MaxLength(20)]
         [Column("badge")]

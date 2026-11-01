@@ -1,14 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Dish, CartItem, SelectedAddon } from '../types';
+import { priceForWeight, weightLabel } from '../utils/weight';
 
 // Уникальный ключ: учитывает id родителя + id выбранного ребёнка + добавки
 const generateUniqueKey = (
   productId: number,
   selectedAddons: SelectedAddon[],
-  selectedChildId?: number
+  selectedChildId?: number,
+  weight?: number
 ): string => {
-  const childPart = selectedChildId ? `c${selectedChildId}` : 'no-child';
+  const childPart = (selectedChildId ? `c${selectedChildId}` : 'no-child') + (weight ? `-w${weight}` : '');
   if (!selectedAddons || selectedAddons.length === 0) {
     return `item-${productId}-${childPart}-no-addons`;
   }
@@ -27,7 +29,9 @@ interface CartStore {
     quantity: number,
     selectedAddons: SelectedAddon[],
     instructions?: string,
-    selectedChild?: Dish
+    selectedChild?: Dish,
+    /** Вес весового блюда, г */
+    weight?: number
   ) => void;
 
   removeItem: (uniqueKey: string) => void;
@@ -41,9 +45,18 @@ export const useCartStore = create<CartStore>()(
     (set, get) => ({
       items: [],
 
-      addItem: (product, quantity, selectedAddons, instructions = '', selectedChild) => {
+      addItem: (product, quantity, selectedAddons, instructions = '', selectedChild, weight) => {
         const items = get().items;
-        const uniqueKey = generateUniqueKey(product.id, selectedAddons, selectedChild?.id);
+        const uniqueKey = generateUniqueKey(product.id, selectedAddons, selectedChild?.id, weight);
+        // Весовое: вариант в корзине несёт цену уже за выбранный вес, а в названии — вес
+        if (weight) {
+          const base = selectedChild ?? product;
+          selectedChild = {
+            ...base,
+            name: base.name && base.name !== 'Стандарт' && base.id !== product.id ? `${base.name}, ${weightLabel(weight)}` : weightLabel(weight),
+            price: priceForWeight(base.price, weight),
+          };
+        }
 
         const existingIndex = items.findIndex(item => item.uniqueKey === uniqueKey);
 
@@ -63,6 +76,7 @@ export const useCartStore = create<CartStore>()(
             specialInstructions: instructions,
             uniqueKey,
             selectedChild,
+            weight,
           };
           set({ items: [...items, newItem] });
         }

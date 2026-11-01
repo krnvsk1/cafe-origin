@@ -30,8 +30,13 @@ namespace Cafe.API.Models
         [Column("quantity")]
         public int Quantity { get; set; } = 1;
         
+        /// <summary>Цена одной позиции; у весового блюда — уже за указанный вес</summary>
         [Column("price", TypeName = "decimal(10,2)")]
         public decimal Price { get; set; }
+
+        /// <summary>Вес весового блюда, г (цена в меню — за 100 г); null — обычная позиция</summary>
+        [Column("weight")]
+        public int? Weight { get; set; }
         
         [Column("subtotal", TypeName = "decimal(10,2)")]
         public decimal Subtotal => Price * Quantity;

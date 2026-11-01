@@ -29,6 +29,8 @@ export interface CheckItem {
   id: number;
   name: string;
   quantity: number;
+  /** Вес весового блюда, г — можно поправить, пока счёт открыт */
+  weight?: number | null;
   price: number;
   addons: { addonName: string; quantity: number; price: number }[];
   readyQuantity: number;
@@ -289,6 +291,11 @@ export const useShiftDetails = (id: number | null) =>
 export const useServeItem = () =>
   useWaiterMutation<{ itemId: number; delta: number | null }>(({ itemId, delta }) =>
     apiClient.post(`/api/kitchen/items/${itemId}/served`, { delta }).then(r => r.data));
+
+/** Поправить вес весового блюда (официант уточнил, повар взвесил) — сумма пересчитается */
+export const useSetItemWeight = () =>
+  useWaiterMutation<{ itemId: number; grams: number }>(({ itemId, grams }) =>
+    apiClient.put(`/api/kitchen/items/${itemId}/weight`, { grams }).then(r => r.data));
 
 export interface MyChecks {
   shift: { id: number; openedAt: string; closedAt: string | null } | null;

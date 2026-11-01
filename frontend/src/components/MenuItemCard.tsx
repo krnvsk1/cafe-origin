@@ -122,6 +122,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
         <Typography sx={{ fontWeight: 800, fontSize: { xs: '1.05rem', sm: '1.2rem' }, letterSpacing: '-0.02em' }}>
           {price.from && <Box component="span" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.85em', mr: 0.5 }}>от</Box>}
           {price.value} ₽
+          {item.isWeighted && <Box component="span" sx={{ fontWeight: 600, color: 'text.secondary', fontSize: '0.75em', ml: 0.5 }}>за 100 г</Box>}
         </Typography>
         <Typography
           sx={{

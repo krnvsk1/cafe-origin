@@ -23,13 +23,48 @@ import type { Dish, Addon, SelectedAddon, AddonCategory } from '../types';
 import { useDishAddons } from '../hooks/useAddons';
 import { resolveMediaUrl } from '../utils/media';
 import { tokens } from '../theme';
+import { DEFAULT_GRAMS, MAX_GRAMS, MIN_GRAMS, WEIGHT_PRESETS, isWeightedDish, priceForWeight, validGrams, weightLabel } from '../utils/weight';
 
 interface ProductModalProps {
   open: boolean;
   onClose: () => void;
   product: Dish | null;
-  onAddToCart: (product: Dish, quantity: number, selectedAddons: SelectedAddon[], instructions: string, selectedChild?: Dish) => void;
+  onAddToCart: (product: Dish, quantity: number, selectedAddons: SelectedAddon[], instructions: string, selectedChild?: Dish, weight?: number) => void;
 }
+
+/** Выбор веса весового блюда: быстрые кнопки и свои граммы */
+export const WeightChooser: React.FC<{ grams: number; onChange: (g: number) => void; per100: number; muted: string }> = ({ grams, onChange, per100, muted }) => {
+  const [text, setText] = useState(String(grams));
+  useEffect(() => { setText(String(grams)); }, [grams]);
+  const valid = validGrams(grams);
+  return (
+    <Box sx={{ mt: 2.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1, mb: 1 }}>
+        <Typography variant="h6" sx={{ fontSize: '1.1rem' }}>Вес</Typography>
+        <Typography variant="body2" color="text.secondary">{per100.toLocaleString('ru-RU')} ₽ за 100 г</Typography>
+      </Box>
+      <Box role="radiogroup" aria-label="Вес" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, p: 0.5, bgcolor: muted, borderRadius: '16px' }}>
+        {WEIGHT_PRESETS.map(g => {
+          const active = grams === g;
+          return (
+            <ButtonBase key={g} role="radio" aria-checked={active} onClick={() => onChange(g)}
+              sx={{ flex: '1 1 auto', minWidth: 64, px: 1.25, py: 1, borderRadius: '12px', fontWeight: active ? 700 : 500,
+                bgcolor: active ? 'background.paper' : 'transparent', boxShadow: active ? '0 1px 4px rgba(33,32,31,0.14)' : 'none' }}>
+              {weightLabel(g)}
+            </ButtonBase>
+          );
+        })}
+      </Box>
+      <TextField
+        label="Свой вес, г" type="number" size="small" value={text} sx={{ mt: 1.5, width: 160 }}
+        inputProps={{ min: MIN_GRAMS, max: MAX_GRAMS, step: 10, inputMode: 'numeric' }}
+        onChange={e => { setText(e.target.value); const g = Math.round(Number(e.target.value)); if (g > 0) onChange(g); }}
+        error={!valid}
+        helperText={valid ? `${priceForWeight(per100, grams).toLocaleString('ru-RU')} ₽` : `от ${MIN_GRAMS} г до ${MAX_GRAMS / 1000} кг`}
+      />
+    </Box>
+  );
+};
 
 // Выбор одной опции: явно одна (maxSelections = 1)
 const isSingleChoice = (c: AddonCategory) => c.maxSelections === 1;
@@ -50,6 +85,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ open, onClose, product, onA
   const [selectedChild, setSelectedChild] = useState<Dish | null>(null);
   const [missing, setMissing] = useState<number[]>([]);
   const [added, setAdded] = useState(false);
+  const [grams, setGrams] = useState(DEFAULT_GRAMS);
   const groupRefs = useRef(new Map<number, HTMLElement>());
 
   // Доступные варианты, от дешёвого к дорогому
@@ -67,6 +103,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ open, onClose, product, onA
       setInstructions('');
       setMissing([]);
       setAdded(false);
+      setGrams(DEFAULT_GRAMS);
       setSelectedChild(children[0] ?? null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,8 +123,10 @@ const ProductModal: React.FC<ProductModalProps> = ({ open, onClose, product, onA
 
   const selectedList = Array.from(selected.values()).flat();
   const addonsTotal = selectedList.reduce((sum, a) => sum + a.price * a.quantity, 0);
-  const basePrice = selectedChild?.price ?? product.price;
-  const totalPrice = (basePrice + addonsTotal) * quantity;
+  const weighted = isWeightedDish(product, selectedChild);
+  const per100 = selectedChild?.price ?? product.price;
+  const basePrice = weighted ? priceForWeight(per100, grams) : per100;
+  const totalPrice = Math.round((basePrice + addonsTotal) * quantity * 100) / 100;
 
   const image = product.images?.find(i => i.isPrimary)?.filePath ?? product.images?.[0]?.filePath;
   const imageUrl = image ? resolveMediaUrl(image) : '';
@@ -147,7 +186,8 @@ const ProductModal: React.FC<ProductModalProps> = ({ open, onClose, product, onA
       return;
     }
 
-    onAddToCart(product, quantity, selectedList, instructions.trim(), selectedChild ?? undefined);
+    if (weighted && !validGrams(grams)) return;
+    onAddToCart(product, quantity, selectedList, instructions.trim(), selectedChild ?? undefined, weighted ? grams : undefined);
     setAdded(true);
     setTimeout(onClose, 450);
   };
@@ -238,13 +278,15 @@ const ProductModal: React.FC<ProductModalProps> = ({ open, onClose, product, onA
                         }}
                       >
                         <Typography sx={{ fontWeight: active ? 700 : 500, fontSize: '0.92rem' }}>{child.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">{child.price} ₽</Typography>
+                        <Typography variant="body2" color="text.secondary">{child.price} ₽{weighted ? ' / 100 г' : ''}</Typography>
                       </ButtonBase>
                     );
                   })}
                 </Box>
               </Box>
             )}
+
+            {weighted && <WeightChooser grams={grams} onChange={setGrams} per100={per100} muted={muted} />}
 
             {/* Добавки */}
             {addonsLoading && <Skeleton variant="rounded" height={120} sx={{ mt: 3, borderRadius: '16px' }} />}
@@ -380,7 +422,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ open, onClose, product, onA
               color="secondary"
               size="large"
               onClick={handleAdd}
-              disabled={added || (hasVariants && !selectedChild)}
+              disabled={added || (hasVariants && !selectedChild) || (weighted && !validGrams(grams))}
               sx={{ flex: 1, justifyContent: 'space-between', px: 2.5, '&.Mui-disabled': added ? { bgcolor: tokens.herb, color: '#fff' } : {} }}
             >
               {added ? (

@@ -10,6 +10,7 @@ import {
   MusicNote as MusicNoteIcon,
   MenuBookOutlined as RecipeIcon,
   Check as CheckIcon,
+  ScaleOutlined as ScaleIcon,
 } from '@mui/icons-material';
 import { useKitchenOrders, useSetOrderStatus, useKitchenStations, useSetStationStatus, useKitchenItem, useResolveVoid } from '../api/staff';
 import type { KitchenOrder, KitchenOrderItem } from '../api/staff';
@@ -21,6 +22,8 @@ import { formatScheduled } from '../utils/schedule';
 import FullscreenButton from '../components/FullscreenButton';
 import { useWorkScreen } from '../hooks/useFullscreen';
 import KitchenTechCardDialog from '../components/KitchenTechCardDialog';
+import WeightEditDialog from '../components/WeightEditDialog';
+import { useSetItemWeight } from '../api/waiter';
 import type { OrderStatus } from '../types';
 
 const SOUND_KEY = 'kitchen-sound';
@@ -53,7 +56,10 @@ const COLUMNS: { status: OrderStatus; title: string; color: string }[] = [
 const statusFor = (order: KitchenOrder, stationId: number | null): OrderStatus =>
   stationId == null ? order.status : (order.stations.find(s => s.id === stationId)?.status ?? order.status);
 
-const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: number | null; onRecipe: (item: KitchenOrderItem) => void }> = ({ order, now, stationId, onRecipe }) => {
+const KitchenCard: React.FC<{
+  order: KitchenOrder; now: number; stationId: number | null;
+  onRecipe: (item: KitchenOrderItem) => void; onWeigh: (item: KitchenOrderItem) => void;
+}> = ({ order, now, stationId, onRecipe, onWeigh }) => {
   const setStatus = useSetOrderStatus();
   const setStation = useSetStationStatus();
   const itemMark = useKitchenItem();
@@ -111,6 +117,13 @@ const KitchenCard: React.FC<{ order: KitchenOrder; now: number; stationId: numbe
           <Typography fontWeight={700} sx={{ fontSize: '1.05rem', flex: 1, textDecoration: crossed ? 'line-through' : 'none' }}>
             {item.quantity} × {item.name}
           </Typography>
+          {!!item.weight && !done && (
+            <Tooltip title="Взвесить: указать фактический вес">
+              <IconButton size="small" onClick={() => onWeigh(item)} aria-label={`Вес: ${item.name}`} sx={{ mt: -0.25, color: 'text.secondary' }}>
+                <ScaleIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           {/* Техкарта — по запросу повара, чтобы не загромождать карточку */}
           <Tooltip title="Техкарта">
             <IconButton size="small" onClick={() => onRecipe(item)} aria-label={`Техкарта: ${item.name}`} sx={{ mt: -0.25, color: 'text.secondary' }}>
@@ -253,6 +266,8 @@ const KitchenPage: React.FC = () => {
   });
   const [melody, setMelodyState] = React.useState<MelodyId>(getMelody);
   const [recipeItem, setRecipeItem] = React.useState<KitchenOrderItem | null>(null);
+  const [weighItem, setWeighItem] = React.useState<KitchenOrderItem | null>(null);
+  const setItemWeight = useSetItemWeight();
   const { data: stations = [] } = useKitchenStations();
   const [stationId, setStationIdState] = React.useState<number | null>(() => {
     try { const v = localStorage.getItem(STATION_KEY); return v ? Number(v) : null; } catch { return null; }
@@ -371,7 +386,7 @@ const KitchenPage: React.FC = () => {
                 <Typography variant="h6" fontWeight={700}>{col.title}</Typography>
                 <Chip size="small" label={list.length} />
               </Box>
-              {list.map(o => <KitchenCard key={o.id} order={o} now={now} stationId={station} onRecipe={setRecipeItem} />)}
+              {list.map(o => <KitchenCard key={o.id} order={o} now={now} stationId={station} onRecipe={setRecipeItem} onWeigh={setWeighItem} />)}
               {list.length === 0 && (
                 <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>Пусто</Typography>
               )}
@@ -384,11 +399,13 @@ const KitchenPage: React.FC = () => {
               <Typography variant="h6" fontWeight={700}>Ко времени (позже)</Typography>
               <Chip size="small" label={later.length} />
             </Box>
-            {later.map(o => <KitchenCard key={o.id} order={o} now={now} stationId={station} onRecipe={setRecipeItem} />)}
+            {later.map(o => <KitchenCard key={o.id} order={o} now={now} stationId={station} onRecipe={setRecipeItem} onWeigh={setWeighItem} />)}
           </Box>
         )}
       </Box>
       <KitchenTechCardDialog item={recipeItem} onClose={() => setRecipeItem(null)} />
+      <WeightEditDialog item={weighItem} onClose={() => setWeighItem(null)}
+        onSave={grams => setItemWeight.mutateAsync({ itemId: weighItem!.id, grams })} />
     </Box>
   );
 };

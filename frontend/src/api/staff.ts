@@ -46,6 +46,8 @@ export interface KitchenOrderItem {
   stationId: number;
   name: string;
   quantity: number;
+  /** Вес весового блюда, г */
+  weight?: number | null;
   addons: { addonId: number; addonName: string; quantity: number }[];
 }
 

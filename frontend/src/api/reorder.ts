@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
 import { useCartStore } from '../store/cartStore';
 import type { SelectedAddon, Dish } from '../types';
+import { isWeightedDish } from '../utils/weight';
 
 interface ReorderAddon {
   addonId: number;
@@ -18,6 +19,8 @@ interface ReorderItem {
   cardId: number;
   name: string;
   quantity: number;
+  /** Вес весового блюда, г */
+  weight?: number | null;
   available: boolean;
   price: number;
   oldPrice: number;
@@ -84,7 +87,13 @@ export const useRepeatOrder = () => {
         }
 
         if (item.price !== item.oldPrice) result.priceChanged = true;
-        addItem(card, item.quantity, addons, '', child);
+        // Вес повторяем, только если блюдо и сейчас продаётся на вес
+        const weight = item.weight && isWeightedDish(card, child) ? item.weight : undefined;
+        if (!item.weight && isWeightedDish(card, child)) {
+          result.skipped.push(item.name);
+          continue;
+        }
+        addItem(card, item.quantity, addons, '', child, weight);
         result.added += item.quantity;
       }
 

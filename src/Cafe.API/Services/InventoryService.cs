@@ -21,6 +21,9 @@ namespace Cafe.API.Services
         /// </summary>
         Task VoidItemStockAsync(Order order, OrderItem item, int quantity, bool writeOff, string comment);
 
+        /// <summary>Вес весовой позиции поправили после списания: дописать или вернуть разницу. Сохранение — на вызывающем.</summary>
+        Task AdjustWeightStockAsync(Order order, OrderItem item, int oldGrams, int newGrams);
+
         Task<TechCardCalculator> LoadCalculatorAsync(bool tracking = false);
 
         /// <summary>Пересчитывает остатки по журналу (на случай рассинхронизации)</summary>
@@ -171,6 +174,7 @@ namespace Cafe.API.Services
                 {
                     i.DishId,
                     i.Quantity,
+                    i.Weight,
                     ParentId = _context.Dishes.Where(s => s.Id == i.DishId).Select(s => s.ParentId).FirstOrDefault(),
                     Addons = i.SelectedAddons.Select(a => new { a.AddonId, a.Quantity }).ToList()
                 })
@@ -183,7 +187,8 @@ namespace Cafe.API.Services
             foreach (var line in lines)
             {
                 var card = calc.ForDish(line.DishId, line.ParentId);
-                if (card != null) calc.AddToRaw(card, line.Quantity, consumption);
+                // Техкарта весового блюда — на 100 г
+                if (card != null) calc.AddToRaw(card, Weighing.Portions(line.Quantity, line.Weight), consumption);
                 else missing++;
 
                 foreach (var addon in line.Addons)
@@ -221,7 +226,7 @@ namespace Cafe.API.Services
             var calc = await LoadCalculatorAsync(tracking: true);
             var consumption = new Dictionary<int, decimal>();
             var card = calc.ForDish(item.DishId, parentId);
-            if (card != null) calc.AddToRaw(card, quantity, consumption);
+            if (card != null) calc.AddToRaw(card, Weighing.Portions(quantity, item.Weight), consumption);
             foreach (var (addonId, addonQty) in addons)
             {
                 var addonCard = calc.ForAddon(addonId);
@@ -239,6 +244,27 @@ namespace Cafe.API.Services
                 // Приготовлено или начато — списываем как порчу, без привязки к заказу
                 if (writeOff)
                     Apply(stock, -Math.Round(qty, 3), cost, StockMovementTypes.WriteOff, null, null, $"Списание отменённого блюда: {comment}", affectsAvg: false);
+            }
+        }
+
+        public async Task AdjustWeightStockAsync(Order order, OrderItem item, int oldGrams, int newGrams)
+        {
+            if (order.StockDeductedAt == null || oldGrams == newGrams) return;
+            var parentId = await _context.Dishes.Where(s => s.Id == item.DishId).Select(s => s.ParentId).FirstOrDefaultAsync();
+            var calc = await LoadCalculatorAsync(tracking: true);
+            var card = calc.ForDish(item.DishId, parentId);
+            if (card == null) return;
+            var consumption = new Dictionary<int, decimal>();
+            calc.AddToRaw(card, Weighing.Portions(item.Quantity, newGrams) - Weighing.Portions(item.Quantity, oldGrams), consumption);
+            var comment = $"Вес «{Weighing.StripWeight(item.Name)}»: {Weighing.Label(oldGrams)} → {Weighing.Label(newGrams)}, заказ #{order.Id}";
+            foreach (var (itemId, qty) in consumption)
+            {
+                var stock = calc.Item(itemId);
+                if (stock == null || qty == 0) continue;
+                var cost = Math.Round(TechCardCalculator.CostOf(stock), 4);
+                // Больше веса — досписываем как продажу, меньше — возвращаем; оба движения привязаны к заказу
+                Apply(stock, -Math.Round(qty, 3), cost, qty > 0 ? StockMovementTypes.Sale : StockMovementTypes.SaleReturn,
+                    null, order.Id, comment, affectsAvg: false);
             }
         }
 

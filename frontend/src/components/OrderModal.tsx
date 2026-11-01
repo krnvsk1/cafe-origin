@@ -189,9 +189,11 @@ const OrderModal: React.FC<OrderModalProps> = ({
       items: cartItems.map(item => ({
         dishId: item.selectedChild?.id ?? item.id,
         quantity: item.quantity,
-        name: item.selectedChild
+        // У весового вес в названии добавит сервер
+        name: item.weight ? item.name : item.selectedChild
           ? `${item.name} — ${item.selectedChild.name}`
           : item.name,
+        weight: item.weight,
         price: item.selectedChild?.price ?? item.price,
         selectedAddons: item.selectedAddons?.map(addon => ({
           addonId: addon.addonId,

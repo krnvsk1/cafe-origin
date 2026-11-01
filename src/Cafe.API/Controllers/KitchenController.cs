@@ -67,6 +67,44 @@ namespace Cafe.API.Controllers
             return await _context.KitchenStations.AsNoTracking().OrderBy(s => s.SortOrder).ThenBy(s => s.Id).ToListAsync();
         }
 
+        public class WeightRequest
+        {
+            public int Grams { get; set; }
+        }
+
+        // PUT: api/kitchen/items/{id}/weight — поправить вес весового блюда (повар взвесил, официант уточнил).
+        // Сумма заказа и счёта пересчитывается; если продукты уже списаны — дописывается или возвращается разница.
+        [HttpPut("items/{id:int}/weight")]
+        [HasPermission(Permissions.Kitchen, Permissions.Waiter, Permissions.ChecksAll)]
+        public async Task<IActionResult> SetWeight(int id, [FromBody] WeightRequest r)
+        {
+            var item = await _context.OrderItems.Include(i => i.SelectedAddons).Include(i => i.Order).FirstOrDefaultAsync(i => i.Id == id);
+            if (item?.Order == null) return NotFound(new { message = "Позиция не найдена" });
+            var order = item.Order;
+            if (item.Weight is not > 0) return BadRequest(new { message = "Это блюдо продаётся поштучно" });
+            if (Weighing.Validate(true, r.Grams, Weighing.StripWeight(item.Name)) is { } error) return BadRequest(new { message = error });
+            if (OrderStatuses.IsFinal(order.Status)) return BadRequest(new { message = "Заказ уже закрыт" });
+            if (order.PaymentStatus == "paid") return BadRequest(new { message = "Заказ уже оплачен — вес не изменить" });
+            var checkId = item.CheckId ?? order.CheckId;
+            if (checkId != null && await _context.TableChecks.AnyAsync(c => c.Id == checkId && c.Status != CheckStatuses.Open))
+                return BadRequest(new { message = "Счёт уже закрыт" });
+
+            var oldGrams = item.Weight.Value;
+            if (oldGrams == r.Grams) return Ok(new { item.Id, item.Weight, item.Price, item.Name });
+            // Цена за 100 г — та, по которой блюдо заказали (меню могло с тех пор поменяться)
+            var per100 = item.Price * 100m / oldGrams;
+            var oldPrice = item.Price;
+            item.Price = Weighing.PriceFor(per100, r.Grams);
+            item.Weight = r.Grams;
+            item.Name = Weighing.NameWith(Weighing.StripWeight(item.Name), r.Grams);
+            order.Total += (item.Price - oldPrice) * item.Quantity;
+            await _inventory.AdjustWeightStockAsync(order, item, oldGrams, r.Grams);
+            await _context.SaveChangesAsync();
+
+            _events.Publish(new OrderEvent("updated", order.Id, order.UserId, order.Status, null, DateTime.UtcNow));
+            return Ok(new { item.Id, item.Weight, item.Price, item.Name });
+        }
+
         // GET: api/kitchen/stations
         [HttpGet("stations")]
         public async Task<IActionResult> GetStations() =>
@@ -454,6 +492,7 @@ namespace Cafe.API.Controllers
                         StationId = StationOf(i.DishId),
                         i.Name,
                         i.Quantity,
+                        i.Weight,
                         Addons = i.SelectedAddons.Select(a => new { a.AddonId, a.AddonName, a.Quantity })
                     })
                 };

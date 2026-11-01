@@ -60,6 +60,8 @@ const KitchenTechCardDialog: React.FC<{ item: KitchenOrderItem | null; onClose: 
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const { data, isLoading, error } = useKitchenTechCard(item);
   const portions = item?.quantity ?? 1;
+  // Техкарта весового блюда — на 100 г: на 350 г нужно 3,5 «порции»
+  const dishPortions = item?.weight ? Math.round(portions * item.weight) / 100 : portions;
   const empty = !!data && !data.dish && data.addons.length === 0;
 
   return (
@@ -83,7 +85,10 @@ const KitchenTechCardDialog: React.FC<{ item: KitchenOrderItem | null; onClose: 
             <Typography variant="body2">Её заполняют на складе: «Блюда и техкарты».</Typography>
           </Box>
         )}
-        {data?.dish && <CardSection card={data.dish} heading={data.addons.length ? 'Блюдо' : data.dish.title} portions={portions} />}
+        {item?.weight && data?.dish && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>Техкарта на 100 г — пересчитано на {item.quantity > 1 ? `${item.quantity} × ` : ''}{item.weight} г</Typography>
+        )}
+        {data?.dish && <CardSection card={data.dish} heading={data.addons.length ? 'Блюдо' : data.dish.title} portions={dishPortions} />}
         {data?.addons.map(card => <CardSection key={card.title} card={card} heading={`Добавка: ${card.title}`} portions={portions} />)}
         {data && data.semis.length > 0 && (
           <>

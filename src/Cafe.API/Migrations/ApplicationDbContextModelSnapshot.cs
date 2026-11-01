@@ -1536,6 +1536,10 @@ namespace Cafe.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
 
+                    b.Property<int?>("Weight")
+                        .HasColumnType("integer")
+                        .HasColumnName("weight");
+
                     b.Property<int>("DishId")
                         .HasColumnType("integer")
                         .HasColumnName("dish_id");
@@ -1977,6 +1981,10 @@ namespace Cafe.API.Migrations
                     b.Property<bool>("IsSpicy")
                         .HasColumnType("boolean")
                         .HasColumnName("is_spicy");
+
+                    b.Property<bool>("IsWeighted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_weighted");
 
                     b.Property<int?>("KitchenStationId")
                         .HasColumnType("integer")

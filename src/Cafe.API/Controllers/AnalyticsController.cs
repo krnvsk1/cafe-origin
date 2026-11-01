@@ -95,7 +95,7 @@ namespace Cafe.API.Controllers
 
             var topItems = valid
                 .SelectMany(o => o.OrderItems)
-                .GroupBy(i => i.Name)
+                .GroupBy(i => i.Weight.HasValue ? Weighing.StripWeight(i.Name) : i.Name)
                 .Select(g => new { Name = g.Key, Quantity = g.Sum(i => i.Quantity), Revenue = g.Sum(i => i.Price * i.Quantity) })
                 .OrderByDescending(x => x.Quantity)
                 .Take(10)

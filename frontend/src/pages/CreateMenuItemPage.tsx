@@ -190,6 +190,7 @@ const CreateMenuItemPage: React.FC = () => {
     price: 0,
     description: '',
     isSpicy: false,
+    isWeighted: false,
     isAvailable: true,
     parentId: urlParentId ? Number(urlParentId) : null,
     category: '',
@@ -214,6 +215,7 @@ const CreateMenuItemPage: React.FC = () => {
         price: existingDish.price,
         description: existingDish.description,
         isSpicy: existingDish.isSpicy,
+        isWeighted: !!existingDish.isWeighted,
         isAvailable: existingDish.isAvailable,
         parentId: existingDish.parentId ?? null,
         category: existingDish.category ?? '',
@@ -506,6 +508,7 @@ const CreateMenuItemPage: React.FC = () => {
     price: formData.price || 0,
     description: formData.description || '',
     isSpicy: !!formData.isSpicy,
+    isWeighted: !!formData.isWeighted,
     isAvailable: formData.isAvailable ?? true,
     badge: formData.badge ?? null,
     category: formData.category,
@@ -649,7 +652,7 @@ const CreateMenuItemPage: React.FC = () => {
 
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: '200px 1fr' }, gap: 2.5 }}>
                 <Field
-                  label="Цена"
+                  label={formData.isWeighted && kind === 'card' ? 'Цена за 100 г' : 'Цена'}
                   htmlFor="field-price"
                   required={kind === 'variant'}
                   hint={kind === 'card' && !errors.price ? 'Если есть варианты, цена берётся из них' : undefined}
@@ -775,6 +778,18 @@ const CreateMenuItemPage: React.FC = () => {
                 onChange={v => handleChange('isSpicy', v)}
                 disabled={isPending}
               />
+              {kind === 'card' && (
+                <>
+                  <Divider />
+                  <SettingRow
+                    title="На вес"
+                    description="Цена указывается за 100 г, вес выбирают при заказе (шашлык, люля, орехи)"
+                    checked={!!formData.isWeighted}
+                    onChange={v => handleChange('isWeighted', v)}
+                    disabled={isPending}
+                  />
+                </>
+              )}
             </Box>
           </Section>
 

@@ -209,8 +209,10 @@ namespace Cafe.API.Controllers
                         ? (current.Parent != null ? $"{current.Parent.Name} — {current.Name}" : current.Name)
                         : item.Name,
                     item.Quantity,
+                    item.Weight,
                     Available = current != null && current.IsAvailable && parentAvailable,
-                    Price = current?.Price ?? item.Price,
+                    Price = current == null ? item.Price
+                        : item.Weight is > 0 ? Weighing.PriceFor(current.Price, item.Weight.Value) : current.Price,
                     OldPrice = item.Price,
                     Addons = item.SelectedAddons.Select(a =>
                     {
@@ -288,14 +290,22 @@ namespace Cafe.API.Controllers
 
                 // Получаем актуальные цены из базы данных (только доступные блюда)
                 var dishIds = request.Items.Select(i => i.DishId).Distinct();
-                var dishes = await _context.Dishes
+                var dishInfo = await _context.Dishes
                     .Where(s => s.IsAvailable && dishIds.Contains(s.Id))
-                    .ToDictionaryAsync(s => s.Id, s => s.Price);
+                    .Select(s => new { s.Id, s.Price, s.Name, Weighted = s.IsWeighted || (s.Parent != null && s.Parent.IsWeighted) })
+                    .ToDictionaryAsync(s => s.Id);
+                var dishes = dishInfo.ToDictionary(x => x.Key, x => x.Value.Price);
 
                 // Проверяем, что все запрошенные блюда существуют и доступны
                 var missingDishIds = dishIds.Where(id => !dishes.ContainsKey(id)).ToList();
                 if (missingDishIds.Any())
                     return BadRequest(new { Message = $"Блюда с ID {string.Join(", ", missingDishIds)} нет в меню или оно недоступно" });
+                foreach (var item in request.Items)
+                {
+                    var info = dishInfo[item.DishId];
+                    if (Weighing.Validate(info.Weighted, item.Weight, string.IsNullOrWhiteSpace(item.Name) ? info.Name : item.Name.Trim()) is { } weightError)
+                        return BadRequest(new { Message = weightError });
+                }
 
                 // Получаем все добавки для проверки цен
                 var allAddonIds = request.Items
@@ -410,15 +420,21 @@ namespace Cafe.API.Controllers
                 // Добавляем позиции заказа
                 foreach (var itemRequest in request.Items)
                 {
-                    var basePrice = dishes.GetValueOrDefault(itemRequest.DishId, 0);
-                    
+                    var weight = dishInfo[itemRequest.DishId].Weighted ? itemRequest.Weight : null;
+                    var basePrice = weight.HasValue
+                        ? Weighing.PriceFor(dishes.GetValueOrDefault(itemRequest.DishId, 0), weight.Value)
+                        : dishes.GetValueOrDefault(itemRequest.DishId, 0);
+                    var itemName = string.IsNullOrWhiteSpace(itemRequest.Name) ? "Без названия" : itemRequest.Name.Trim();
+                    if (weight.HasValue) itemName = Weighing.NameWith(Weighing.StripWeight(itemName), weight.Value);
+
                     var orderItem = new OrderItem
                     {
                         OrderId = newOrder.Id,
                         DishId = itemRequest.DishId,
-                        Name = itemRequest.Name?.Trim() ?? "Без названия",
+                        Name = itemName.Length > 100 ? itemName[..100] : itemName,
                         Quantity = itemRequest.Quantity,
-                        Price = basePrice
+                        Price = basePrice,
+                        Weight = weight
                     };
                     
                     await _context.OrderItems.AddAsync(orderItem);
@@ -591,6 +607,8 @@ namespace Cafe.API.Controllers
             public int DishId { get; set; }
             public string Name { get; set; } = string.Empty;
             public int Quantity { get; set; }
+            /// <summary>Вес весового блюда, г</summary>
+            public int? Weight { get; set; }
             public List<SelectedAddonDto>? SelectedAddons { get; set; }
         }
 

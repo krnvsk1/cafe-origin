@@ -8,7 +8,7 @@ import {
   ArrowBack as BackIcon, Add as AddIcon, Remove as RemoveIcon, Search as SearchIcon, Close as CloseIcon,
   TableRestaurant as TableIcon, CheckCircle as ReadyIcon, Schedule as CookingIcon, DoneAll as ServedIcon,
   DeleteOutline as DeleteIcon, MoreVert as MoreIcon,
-  NotificationsActiveOutlined as BellOnIcon, NotificationsOffOutlined as BellOffIcon,
+  NotificationsActiveOutlined as BellOnIcon, NotificationsOffOutlined as BellOffIcon, ScaleOutlined as ScaleIcon,
 } from '@mui/icons-material';
 import { usePushNotifications, type PushState } from '../api/push';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -16,14 +16,16 @@ import { useDishes } from '../api/hooks';
 import {
   useWaiterTables, useTableCheck, useOpenCheck, useAddRound, useCancelRound, useCloseCheck, useCancelCheck,
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
-  useServeItem, useMyChecks,
+  useServeItem, useMyChecks, useSetItemWeight,
   useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
   type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
 import { apiError } from '../api/inventory';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
 import { useQueryClient } from '@tanstack/react-query';
+import { isWeightedDish, priceForWeight, weightLabel } from '../utils/weight';
 import ProductModal from '../components/ProductModal';
+import WeightEditDialog from '../components/WeightEditDialog';
 import { useCan, P } from '../auth/permissions';
 import { resolveMediaUrl } from '../utils/media';
 import { allowedOrderTypes, isAllowedFor } from '../utils/orderTypes';
@@ -365,6 +367,8 @@ interface DraftLine {
   quantity: number;
   addons: SelectedAddon[];
   comment: string;
+  /** Вес весового блюда, г (unitPrice — уже за этот вес) */
+  weight?: number;
 }
 
 const lineTotal = (l: DraftLine) => (l.unitPrice + l.addons.reduce((s, a) => s + a.price * a.quantity, 0)) * l.quantity;
@@ -392,16 +396,18 @@ const MenuPicker: React.FC<{ open: boolean; tableName: string; onClose: () => vo
   const visible = cards.filter(c => (!section || (c.category?.trim() || 'Меню') === section)
     && (!q || c.name.toLowerCase().includes(q) || c.children.some(ch => ch.name.toLowerCase().includes(q))));
 
-  const add = (card: Dish, child: Dish, quantity: number, addons: SelectedAddon[], cmt: string) => {
-    const key = `${child.id}|${addons.map(a => `${a.addonId}x${a.quantity}`).sort().join(',')}|${cmt}`;
-    const title = card.children && card.children.length > 1 && child.name !== card.name ? `${card.name} ${child.name}` : card.name;
+  const add = (card: Dish, child: Dish, quantity: number, addons: SelectedAddon[], cmt: string, weight?: number) => {
+    const key = `${child.id}|${weight ?? ''}|${addons.map(a => `${a.addonId}x${a.quantity}`).sort().join(',')}|${cmt}`;
+    const baseTitle = card.children && card.children.length > 1 && child.name !== card.name ? `${card.name} ${child.name}` : card.name;
+    const title = weight ? `${baseTitle} · ${weightLabel(weight)}` : baseTitle;
+    const unitPrice = weight ? priceForWeight(child.price, weight) : child.price;
     setLines(prev => prev.some(l => l.key === key)
       ? prev.map(l => (l.key === key ? { ...l, quantity: l.quantity + quantity } : l))
-      : [...prev, { key, dishId: child.id, title, unitPrice: child.price, quantity, addons, comment: cmt }]);
+      : [...prev, { key, dishId: child.id, title, unitPrice, quantity, addons, comment: cmt, weight }]);
   };
 
   const pick = (card: Dish & { children: Dish[] }) => {
-    if (card.children.length === 1 && !hasAddons(card) && !hasAddons(card.children[0])) add(card, card.children[0], 1, [], '');
+    if (card.children.length === 1 && !hasAddons(card) && !hasAddons(card.children[0]) && !isWeightedDish(card, card.children[0])) add(card, card.children[0], 1, [], '');
     else setPicking(card);
   };
 
@@ -445,7 +451,7 @@ const MenuPicker: React.FC<{ open: boolean; tableName: string; onClose: () => vo
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: '0.95rem', lineHeight: 1.2 }} noWrap>{card.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">{card.children.length > 1 ? 'от ' : ''}{money(min)}</Typography>
+                  <Typography variant="body2" color="text.secondary">{card.children.length > 1 ? 'от ' : ''}{money(min)}{card.isWeighted ? ' за 100 г' : ''}</Typography>
                 </Box>
                 {n > 0 ? <Chip size="small" color="secondary" label={n} sx={{ fontWeight: 800 }} /> : <AddIcon sx={{ color: 'text.secondary' }} />}
               </Box>
@@ -491,7 +497,7 @@ const MenuPicker: React.FC<{ open: boolean; tableName: string; onClose: () => vo
         )}
       </Box>
       <ProductModal open={!!picking} product={picking} onClose={() => setPicking(null)}
-        onAddToCart={(product, quantity, addons, instructions, child) => add(product, child ?? product, quantity, addons, instructions)} />
+        onAddToCart={(product, quantity, addons, instructions, child, weight) => add(product, child ?? product, quantity, addons, instructions, weight)} />
     </Drawer>
   );
 };
@@ -535,6 +541,8 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const [dialog, setDialog] = React.useState<'move' | 'split' | 'edit' | 'assign' | null>(null);
   const [toast, setToast] = React.useState('');
   const [voiding, setVoiding] = React.useState<CheckItem | null>(null);
+  const [weighing, setWeighing] = React.useState<CheckItem | null>(null);
+  const setItemWeight = useSetItemWeight();
   const serve = useServeItem();
   const serveItem = (itemId: number, delta: number | null) =>
     serve.mutate({ itemId, delta }, { onError: e => setToast(apiError(e)) });
@@ -556,7 +564,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
     await addRound.mutateAsync({
       checkId: check.id,
       comment: comment.trim() || null,
-      items: lines.map(l => ({ dishId: l.dishId, quantity: l.quantity, addons: l.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })), comment: l.comment || undefined })),
+      items: lines.map(l => ({ dishId: l.dishId, quantity: l.quantity, weight: l.weight, addons: l.addons.map(a => ({ addonId: a.addonId, quantity: a.quantity })), comment: l.comment || undefined })),
     });
   };
 
@@ -684,6 +692,11 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
                     Отдать{i.readyQuantity - i.servedQuantity > 1 ? ` ${i.readyQuantity - i.servedQuantity}` : ''}
                   </Button>
                 )}
+                {isOpen && !cancelled && !!i.weight && (
+                  <IconButton size="small" onClick={() => setWeighing(i)} aria-label={`Изменить вес: ${i.name}`} sx={{ color: 'text.secondary' }}>
+                    <ScaleIcon fontSize="small" />
+                  </IconButton>
+                )}
                 {isOpen && !cancelled && i.quantity - i.pendingVoid > 0 && (
                   <IconButton size="small" onClick={() => setVoiding(i)} aria-label={`Убрать из счёта: ${i.name}`} sx={{ color: 'text.secondary' }}>
                     <CloseIcon fontSize="small" />
@@ -736,6 +749,8 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       {dialog === 'move' && <MoveDialog check={check} onClose={() => setDialog(null)} onDone={name => { setDialog(null); setToast(`Счёт перенесён на стол ${name}`); }} />}
       {dialog === 'edit' && <EditCheckDialog check={check} onClose={() => setDialog(null)} />}
       {dialog === 'assign' && <AssignDialog check={check} onClose={() => setDialog(null)} onDone={name => { setDialog(null); setToast(`Счёт передан: ${name}`); }} />}
+      <WeightEditDialog item={weighing} onClose={() => setWeighing(null)}
+        onSave={grams => setItemWeight.mutateAsync({ itemId: weighing!.id, grams }).then(() => setToast('Вес изменён, сумма пересчитана'))} />
       {voiding && <VoidDialog item={voiding} onClose={() => setVoiding(null)} onDone={needsKitchen => {
         setVoiding(null);
         setToast(needsKitchen ? 'Блюдо уже готовят — кухня подтвердит отмену' : 'Блюдо убрано из счёта');

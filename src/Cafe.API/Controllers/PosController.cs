@@ -46,6 +46,8 @@ namespace Cafe.API.Controllers
         {
             public int DishId { get; set; }
             public int Quantity { get; set; } = 1;
+            /// <summary>Вес весового блюда, г</summary>
+            public int? Weight { get; set; }
             public List<PosAddonRequest> Addons { get; set; } = new();
             public string? Comment { get; set; }
         }
@@ -248,7 +250,8 @@ namespace Cafe.API.Controllers
                     ParentAvailable = s.Parent == null || s.Parent.IsAvailable,
                     HasChildren = s.Children.Any(),
                     s.OrderTypes,
-                    ParentTypes = s.Parent != null ? s.Parent.OrderTypes : null
+                    ParentTypes = s.Parent != null ? s.Parent.OrderTypes : null,
+                    Weighted = s.IsWeighted || (s.Parent != null && s.Parent.IsWeighted)
                 })
                 .ToDictionaryAsync(s => s.Id);
 
@@ -259,6 +262,11 @@ namespace Cafe.API.Controllers
                 if (d.HasChildren) return (null, 0, $"Выберите вариант для «{d.Name}»");
                 if (!SalesChannels.Allows(d.OrderTypes, d.ParentTypes, orderType))
                     return (null, 0, $"«{d.ParentName ?? d.Name}» нельзя продать {(orderType == SalesChannels.DineIn ? "в зале" : "с собой")}");
+            }
+            foreach (var item in items)
+            {
+                var d = dishes[item.DishId];
+                if (Weighing.Validate(d.Weighted, item.Weight, d.ParentName ?? d.Name) is { } weightError) return (null, 0, weightError);
             }
 
             // Цены добавок — как в карточке товара: своя цена для блюда или базовая
@@ -280,12 +288,16 @@ namespace Cafe.API.Controllers
             {
                 var dish = dishes[item.DishId];
                 var name = dish.ParentName != null && dish.Name != "Стандарт" ? $"{dish.ParentName} {dish.Name}" : dish.ParentName ?? dish.Name;
+                var weight = dish.Weighted ? item.Weight : null;
+                var price = weight.HasValue ? Weighing.PriceFor(dish.Price, weight.Value) : dish.Price;
+                var fullName = Truncate(string.IsNullOrWhiteSpace(item.Comment) ? name : $"{name} ({item.Comment.Trim()})", 100);
                 var orderItem = new OrderItem
                 {
                     DishId = dish.Id,
-                    Name = Truncate(string.IsNullOrWhiteSpace(item.Comment) ? name : $"{name} ({item.Comment.Trim()})", 100),
+                    Name = weight.HasValue ? Weighing.NameWith(fullName, weight.Value) : fullName,
                     Quantity = item.Quantity,
-                    Price = dish.Price
+                    Price = price,
+                    Weight = weight
                 };
 
                 decimal addonsSum = 0;
@@ -294,21 +306,21 @@ namespace Cafe.API.Controllers
                     var addon = addons[a.AddonId];
                     var link = links.FirstOrDefault(l => l.DishId == dish.Id && l.AddonId == a.AddonId)
                                ?? (dish.ParentId.HasValue ? links.FirstOrDefault(l => l.DishId == dish.ParentId && l.AddonId == a.AddonId) : null);
-                    var price = link?.CustomPrice ?? addon.Price;
+                    var addonPrice = link?.CustomPrice ?? addon.Price;
                     orderItem.SelectedAddons.Add(new OrderItemAddon
                     {
                         AddonId = addon.Id,
                         AddonName = addon.Name,
                         AddonCategoryId = addon.AddonCategoryId,
                         AddonCategoryName = addon.Category?.Name ?? "Добавки",
-                        Price = price,
+                        Price = addonPrice,
                         Quantity = a.Quantity
                     });
-                    addonsSum += price * a.Quantity;
+                    addonsSum += addonPrice * a.Quantity;
                 }
 
                 result.Add(orderItem);
-                total += (dish.Price + addonsSum) * item.Quantity;
+                total += (price + addonsSum) * item.Quantity;
             }
 
             return (result, total, null);
