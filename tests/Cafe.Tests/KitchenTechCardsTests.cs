@@ -28,7 +28,7 @@ namespace Cafe.Tests
         {
             var (calc, dish) = Setup();
 
-            var view = KitchenTechCards.ToView(dish, "Шаурма · Большая", calc)!;
+            var view = KitchenTechCards.ToView(dish, "Бургер · Большая", calc)!;
 
             Assert.Equal(350, view.OutputWeight);
             Assert.Equal("Обжарить курицу, завернуть", view.Instructions);
@@ -53,7 +53,7 @@ namespace Cafe.Tests
         public void SemiCards_IncludeRecipesOfSemiFinishedIngredients_Once()
         {
             var (calc, dish) = Setup();
-            var view = KitchenTechCards.ToView(dish, "Шаурма", calc)!;
+            var view = KitchenTechCards.ToView(dish, "Бургер", calc)!;
 
             var semis = KitchenTechCards.SemiCards(new[] { view, view }, calc);
 

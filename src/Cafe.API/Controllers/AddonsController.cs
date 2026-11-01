@@ -193,7 +193,7 @@ namespace Cafe.API.Controllers
                     .FirstOrDefaultAsync(s => s.Id == dishId);
 
                 if (dish == null)
-                    return NotFound(new { Message = "Шаурма не найдена" });
+                    return NotFound(new { Message = "Блюдо не найдено" });
 
                 // Если у блюда нет своих добавок и оно — вариант карточки, берём добавки карточки
                 var addonsSource = dish.Addons;
@@ -377,7 +377,7 @@ namespace Cafe.API.Controllers
                     .Include(s => s.Children)
                     .FirstOrDefaultAsync(s => s.Id == request.DishId);
                 if (dish == null)
-                    return NotFound(new { Message = "Шаурма не найдена" });
+                    return NotFound(new { Message = "Блюдо не найдено" });
 
                 var addon = await _context.Addons.FindAsync(request.AddonId);
                 if (addon == null)

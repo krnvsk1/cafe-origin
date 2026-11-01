@@ -47,7 +47,9 @@ namespace Cafe.API.Monitoring
             if (Skip(ctx.Request.Path)) return;
             // Шаблон маршрута, а не адрес: /api/orders/{id}, чтобы заказы 1 и 2 считались одной ручкой
             if (ctx.GetEndpoint() is not RouteEndpoint endpoint) return;
-            var route = "/" + (endpoint.RoutePattern.RawText ?? ctx.Request.Path.Value ?? "").TrimStart('/');
+            var raw = "/" + (endpoint.RoutePattern.RawText ?? ctx.Request.Path.Value ?? "").TrimStart('/');
+            // /api/Dishes и /api/dishes — одна ручка: буквы маршрута в нижний регистр, параметры {id} как есть
+            var route = string.Join('/', raw.Split('/').Select(seg => seg.StartsWith('{') ? seg : seg.ToLowerInvariant()));
             var key = (ctx.Request.Method, route);
             var item = _items.GetOrAdd(key, _ => new Endpoint());
             var status = ctx.Response.StatusCode;

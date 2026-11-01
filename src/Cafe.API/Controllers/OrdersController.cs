@@ -273,7 +273,7 @@ namespace Cafe.API.Controllers
                 // Проверяем, что все запрошенные блюда существуют и доступны
                 var missingDishIds = dishIds.Where(id => !dishes.ContainsKey(id)).ToList();
                 if (missingDishIds.Any())
-                    return BadRequest(new { Message = $"Шаурма с ID {string.Join(", ", missingDishIds)} не найдена или недоступна" });
+                    return BadRequest(new { Message = $"Блюда с ID {string.Join(", ", missingDishIds)} нет в меню или оно недоступно" });
 
                 // Получаем все добавки для проверки цен
                 var allAddonIds = request.Items

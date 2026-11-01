@@ -637,7 +637,7 @@ const CreateMenuItemPage: React.FC = () => {
                 <TextField
                   id="field-name"
                   fullWidth
-                  placeholder={kind === 'variant' ? 'Например: Большая, 400 г, 30 см' : 'Например: Шаурма классическая'}
+                  placeholder={kind === 'variant' ? 'Например: Большая, 400 г, 30 см' : 'Например: Цезарь с курицей'}
                   value={formData.name}
                   onChange={e => handleChange('name', e.target.value)}
                   disabled={isPending}
@@ -681,7 +681,7 @@ const CreateMenuItemPage: React.FC = () => {
                       onInputChange={(_e, value) => handleChange('category', value)}
                       disabled={isPending}
                       renderInput={params => (
-                        <TextField {...params} id="field-category" placeholder="Например: Шаурма" />
+                        <TextField {...params} id="field-category" placeholder="Например: Салаты" />
                       )}
                     />
                   </Field>

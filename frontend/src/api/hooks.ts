@@ -1,3 +1,4 @@
+import { useAuthStore } from '../store/authStore';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from './client';
 import { saveOrderToken, getOrderToken } from '../utils/orderTokens';
@@ -417,24 +418,27 @@ export const useDeletePromoCode = () => {
 // ==================== LOYALTY POINTS HOOKS ====================
 
 export const usePointsBalance = () => {
+  // Баланс есть только у вошедших — гостю не спрашиваем (раньше это давало 401)
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   return useQuery<PointsBalance>({
     queryKey: ['points-balance'],
     queryFn: () => apiClient.get('/api/points/balance').then(res => ({
       balance: res.data.balance ?? res.data.Balance ?? 0
     })),
-    enabled: !!localStorage.getItem('token') || !!localStorage.getItem('cafe-auth'),
+    enabled: isAuthenticated,
     staleTime: 30 * 1000,
   });
 };
 
 export const usePointsHistory = (page = 1, pageSize = 20) => {
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
   return useQuery<PointsTransaction[]>({
     queryKey: ['points-history', page, pageSize],
     queryFn: async () => {
       const { data } = await apiClient.get(`/api/points/history?page=${page}&pageSize=${pageSize}`);
       return data.transactions || data.Transactions || [];
     },
-    enabled: !!localStorage.getItem('token') || !!localStorage.getItem('cafe-auth'),
+    enabled: isAuthenticated,
     staleTime: 30 * 1000,
   });
 };

@@ -16,7 +16,7 @@ import { apiError } from '../../api/inventory';
 const fill = (text: string) => LAYOUT_VARS.reduce((t, v) => t.split(v.key).join(v.sample), text);
 
 const SAMPLE = [
-  { name: 'Шаурма классическая + Сыр', qty: 2, price: 350 },
+  { name: 'Бургер классический + Сыр', qty: 2, price: 350 },
   { name: 'Морс клюквенный', qty: 1, price: 120 },
 ];
 

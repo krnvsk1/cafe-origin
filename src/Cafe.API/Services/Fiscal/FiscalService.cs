@@ -14,9 +14,12 @@ namespace Cafe.API.Services.Fiscal
         private readonly AtolClient _atol;
         private readonly FiscalSettingsProvider _settings;
         private readonly ILogger<FiscalService> _logger;
+        private readonly BrandSettingsProvider _brand;
 
-        public FiscalService(ApplicationDbContext context, AtolClient atol, FiscalSettingsProvider settings, ILogger<FiscalService> logger)
+        public FiscalService(ApplicationDbContext context, AtolClient atol, FiscalSettingsProvider settings, ILogger<FiscalService> logger,
+            BrandSettingsProvider brand)
         {
+            _brand = brand;
             _context = context;
             _atol = atol;
             _settings = settings;
@@ -63,7 +66,7 @@ namespace Cafe.API.Services.Fiscal
                 var lines = await ReceiptLines.LoadAsync(_context, order, ct);
                 var cashier = await CashierNameAsync(userId, ct);
                 var contact = o.SendToCustomer ? Controllers.PosController.NormalizePhone(order.Phone) : null;
-                var task = FiscalTasks.Receipt(kind, o, lines, order.PaymentMethod, cashier, contact, Vars(order.Id, order.DeliveryType, cashier, DateTime.UtcNow));
+                var task = FiscalTasks.Receipt(kind, o, lines, order.PaymentMethod, cashier, contact, Vars(order.Id, order.DeliveryType, cashier, DateTime.UtcNow, (await _brand.GetAsync()).DisplayName));
 
                 var receipt = new FiscalReceipt
                 {
@@ -97,7 +100,7 @@ namespace Cafe.API.Services.Fiscal
         }
 
         /// <summary>Подстановки для своего текста в чеке</summary>
-        public static Dictionary<string, string> Vars(int orderId, string deliveryType, string cashier, DateTime utc)
+        public static Dictionary<string, string> Vars(int orderId, string deliveryType, string cashier, DateTime utc, string brand = "")
         {
             var msk = utc.AddHours(3);
             return new()
@@ -105,6 +108,7 @@ namespace Cafe.API.Services.Fiscal
                 ["order"] = orderId.ToString(),
                 ["type"] = deliveryType switch { "В зале" => "в зале", "Самовывоз" => "с собой", _ => "доставка" },
                 ["cashier"] = cashier,
+                ["brand"] = brand,
                 ["date"] = msk.ToString("dd.MM.yyyy"),
                 ["time"] = msk.ToString("HH:mm"),
             };
@@ -118,13 +122,13 @@ namespace Cafe.API.Services.Fiscal
             var cashier = await CashierNameAsync(userId, ct);
             var lines = new List<ReceiptLine>
             {
-                new("Шаурма классическая + Сыр", 350, 2, 700, false),
+                new("Бургер классический + Сыр", 350, 2, 700, false),
                 new("Морс клюквенный", 120, 1, 120, false),
             };
             await DeviceLock.WaitAsync(ct);
             try
             {
-                var r = await _atol.RunAsync(o, Guid.NewGuid().ToString(), FiscalTasks.Sample(o, layout, lines, Vars(128, "В зале", cashier, DateTime.UtcNow)), ct);
+                var r = await _atol.RunAsync(o, Guid.NewGuid().ToString(), FiscalTasks.Sample(o, layout, lines, Vars(128, "В зале", cashier, DateTime.UtcNow, (await _brand.GetAsync()).DisplayName)), ct);
                 if (r.Pending) throw new FiscalException("Касса не закончила печать — проверьте её");
                 if (!r.Ready) throw new FiscalException(r.Error ?? "Касса отказала");
             }

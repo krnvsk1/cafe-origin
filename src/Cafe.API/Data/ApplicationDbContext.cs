@@ -82,6 +82,26 @@ namespace Cafe.API.Data
         public DbSet<EgaisDocument> EgaisDocuments { get; set; } = null!;
         public DbSet<EgaisDocumentLine> EgaisDocumentLines { get; set; } = null!;
 
+        /// <summary>Меню поменялось — сбрасываем кэш GET /api/dishes</summary>
+        private void InvalidateMenuIfChanged()
+        {
+            if (ChangeTracker.Entries().Any(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted
+                    && e.Entity is Dish or DishImage or DishAddon or Addon or AddonCategory))
+                Cafe.API.Services.MenuCache.Invalidate();
+        }
+
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            InvalidateMenuIfChanged();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+        {
+            InvalidateMenuIfChanged();
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);

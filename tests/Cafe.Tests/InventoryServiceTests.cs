@@ -150,7 +150,7 @@ namespace Cafe.Tests
             sauceCard.Lines.Add(new TechCardLine { StockItemId = 1, Gross = 0.9m });
             sauceCard.Lines.Add(new TechCardLine { StockItemId = 2, Gross = 0.1m });
 
-            // Шаурма = 0.15 кг курицы + 0.05 кг соуса
+            // Бургер = 0.15 кг курицы + 0.05 кг соуса
             var dishCard = new TechCard { Id = 2, DishId = 10 };
             dishCard.Lines.Add(new TechCardLine { StockItemId = 4, Gross = 0.15m });
             dishCard.Lines.Add(new TechCardLine { StockItemId = 3, Gross = 0.05m });
@@ -183,10 +183,10 @@ namespace Cafe.Tests
             var cheese = await Item(db, "Сыр");
             await Receipt(db, svc, (chicken, 10m, 300m), (lavash, 50m, 10m), (cheese, 2m, 800m));
 
-            var card = new Dish { Name = "Шаурма", Price = 0, Category = "Шаурма" };
+            var card = new Dish { Name = "Бургер", Price = 0, Category = "Бургер" };
             db.Dishes.Add(card);
             await db.SaveChangesAsync();
-            var big = new Dish { Name = "Большая", Price = 350, ParentId = card.Id, Category = "Шаурма" };
+            var big = new Dish { Name = "Большая", Price = 350, ParentId = card.Id, Category = "Бургер" };
             db.Dishes.Add(big);
 
             var addonCategory = new AddonCategory { Name = "Добавки" };
@@ -205,7 +205,7 @@ namespace Cafe.Tests
             db.TechCards.AddRange(dishCard, addonCard);
 
             var order = new Order { CustomerName = "Гость", Total = 800, Status = OrderStatuses.New };
-            var item = new OrderItem { DishId = big.Id, Name = "Шаурма Большая", Quantity = 2, Price = 350 };
+            var item = new OrderItem { DishId = big.Id, Name = "Бургер Большая", Quantity = 2, Price = 350 };
             item.SelectedAddons.Add(new OrderItemAddon { AddonId = extraCheese.Id, AddonName = "Сыр", AddonCategoryId = addonCategory.Id, Price = 50, Quantity = 1 });
             order.OrderItems.Add(item);
             db.Orders.Add(order);

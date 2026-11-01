@@ -60,11 +60,11 @@ namespace Cafe.Tests
                     new IikoChartItem { ProductId = "sauce", AmountIn = 0.05m, AmountMiddle = 0.05m, AmountOut = 0.045m },
                 }
             };
-            var dish = new IikoProduct { Id = "d", Name = "Шаурма", Type = "DISH", Unit = "кг" };
+            var dish = new IikoProduct { Id = "d", Name = "Бургер", Type = "DISH", Unit = "кг" };
             Assert.Equal(281m, IikoImportService.OutputGrams(dish, chart, s));
 
             // Если у блюда в порциях указан вес порции — берём его
-            var portion = new IikoProduct { Id = "d2", Name = "Шаурма", Type = "DISH", Unit = "порц", UnitWeight = 0.3m };
+            var portion = new IikoProduct { Id = "d2", Name = "Бургер", Type = "DISH", Unit = "порц", UnitWeight = 0.3m };
             Assert.Equal(300m, IikoImportService.OutputGrams(portion, chart, s));
         }
 
@@ -82,6 +82,6 @@ namespace Cafe.Tests
 
         [Fact]
         public void NormalizesNames() =>
-            Assert.Equal("шаурма с курицей 30 см", IikoImportService.Normalize("Шаурма  с курицей, 30 см!"));
+            Assert.Equal("бургер с курицей 30 см", IikoImportService.Normalize("Бургер  с курицей, 30 см!"));
     }
 }

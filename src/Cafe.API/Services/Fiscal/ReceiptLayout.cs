@@ -16,7 +16,7 @@ namespace Cafe.API.Services.Fiscal
     /// <summary>
     /// Оформление чека. Обязательные реквизиты (продавец, ИНН, ФН, ФД, ФП, QR ФНС) касса печатает сама —
     /// их менять нельзя. Здесь — свой текст сверху и снизу и QR-код (например, на отзыв или меню).
-    /// В тексте можно использовать {order}, {type}, {cashier}, {date}, {time}.
+    /// В тексте можно использовать {brand}, {order}, {type}, {cashier}, {date}, {time}.
     /// </summary>
     public class ReceiptLayout
     {
@@ -34,7 +34,7 @@ namespace Cafe.API.Services.Fiscal
         {
             Header = new()
             {
-                new() { Text = "КУМА ШАУРМА", Align = "center", Large = true },
+                new() { Text = "{brand}", Align = "center", Large = true },
                 new() { Text = "Заказ № {order} · {type}", Align = "center", Large = false },
             },
             Footer = new()
@@ -69,7 +69,7 @@ namespace Cafe.API.Services.Fiscal
 
         private static LayoutLine Clean(LayoutLine l) => new() { Text = (l.Text ?? "").TrimEnd(), Align = l.Align, Large = l.Large };
 
-        private static readonly Regex Placeholder = new(@"\{(order|type|cashier|date|time)\}", RegexOptions.Compiled);
+        private static readonly Regex Placeholder = new(@"\{(brand|order|type|cashier|date|time)\}", RegexOptions.Compiled);
 
         public static string Fill(string text, IReadOnlyDictionary<string, string> vars) =>
             Placeholder.Replace(text, m => vars.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);

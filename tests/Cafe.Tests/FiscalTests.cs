@@ -16,9 +16,9 @@ namespace Cafe.Tests
         [Fact]
         public void Lines_WithoutDiscount_MatchItemsAndAddons()
         {
-            var lines = ReceiptLines.Build(new[] { Item("Шаурма", 300, 2, ("Сыр", 50, 1)), Item("Морс", 120, 1) }, 0, 820);
+            var lines = ReceiptLines.Build(new[] { Item("Бургер", 300, 2, ("Сыр", 50, 1)), Item("Морс", 120, 1) }, 0, 820);
             Assert.Equal(2, lines.Count);
-            Assert.Equal("Шаурма + Сыр", lines[0].Name);
+            Assert.Equal("Бургер + Сыр", lines[0].Name);
             Assert.Equal(350, lines[0].Price);
             Assert.Equal(2, lines[0].Quantity);
             Assert.Equal(700, lines[0].Amount);
@@ -29,7 +29,7 @@ namespace Cafe.Tests
         public void Lines_DiscountSpreadOverDishes_DeliveryKeptAsService()
         {
             // 3 × 333 = 999 блюд, скидка 100, доставка 150 → итого 1049
-            var lines = ReceiptLines.Build(new[] { Item("Шаурма", 333, 3) }, 150, 1049);
+            var lines = ReceiptLines.Build(new[] { Item("Бургер", 333, 3) }, 150, 1049);
             Assert.Equal(1049, lines.Sum(l => l.Amount));
             Assert.All(lines, l => Assert.Equal(l.Amount, l.Price * l.Quantity));
             var delivery = Assert.Single(lines, l => l.IsService);
@@ -40,7 +40,7 @@ namespace Cafe.Tests
         [Fact]
         public void Lines_NonDivisibleAmount_SplitsLastPortion()
         {
-            var lines = ReceiptLines.Build(new[] { Item("Шаурма", 100, 3) }, 0, 200);
+            var lines = ReceiptLines.Build(new[] { Item("Бургер", 100, 3) }, 0, 200);
             Assert.Equal(2, lines.Count);
             Assert.Equal(200, lines.Sum(l => l.Amount));
             Assert.All(lines, l => Assert.Equal(l.Amount, l.Price * l.Quantity));
@@ -50,7 +50,7 @@ namespace Cafe.Tests
         public void SellTask_HasPaymentAndClient()
         {
             var o = new FiscalOptions { TaxationType = "patent", Vat = "none", CashierInn = "123456789012" };
-            var lines = ReceiptLines.Build(new[] { Item("Шаурма", 300, 1) }, 0, 300);
+            var lines = ReceiptLines.Build(new[] { Item("Бургер", 300, 1) }, 0, 300);
             var task = FiscalTasks.Receipt(FiscalKinds.Sell, o, lines, "card", "Иванов Иван", "+79991234567");
             Assert.Equal("sell", (string?)task["type"]);
             Assert.Equal("patent", (string?)task["taxationType"]);
@@ -103,7 +103,7 @@ namespace Cafe.Tests
                     Qr = "https://cafe.example/review?o={order}"
                 }
             };
-            var lines = ReceiptLines.Build(new[] { Item("Шаурма", 300, 1) }, 0, 300);
+            var lines = ReceiptLines.Build(new[] { Item("Бургер", 300, 1) }, 0, 300);
             var vars = FiscalService.Vars(42, "Самовывоз", "Иванов", new DateTime(2026, 10, 28, 18, 0, 0, DateTimeKind.Utc));
             var task = FiscalTasks.Receipt(FiscalKinds.Sell, o, lines, "cash", "Иванов", null, vars);
             Assert.Equal("Заказ № 42 · с собой", (string?)task["preItems"]![0]!["text"]);

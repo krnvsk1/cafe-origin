@@ -23,7 +23,12 @@ namespace Cafe.API.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Dish>>> GetAll()
         {
+            if (Cafe.API.Services.MenuCache.Get<List<Dish>>() is { } cached) return Ok(cached);
+            var version = Cafe.API.Services.MenuCache.Version;
+            // Без отслеживания и отдельными запросами: иначе вложенные Include перемножают строки (фото × добавки × варианты)
             var dishes = await _context.Dishes
+                .AsNoTrackingWithIdentityResolution()
+                .AsSplitQuery()
                 .Include(s => s.Children)
                     .ThenInclude(c => c.Images)
                 .Include(s => s.Children)
@@ -37,6 +42,7 @@ namespace Cafe.API.Controllers
                 .OrderBy(s => s.SortOrder)
                 .ToListAsync();
 
+            Cafe.API.Services.MenuCache.Set(dishes, version);
             return Ok(dishes);
         }
 
@@ -58,7 +64,7 @@ namespace Cafe.API.Controllers
                 .FirstOrDefaultAsync(s => s.Id == id);
 
             if (dish == null)
-                return NotFound(new { Message = $"Шаурма с ID {id} не найдена" });
+                return NotFound(new { Message = $"Блюдо с ID {id} не найдено" });
 
             return Ok(dish);
         }
@@ -128,7 +134,7 @@ namespace Cafe.API.Controllers
         {
             var dish = await _context.Dishes.FindAsync(id);
             if (dish == null)
-                return NotFound(new { Message = $"Шаурма с ID {id} не найдена" });
+                return NotFound(new { Message = $"Блюдо с ID {id} не найдено" });
 
             var parentId = dto.ParentId ?? dish.ParentId;
             if (dto.Name != null && dto.Name != dish.Name &&
@@ -173,12 +179,12 @@ namespace Cafe.API.Controllers
                 .FirstOrDefaultAsync(s => s.Id == id);
 
             if (dish == null)
-                return NotFound(new { Message = $"Шаурма с ID {id} не найдена" });
+                return NotFound(new { Message = $"Блюдо с ID {id} не найдено" });
 
             _context.Dishes.Remove(dish);
             await _context.SaveChangesAsync();
 
-            return Ok(new { Message = "Шаурма успешно удалена" });
+            return Ok(new { Message = "Блюдо удалено" });
         }
 
         // PUT: api/dish/reorder

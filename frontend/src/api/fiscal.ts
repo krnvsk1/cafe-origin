@@ -109,6 +109,7 @@ export const printReceiptSample = (layout: ReceiptLayout) =>
 
 /** Подстановки в своём тексте чека */
 export const LAYOUT_VARS: { key: string; label: string; sample: string }[] = [
+  { key: '{brand}', label: 'название заведения', sample: 'Кафе «Дворик»' },
   { key: '{order}', label: 'номер заказа', sample: '128' },
   { key: '{type}', label: 'в зале / с собой / доставка', sample: 'в зале' },
   { key: '{cashier}', label: 'кассир', sample: 'Иванова Анна' },

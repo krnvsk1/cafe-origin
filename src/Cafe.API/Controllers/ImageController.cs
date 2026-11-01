@@ -48,7 +48,7 @@ namespace Cafe.API.Controllers
                 // Проверяем, существует ли блюдо
                 var dish = await _context.Dishes.FindAsync(dishId);
                 if (dish == null)
-                    return NotFound(new { Message = "Шаурма не найдена" });
+                    return NotFound(new { Message = "Блюдо не найдено" });
 
                 // Создаём папку для изображений, если её нет
                 var uploadsFolder = Path.Combine(_environment.WebRootPath ?? "wwwroot", "uploads");

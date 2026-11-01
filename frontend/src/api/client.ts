@@ -77,8 +77,12 @@ const forceLogout = () => {
   window.dispatchEvent(new Event('auth-unauthorized'));
 };
 
-apiClient.interceptors.request.use((config) => {
-  const token = getAccessToken();
+apiClient.interceptors.request.use(async (config) => {
+  let token = getAccessToken();
+  // Токен вот-вот истечёт — обновляем заранее, а не ловим 401 и повторяем запрос
+  if (token && isAccessTokenExpired(token) && useAuthStore.getState().refreshToken) {
+    try { token = (await refreshAccessToken()) ?? token; } catch { /* сервер недоступен — отправим как есть */ }
+  }
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
