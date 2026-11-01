@@ -115,8 +115,7 @@ namespace Cafe.API.Controllers
             var chatId = await _alerts.ChatIdAsync();
             if (chatId == null) return BadRequest(new { message = "Сначала укажите чат для тревог" });
             if (!telegram.Enabled) return BadRequest(new { message = "Telegram-бот не настроен (Telegram:BotToken)" });
-            var ok = await telegram.SendMessageAsync(chatId.Value, "🟢 <b>Проверка тревог</b>
-Сюда будут приходить сообщения о сбоях сервера.");
+            var ok = await telegram.SendMessageAsync(chatId.Value, "🟢 <b>Проверка тревог</b>\nСюда будут приходить сообщения о сбоях сервера.");
             return ok ? NoContent() : BadRequest(new { message = "Telegram не принял сообщение — проверьте ID чата и что бот добавлен в чат" });
         }
 
