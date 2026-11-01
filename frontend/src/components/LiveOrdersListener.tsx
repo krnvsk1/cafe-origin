@@ -17,8 +17,8 @@ const CUSTOMER_MESSAGES: Partial<Record<OrderEvent['status'], string>> = {
 
 /**
  * Глобальный слушатель событий заказов для авторизованных пользователей:
- * держит данные свежими и показывает уведомления (персоналу — о новых заказах,
- * клиенту — о смене статуса его заказа).
+ * держит данные свежими и показывает клиенту уведомления о смене статуса его заказа.
+ * Персоналу всплывашки о новых заказах не показываем: кухня узнаёт о них по своему сигналу.
  */
 const LiveOrdersListener: React.FC = () => {
   const { isAuthenticated } = useAuthStore();
@@ -30,9 +30,7 @@ const LiveOrdersListener: React.FC = () => {
 
   useEventStream(isAuthenticated ? '/api/events/orders' : null, (evt) => {
     invalidate(evt);
-    if (isStaff && evt.type === 'created') {
-      setToast({ text: `Новый заказ #${evt.orderId}`, orderId: evt.orderId });
-    } else if (!isStaff && evt.type === 'status' && CUSTOMER_MESSAGES[evt.status]) {
+    if (!isStaff && evt.type === 'status' && CUSTOMER_MESSAGES[evt.status]) {
       setToast({ text: `Заказ #${evt.orderId} ${CUSTOMER_MESSAGES[evt.status]}`, orderId: evt.orderId });
     }
   });
@@ -53,7 +51,7 @@ const LiveOrdersListener: React.FC = () => {
             color="inherit"
             size="small"
             onClick={() => {
-              if (toast) navigate(isStaff ? '/orders' : `/order/${toast.orderId}/success`);
+              if (toast) navigate(`/order/${toast.orderId}/success`);
               setToast(null);
             }}
           >
