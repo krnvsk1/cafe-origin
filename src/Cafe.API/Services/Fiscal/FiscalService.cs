@@ -44,10 +44,44 @@ namespace Cafe.API.Services.Fiscal
             if (order.Total <= 0) throw new FiscalException("Сумма заказа — 0 ₽, чек не нужен");
 
             var receipts = await _context.FiscalReceipts.Where(r => r.OrderId == orderId).OrderBy(r => r.Id).ToListAsync(ct);
+            var lines = await ReceiptLines.LoadAsync(_context, order, ct);
+            var contact = o.SendToCustomer ? Controllers.PosController.NormalizePhone(order.Phone) : null;
+            return await RunReceiptAsync(o, order.Id, null, kind, receipts, lines, order.PaymentMethod, contact, order.DeliveryType, userId, ct);
+        }
+
+        /// <summary>
+        /// Чек прихода или возврата по счёту стола (официант закрыл счёт): все блюда счёта из всех подач,
+        /// включая перенесённые из других счетов. Ошибка кассы записывается в чек, как и у кассы.
+        /// </summary>
+        public async Task<FiscalReceipt> PrintCheckAsync(int checkId, string kind, int? userId, CancellationToken ct = default)
+        {
+            var o = await _settings.GetAsync();
+            if (!o.Enabled) throw new FiscalException("Онлайн-касса выключена — включите её в «Настройке интеграций»");
+            var check = await _context.TableChecks.AsNoTracking().FirstOrDefaultAsync(c => c.Id == checkId, ct)
+                        ?? throw new FiscalException("Счёт не найден");
+            if (check.Status != CheckStatuses.Closed) throw new FiscalException("Чек пробивается после оплаты счёта");
+            if (check.PaymentMethod is not ("cash" or "card")) throw new FiscalException("Не указан способ оплаты счёта");
+            if (check.Total <= 0) throw new FiscalException("Сумма счёта — 0 ₽, чек не нужен");
+
+            var orders = await _context.Orders.AsNoTracking().Include(x => x.OrderItems).ThenInclude(i => i.SelectedAddons)
+                .Where(x => x.Status != OrderStatuses.Cancelled &&
+                            ((x.CheckId == checkId) || x.OrderItems.Any(i => i.CheckId == checkId)))
+                .OrderBy(x => x.CreatedAt).ToListAsync(ct);
+            var items = orders.SelectMany(x => x.OrderItems.Where(i => (i.CheckId ?? x.CheckId) == checkId)).OrderBy(i => i.Id).ToList();
+            if (items.Count == 0 || orders.Count == 0) throw new FiscalException("В счёте нет блюд");
+
+            var receipts = await _context.FiscalReceipts.Where(r => r.CheckId == checkId).OrderBy(r => r.Id).ToListAsync(ct);
+            var lines = ReceiptLines.Build(items, 0, check.Total);
+            return await RunReceiptAsync(o, orders[0].Id, checkId, kind, receipts, lines, check.PaymentMethod, null, SalesChannels.DineIn, userId, ct);
+        }
+
+        private async Task<FiscalReceipt> RunReceiptAsync(FiscalOptions o, int orderId, int? checkId, string kind, List<FiscalReceipt> receipts,
+            List<ReceiptLine> lines, string paymentMethod, string? contact, string deliveryType, int? userId, CancellationToken ct)
+        {
             var sold = receipts.Any(r => r.Kind == FiscalKinds.Sell && r.Status == FiscalStatuses.Done);
             var returned = receipts.Any(r => r.Kind == FiscalKinds.Return && r.Status == FiscalStatuses.Done);
-            if (kind == FiscalKinds.Sell && sold) throw new FiscalException("Чек по этому заказу уже пробит");
-            if (kind == FiscalKinds.Return && !sold) throw new FiscalException("Чек прихода по заказу не пробит — возвращать нечего");
+            if (kind == FiscalKinds.Sell && sold) throw new FiscalException(checkId != null ? "Чек по этому счёту уже пробит" : "Чек по этому заказу уже пробит");
+            if (kind == FiscalKinds.Return && !sold) throw new FiscalException("Чек прихода не пробит — возвращать нечего");
             if (kind == FiscalKinds.Return && returned) throw new FiscalException("Чек возврата уже пробит");
 
             await DeviceLock.WaitAsync(ct);
@@ -63,19 +97,18 @@ namespace Cafe.API.Services.Fiscal
                     if (pending.Status != FiscalStatuses.Error) return pending;
                 }
 
-                var lines = await ReceiptLines.LoadAsync(_context, order, ct);
                 var cashier = await CashierNameAsync(userId, ct);
-                var contact = o.SendToCustomer ? Controllers.PosController.NormalizePhone(order.Phone) : null;
-                var task = FiscalTasks.Receipt(kind, o, lines, order.PaymentMethod, cashier, contact, Vars(order.Id, order.DeliveryType, cashier, DateTime.UtcNow, (await _brand.GetAsync()).DisplayName));
+                var task = FiscalTasks.Receipt(kind, o, lines, paymentMethod, cashier, contact, Vars(orderId, deliveryType, cashier, DateTime.UtcNow, (await _brand.GetAsync()).DisplayName));
 
                 var receipt = new FiscalReceipt
                 {
-                    OrderId = order.Id,
+                    OrderId = orderId,
+                    CheckId = checkId,
                     Kind = kind,
                     Status = FiscalStatuses.Processing,
                     RequestUuid = Guid.NewGuid().ToString(),
                     Total = lines.Sum(l => l.Amount),
-                    PaymentMethod = order.PaymentMethod,
+                    PaymentMethod = paymentMethod,
                     ClientContact = contact,
                     RequestJson = task.ToJsonString(),
                     CreatedAt = DateTime.UtcNow,
@@ -91,9 +124,9 @@ namespace Cafe.API.Services.Fiscal
                 await _context.SaveChangesAsync(ct);
 
                 if (receipt.Status == FiscalStatuses.Done)
-                    _logger.LogInformation("🧾 Чек {Kind} по заказу #{OrderId}: ФД {Fd}", kind, order.Id, receipt.FiscalDocumentNumber);
+                    _logger.LogInformation("🧾 Чек {Kind} по заказу #{OrderId} (счёт {CheckId}): ФД {Fd}", kind, orderId, checkId, receipt.FiscalDocumentNumber);
                 else
-                    _logger.LogWarning("Чек {Kind} по заказу #{OrderId} не пробит: {Error}", kind, order.Id, receipt.Error);
+                    _logger.LogWarning("Чек {Kind} по заказу #{OrderId} (счёт {CheckId}) не пробит: {Error}", kind, orderId, checkId, receipt.Error);
                 return receipt;
             }
             finally { DeviceLock.Release(); }

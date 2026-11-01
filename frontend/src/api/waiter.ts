@@ -92,6 +92,10 @@ export interface TableCheck {
   /** Когда печатали счёт для гостя и на какую сумму (дозаказали — печатать заново) */
   printedAt?: string | null;
   printedTotal?: number | null;
+  /** Онлайн-касса АТОЛ включена */
+  fiscalEnabled?: boolean;
+  /** Кассовый чек на АТОЛ по закрытому счёту */
+  fiscal?: { status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber: number | null } | null;
   orders: CheckOrder[];
 }
 
@@ -136,7 +140,7 @@ export const useCancelRound = () =>
     apiClient.post(`/api/waiter/checks/${checkId}/orders/${orderId}/cancel`).then(r => r.data));
 
 export const useCloseCheck = () =>
-  useWaiterMutation<{ checkId: number; paymentMethod: 'cash' | 'card'; cashReceived: number | null }, { total: number; change: number | null }>(
+  useWaiterMutation<{ checkId: number; paymentMethod: 'cash' | 'card'; cashReceived: number | null }, { total: number; change: number | null; fiscal: FiscalResult | null }>(
     ({ checkId, ...body }) => apiClient.post(`/api/waiter/checks/${checkId}/close`, body).then(r => r.data));
 
 export const useCancelCheck = () =>
@@ -239,8 +243,10 @@ export const useShiftCurrent = () =>
     refetchInterval: 30_000,
   });
 
-export const useOpenVenueShift = () => useWaiterMutation<void>(() => apiClient.post('/api/shifts/venue/open').then(r => r.data));
-export const useCloseVenueShift = () => useWaiterMutation<void>(() => apiClient.post('/api/shifts/venue/close').then(r => r.data));
+/** Смена заведения; если включена онлайн-касса — смена на АТОЛ открывается/закрывается вместе с ней */
+export interface VenueShiftResult { id: number; fiscal: { ok: boolean; message: string } | null }
+export const useOpenVenueShift = () => useWaiterMutation<void, VenueShiftResult>(() => apiClient.post('/api/shifts/venue/open').then(r => r.data));
+export const useCloseVenueShift = () => useWaiterMutation<void, VenueShiftResult>(() => apiClient.post('/api/shifts/venue/close').then(r => r.data));
 export const useOpenMyShift = () => useWaiterMutation<void>(() => apiClient.post('/api/shifts/mine/open').then(r => r.data));
 export const useCloseMyShift = () => useWaiterMutation<void>(() => apiClient.post('/api/shifts/mine/close').then(r => r.data));
 
@@ -301,6 +307,12 @@ export const useServeItem = () =>
 export const usePrintCheck = () =>
   useWaiterMutation<number, { jobId: number }>(checkId =>
     apiClient.post(`/api/waiter/checks/${checkId}/print`).then(r => r.data));
+
+/** Пробить (повторить) кассовый чек на АТОЛ по закрытому счёту */
+export const useCheckFiscal = () =>
+  useWaiterMutation<number, FiscalResult>(checkId => apiClient.post(`/api/waiter/checks/${checkId}/fiscal`).then(r => r.data));
+
+export interface FiscalResult { status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber?: number | null }
 
 export interface PrintJobState { id: number; status: 'pending' | 'taken' | 'done' | 'error'; error: string | null; agentOnline: boolean }
 

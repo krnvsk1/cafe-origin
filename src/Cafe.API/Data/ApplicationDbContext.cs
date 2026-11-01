@@ -535,6 +535,7 @@ namespace Cafe.API.Data
             modelBuilder.Entity<FiscalReceipt>(entity =>
             {
                 entity.HasIndex(e => e.OrderId);
+                entity.HasIndex(e => e.CheckId);
                 entity.HasIndex(e => e.Status);
                 entity.HasOne<Order>().WithMany().HasForeignKey(e => e.OrderId).OnDelete(DeleteBehavior.Cascade);
             });

@@ -836,6 +836,10 @@ namespace Cafe.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("CheckId")
+                        .HasColumnType("integer")
+                        .HasColumnName("check_id");
+
                     b.Property<string>("ClientContact")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -922,6 +926,8 @@ namespace Cafe.API.Migrations
                         .HasColumnName("total");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CheckId");
 
                     b.HasIndex("OrderId");
 

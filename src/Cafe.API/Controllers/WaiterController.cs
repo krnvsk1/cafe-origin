@@ -6,6 +6,7 @@ using Cafe.API.Extensions;
 using Cafe.API.Models;
 using Cafe.API.Services;
 using Cafe.API.Services.Printing;
+using Cafe.API.Services.Fiscal;
 
 namespace Cafe.API.Controllers
 {
@@ -34,10 +35,12 @@ namespace Cafe.API.Controllers
 
         private readonly PrintService _print;
         private readonly BrandSettingsProvider _brand;
+        private readonly FiscalService _fiscal;
 
         public WaiterController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, VoidService voids, ShiftService shifts, ILogger<WaiterController> logger,
-            PrintService print, BrandSettingsProvider brand)
+            PrintService print, BrandSettingsProvider brand, FiscalService fiscal)
         {
+            _fiscal = fiscal;
             _print = print;
             _brand = brand;
             _voids = voids;
@@ -344,6 +347,12 @@ namespace Cafe.API.Controllers
                 total = c.Status == CheckStatuses.Closed ? c.Total : active.Sum(l => LineTotal(l.Item)),
                 // Счёт для гостя: можно ли печатать и печатали ли его с текущей суммой
                 printEnabled = (await _print.SettingsAsync()).Enabled,
+                // Кассовый чек по закрытому счёту (последний чек прихода)
+                fiscalEnabled = await _fiscal.EnabledAsync(),
+                fiscal = c.Status == CheckStatuses.Closed && await _fiscal.EnabledAsync()
+                    ? await _context.FiscalReceipts.AsNoTracking().Where(f => f.CheckId == c.Id && f.Kind == FiscalKinds.Sell).OrderByDescending(f => f.Id)
+                        .Select(f => new { f.Status, f.Error, f.FiscalDocumentNumber }).FirstOrDefaultAsync()
+                    : null,
                 c.PrintedAt,
                 c.PrintedTotal,
                 // Сколько блюд ещё не отдано (при закрытии предупреждаем)
@@ -558,13 +567,37 @@ namespace Cafe.API.Controllers
             foreach (var o in orders)
                 _events.Publish(new OrderEvent("updated", o.Id, o.UserId, o.Status, null, now));
             _logger.LogInformation("🍽 Счёт #{CheckId} закрыт: {Total} ₽ ({Method})", c.Id, total, method);
+
+            // Онлайн-касса включена — сразу пробиваем чек на АТОЛ. Ошибка кассы не мешает закрытию: чек можно повторить
+            object? fiscal = null;
+            if (await _fiscal.EnabledAsync())
+                fiscal = await FiscalAsync(c.Id);
             return Ok(new
             {
                 c.Id,
                 total,
                 change = method == "cash" && r.CashReceived.HasValue ? r.CashReceived.Value - total : (decimal?)null,
-                orderIds
+                orderIds,
+                fiscal
             });
+        }
+
+        private async Task<object> FiscalAsync(int checkId)
+        {
+            try { return FiscalController.View(await _fiscal.PrintCheckAsync(checkId, FiscalKinds.Sell, User.GetUserId(), HttpContext.RequestAborted)); }
+            catch (FiscalException ex) { return new { status = FiscalStatuses.Error, error = ex.Message }; }
+        }
+
+        // POST: api/waiter/checks/{id}/fiscal — пробить (повторить) кассовый чек по закрытому счёту
+        [HttpPost("checks/{id:int}/fiscal")]
+        [HasPermission(Permissions.Waiter, Permissions.ChecksAll)]
+        public async Task<IActionResult> PrintFiscal(int id)
+        {
+            var c = await _context.TableChecks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
+            if (!await _fiscal.EnabledAsync()) return BadRequest(new { message = "Онлайн-касса выключена" });
+            return Ok(await FiscalAsync(id));
         }
 
         // POST: api/waiter/checks/{id}/cancel — отменить пустой чек (стол освобождается)

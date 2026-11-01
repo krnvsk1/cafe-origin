@@ -6,6 +6,7 @@ using Cafe.API.Data;
 using Cafe.API.Extensions;
 using Cafe.API.Models;
 using Cafe.API.Services;
+using Cafe.API.Services.Fiscal;
 
 namespace Cafe.API.Controllers
 {
@@ -17,9 +18,13 @@ namespace Cafe.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ShiftService _shifts;
+        private readonly FiscalService _fiscal;
+        private readonly ILogger<ShiftsController> _logger;
 
-        public ShiftsController(ApplicationDbContext context, ShiftService shifts)
+        public ShiftsController(ApplicationDbContext context, ShiftService shifts, FiscalService fiscal, ILogger<ShiftsController> logger)
         {
+            _fiscal = fiscal;
+            _logger = logger;
             _context = context;
             _shifts = shifts;
         }
@@ -68,8 +73,43 @@ namespace Cafe.API.Controllers
         [HasPermission(Permissions.Shift)]
         public async Task<IActionResult> OpenVenue()
         {
-            try { var s = await _shifts.OpenVenueAsync(User.GetUserId()); return Ok(new { s.Id }); }
+            try
+            {
+                var s = await _shifts.OpenVenueAsync(User.GetUserId());
+                return Ok(new { s.Id, fiscal = await SyncKktShiftAsync(open: true) });
+            }
             catch (ShiftService.ShiftException ex) { return Fail(ex); }
+        }
+
+        /// <summary>
+        /// Смена на онлайн-кассе АТОЛ вслед за сменой заведения: открыли смену — открываем на кассе
+        /// (просроченную больше 24 часов сначала закрываем), закрыли — закрываем на кассе (Z-отчёт).
+        /// Ошибка кассы смену заведения не отменяет — возвращается текстом для сотрудника.
+        /// </summary>
+        private async Task<object?> SyncKktShiftAsync(bool open)
+        {
+            if (!await _fiscal.EnabledAsync()) return null;
+            var ct = HttpContext.RequestAborted;
+            try
+            {
+                var o = await HttpContext.RequestServices.GetRequiredService<FiscalSettingsProvider>().GetAsync();
+                var (state, _) = await _fiscal.ShiftStatusAsync(o, ct);
+                if (open)
+                {
+                    if (state == "opened") return new { ok = true, message = "Смена на кассе уже открыта" };
+                    if (state == "expired") await _fiscal.ShiftAsync("closeShift", User.GetUserId(), ct);
+                    await _fiscal.ShiftAsync("openShift", User.GetUserId(), ct);
+                    return new { ok = true, message = state == "expired" ? "Старая смена на кассе закрыта, новая открыта" : "Смена на кассе открыта" };
+                }
+                if (state == "closed") return new { ok = true, message = "Смена на кассе уже закрыта" };
+                await _fiscal.ShiftAsync("closeShift", User.GetUserId(), ct);
+                return new { ok = true, message = "Смена на кассе закрыта, Z-отчёт напечатан" };
+            }
+            catch (FiscalException ex)
+            {
+                _logger.LogWarning("Смена на кассе АТОЛ не {Op}: {Error}", open ? "открыта" : "закрыта", ex.Message);
+                return new { ok = false, message = $"Касса АТОЛ: {ex.Message}. Откройте/закройте смену на кассе вручную в «Кассе»." };
+            }
         }
 
         // POST: api/shifts/venue/close — закрыть смену заведения (открытых счетов быть не должно)
@@ -77,7 +117,11 @@ namespace Cafe.API.Controllers
         [HasPermission(Permissions.Shift)]
         public async Task<IActionResult> CloseVenue()
         {
-            try { var s = await _shifts.CloseVenueAsync(User.GetUserId()); return Ok(new { s.Id }); }
+            try
+            {
+                var s = await _shifts.CloseVenueAsync(User.GetUserId());
+                return Ok(new { s.Id, fiscal = await SyncKktShiftAsync(open: false) });
+            }
             catch (ShiftService.ShiftException ex) { return Fail(ex); }
         }
 

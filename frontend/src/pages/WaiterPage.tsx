@@ -17,7 +17,7 @@ import { useDishes } from '../api/hooks';
 import {
   useWaiterTables, useTableCheck, useOpenCheck, useAddRound, useCancelRound, useCloseCheck, useCancelCheck,
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
-  useServeItem, useMyChecks, useSetItemWeight, usePrintCheck, fetchPrintJob,
+  useServeItem, useMyChecks, useSetItemWeight, usePrintCheck, fetchPrintJob, useCheckFiscal, type FiscalResult,
   useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
   type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
@@ -259,11 +259,18 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
   const openMine = useOpenMyShift();
   const closeMine = useCloseMyShift();
   const [err, setErr] = React.useState('');
+  const [kkt, setKkt] = React.useState<{ ok: boolean; message: string } | null>(null);
   const [confirm, setConfirm] = React.useState<'venue' | 'mine' | null>(null);
   const [myChecks, setMyChecks] = React.useState(false);
   const run = async (fn: () => Promise<unknown>) => {
     setErr('');
-    try { await fn(); setConfirm(null); } catch (e) { setErr(apiError(e)); setConfirm(null); }
+    setKkt(null);
+    try {
+      const r = await fn() as { fiscal?: { ok: boolean; message: string } | null } | undefined;
+      // Смена на онлайн-кассе открывается/закрывается вместе со сменой заведения
+      if (r?.fiscal) setKkt(r.fiscal);
+      setConfirm(null);
+    } catch (e) { setErr(apiError(e)); setConfirm(null); }
   };
   const { venue, mine } = shift;
   const isWaiter = can(P.Waiter) && !hideMine;
@@ -306,6 +313,7 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
         </Box>
       )}
       {err && <Alert severity="error" onClose={() => setErr('')}>{err}</Alert>}
+      {kkt && <Alert severity={kkt.ok ? 'success' : 'warning'} onClose={() => setKkt(null)}>{kkt.message}</Alert>}
       {myChecks && <MyChecksDialog onClose={() => setMyChecks(false)} />}
 
       <Dialog open={!!confirm} onClose={() => setConfirm(null)} maxWidth="xs" fullWidth>
@@ -586,7 +594,15 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const [closing, setClosing] = React.useState(false);
   const [method, setMethod] = React.useState<'cash' | 'card'>('card');
   const [cash, setCash] = React.useState('');
-  const [done, setDone] = React.useState<{ total: number; change: number | null } | null>(null);
+  const [done, setDone] = React.useState<{ total: number; change: number | null; fiscal: FiscalResult | null } | null>(null);
+  const checkFiscal = useCheckFiscal();
+  const retryFiscal = async () => {
+    try {
+      const f = await checkFiscal.mutateAsync(check!.id);
+      setDone(d => (d ? { ...d, fiscal: f } : d));
+      if (!done) setToast(f.status === 'done' ? 'Кассовый чек пробит' : `Чек не пробит: ${f.error ?? 'ошибка кассы'}`);
+    } catch (e) { setToast(apiError(e)); }
+  };
   const [err, setErr] = React.useState('');
 
   if (isLoading) return <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }}><CircularProgress /></Box>;
@@ -621,7 +637,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
     try {
       const r = await close.mutateAsync({ checkId: check.id, paymentMethod: method, cashReceived: method === 'cash' && received > 0 ? received : null });
       setClosing(false);
-      setDone({ total: r.total, change: r.change });
+      setDone({ total: r.total, change: r.change, fiscal: r.fiscal });
     } catch (e) { setErr(apiError(e)); }
   };
 
@@ -682,6 +698,13 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       </Menu>
 
       {!isOpen && <Alert severity={check.status === 'closed' ? 'success' : 'info'}>{check.status === 'closed' ? `Чек закрыт · ${check.paymentMethod === 'cash' ? 'наличные' : 'карта'}` : 'Чек отменён'}</Alert>}
+      {check.status === 'closed' && check.fiscalEnabled && (check.fiscal?.status === 'done'
+        ? <Typography variant="body2" color="text.secondary">Кассовый чек пробит{check.fiscal.fiscalDocumentNumber ? ` · ФД ${check.fiscal.fiscalDocumentNumber}` : ''}</Typography>
+        : (
+          <Alert severity="warning" action={<Button color="inherit" size="small" onClick={retryFiscal} disabled={checkFiscal.isPending}>Пробить</Button>}>
+            {check.fiscal ? `Кассовый чек не пробит: ${check.fiscal.error ?? 'ошибка кассы'}` : 'Кассовый чек по этому счёту не пробивался'}
+          </Alert>
+        ))}
 
       {check.orders.length === 0 && (
         <Box sx={{ bgcolor: 'background.paper', borderRadius: '16px', p: 3, textAlign: 'center' }}>
@@ -846,6 +869,15 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           {done?.change != null && done.change > 0 && (
             <Typography sx={{ fontWeight: 800, fontSize: '1.6rem', mt: 1.5 }}>Сдача {money(done.change)}</Typography>
           )}
+          {/* Кассовый чек на АТОЛ */}
+          {done?.fiscal && (done.fiscal.status === 'done'
+            ? <Alert severity="success" sx={{ mt: 2, textAlign: 'left' }}>Кассовый чек пробит{done.fiscal.fiscalDocumentNumber ? ` · ФД ${done.fiscal.fiscalDocumentNumber}` : ''}</Alert>
+            : (
+              <Alert severity={done.fiscal.status === 'processing' ? 'info' : 'error'} sx={{ mt: 2, textAlign: 'left' }}
+                action={<Button color="inherit" size="small" onClick={retryFiscal} disabled={checkFiscal.isPending}>{done.fiscal.status === 'processing' ? 'Проверить' : 'Повторить'}</Button>}>
+                {done.fiscal.status === 'processing' ? 'Касса ещё печатает чек' : `Кассовый чек не пробит: ${done.fiscal.error ?? 'ошибка кассы'}`}
+              </Alert>
+            ))}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button fullWidth variant="contained" color="secondary" size="large" onClick={() => navigate('/waiter')}>К столам</Button>
