@@ -239,6 +239,8 @@ builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(Tel
 builder.Services.AddHttpClient<TelegramApi>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddSingleton<TelegramAuth>();
 builder.Services.AddHostedService<TelegramNotifier>();
+// Без публичного адреса (локально) команды бота забираем опросом
+builder.Services.AddHostedService<TelegramPollingService>();
 
 // Онлайн-оплата ЮKassa (выключено, если не заданы YooKassa:ShopId и YooKassa:SecretKey)
 builder.Services.Configure<YooKassaOptions>(builder.Configuration.GetSection(YooKassaOptions.SectionName));

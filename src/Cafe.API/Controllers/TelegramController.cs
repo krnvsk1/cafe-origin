@@ -31,6 +31,7 @@ namespace Cafe.API.Controllers
         private readonly ITokenService _tokenService;
         private readonly IConfiguration _configuration;
         private readonly ILogger<TelegramController> _logger;
+        private readonly IServiceProvider _services;
 
         public TelegramController(
             ApplicationDbContext context,
@@ -40,8 +41,10 @@ namespace Cafe.API.Controllers
             UserManager<AppUser> userManager,
             ITokenService tokenService,
             IConfiguration configuration,
-            ILogger<TelegramController> logger)
+            ILogger<TelegramController> logger,
+            IServiceProvider services)
         {
+            _services = services;
             _context = context;
             _telegram = telegram;
             _auth = auth;
@@ -204,10 +207,18 @@ namespace Cafe.API.Controllers
                 || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(_options.WebhookSecret)))
                 return Unauthorized();
 
+            await ProcessUpdateAsync(update);
+            return Ok();
+        }
+
+        /// <summary>Обработка входящего сообщения бота — из вебхука или из опроса (когда сервер без публичного адреса)</summary>
+        [NonAction]
+        public async Task ProcessUpdateAsync(JsonElement update)
+        {
             try
             {
-                if (!update.TryGetProperty("message", out var message)) return Ok();
-                if (!message.TryGetProperty("chat", out var chat) || !chat.TryGetProperty("id", out var chatIdEl)) return Ok();
+                if (!update.TryGetProperty("message", out var message)) return;
+                if (!message.TryGetProperty("chat", out var chat) || !chat.TryGetProperty("id", out var chatIdEl)) return;
                 var chatId = chatIdEl.GetInt64();
                 var chatType = chat.TryGetProperty("type", out var t) ? t.GetString() : "private";
                 var fromId = message.TryGetProperty("from", out var from) && from.TryGetProperty("id", out var fid) ? fid.GetInt64() : chatId;
@@ -245,14 +256,12 @@ namespace Cafe.API.Controllers
             catch (Exception ex)
             {
                 // Telegram повторяет запрос при ошибке — всегда отвечаем 200
-                _logger.LogWarning(ex, "Telegram webhook: ошибка обработки");
+                _logger.LogWarning(ex, "Telegram: ошибка обработки сообщения");
             }
-
-            return Ok();
         }
 
         private async Task<string> BrandNameAsync() =>
-            (await HttpContext.RequestServices.GetRequiredService<BrandSettingsProvider>().GetAsync()).DisplayName;
+            (await _services.GetRequiredService<BrandSettingsProvider>().GetAsync()).DisplayName;
 
         private async Task HandleStartAsync(long chatId, long fromId, string? chatType, string argument)
         {
@@ -319,13 +328,13 @@ namespace Cafe.API.Controllers
         /// <summary>/status — сводка о сервере; отвечает только в чате тревог</summary>
         private async Task HandleStatusAsync(long chatId)
         {
-            var alerts = HttpContext.RequestServices.GetRequiredService<Cafe.API.Monitoring.AlertSettingsProvider>();
+            var alerts = _services.GetRequiredService<Cafe.API.Monitoring.AlertSettingsProvider>();
             if (await alerts.ChatIdAsync() != chatId)
             {
                 await _telegram.SendMessageAsync(chatId, "Команда /status работает только в чате тревог (он задаётся в «Состоянии системы»).");
                 return;
             }
-            var report = HttpContext.RequestServices.GetRequiredService<Cafe.API.Monitoring.StatusReport>();
+            var report = _services.GetRequiredService<Cafe.API.Monitoring.StatusReport>();
             await _telegram.SendMessageAsync(chatId, await report.BuildHtmlAsync(SystemController.Version, SystemController.StartedAt));
         }
     }
