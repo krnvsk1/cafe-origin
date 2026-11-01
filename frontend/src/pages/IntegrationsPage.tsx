@@ -137,7 +137,9 @@ const IntegrationsPage: React.FC = () => {
   const printerOnline = agentOnline(printing);
   const lastPrint = printing?.recent[0];
   const networkPrinter = printing?.mode === 'network';
-  const printerStatus: Status = !printing?.enabled ? 'off' : (networkPrinter || printerOnline) && lastPrint?.status !== 'error' ? 'ok' : 'error';
+  const needsAgent = !!printing && ((printing.enabled && !networkPrinter) || printing.relayDevices);
+  const printerStatus: Status = !printing?.enabled && !printing?.relayDevices ? 'off'
+    : (!needsAgent || printerOnline) && lastPrint?.status !== 'error' ? 'ok' : 'error';
 
   return (
     <Box sx={{ py: { xs: 2, sm: 3 }, maxWidth: 1000, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -237,15 +239,16 @@ const IntegrationsPage: React.FC = () => {
 
       <Card
         id="printer"
-        title="Принтер счетов (RONGTA)"
-        purpose="Счёт для гостя перед оплатой: официант печатает его со своего телефона на чековом принтере у кассы"
+        title="Кассовый ПК: принтер счетов и связь"
+        purpose="Счёт для гостя на RONGTA перед оплатой; программа на кассовом ПК связывает сервер в интернете с принтером, кассой АТОЛ и УТМ"
         loading={printingLoading}
         status={printerStatus}
         statusText={printerStatus === 'off' ? 'Не подключено'
-          : networkPrinter ? `По сети · ${printing?.host}:${printing?.port}`
+          : !needsAgent ? `Принтер по сети · ${printing?.host}:${printing?.port}`
           : printerOnline ? `Программа печати на связи${printing?.agentHost ? ` · ${printing.agentHost}` : ''}` : 'Программа печати на кассовом ПК не запущена'}
-        details={printing?.enabled ? [
-          networkPrinter ? `Принтер в сети: ${printing.host}:${printing.port} · ${printing.width} символов в строке` : `Принтер: ${printing.printerName} · ${printing.width} символов в строке`,
+        details={printing?.enabled || printing?.relayDevices ? [
+          printing.relayDevices && 'Касса АТОЛ и УТМ ЕГАИС — через программу на кассовом ПК',
+          printing.enabled && (printing.mode === 'agent' ? `Принтер: ${printing.printerName} · ${printing.width} символов в строке` : `Принтер в сети: ${printing.host}:${printing.port} · ${printing.width} символов в строке`),
           lastPrint && `Последняя печать: ${lastPrint.title} — ${lastPrint.status === 'done' ? 'напечатано' : lastPrint.status === 'error' ? 'ошибка' : 'в очереди'} (${fmtDateTime(lastPrint.createdAt)})`,
         ] : undefined}
         error={printing?.enabled && lastPrint?.status === 'error' ? lastPrint.error : null}

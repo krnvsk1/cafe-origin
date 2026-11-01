@@ -20,7 +20,8 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
   const test = useTestPrint();
   const newToken = useNewPrintToken();
   const [enabled, setEnabled] = React.useState(state.enabled);
-  const [mode, setMode] = React.useState<'agent' | 'network'>(state.mode ?? 'agent');
+  const [mode, setMode] = React.useState<PrintingState['mode']>(state.mode ?? 'agent');
+  const [relay, setRelay] = React.useState(!!state.relayDevices);
   const [host, setHost] = React.useState(state.host ?? '');
   const [port, setPort] = React.useState(String(state.port ?? 9100));
   const [printerName, setPrinterName] = React.useState(state.printerName);
@@ -33,6 +34,7 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
     if (!open) return;
     setEnabled(state.enabled);
     setMode(state.mode ?? 'agent');
+    setRelay(!!state.relayDevices);
     setHost(state.host ?? '');
     setPort(String(state.port ?? 9100));
     setPrinterName(state.printerName);
@@ -44,7 +46,7 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
   }, [open]);
 
   const cp = CODE_PAGES.find(c => c.key === codePage) ?? CODE_PAGES[0];
-  const input = () => ({ enabled, mode, host: host.trim() || null, port: Number(port) || 9100, printerName: printerName.trim(), width: Number(width) || 48, codeTable: cp.codeTable, encoding: cp.encoding, footer: footer.trim() || null });
+  const input = () => ({ enabled, mode, relayDevices: relay, host: host.trim() || null, port: Number(port) || 9100, printerName: printerName.trim(), width: Number(width) || 48, codeTable: cp.codeTable, encoding: cp.encoding, footer: footer.trim() || null });
 
   const handleSave = async (thenTest = false) => {
     setMsg(null);
@@ -59,17 +61,19 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Принтер счетов</DialogTitle>
+      <DialogTitle>Кассовый ПК: принтер счетов и связь</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <Typography variant="body2" color="text.secondary">
           Официант печатает счёт для гостя перед оплатой на чековом принтере (RONGTA RP33x: USB и LAN).
         </Typography>
         <FormControlLabel control={<Switch checked={enabled} onChange={e => setEnabled(e.target.checked)} />} label="Печатать счета для гостей" />
-        <TextField select label="Как подключён принтер" value={mode} onChange={e => setMode(e.target.value as 'agent' | 'network')}>
-          <MenuItem value="network">Сетевой кабель в роутер (LAN) — печатает сервер</MenuItem>
+        <TextField select label="Как подключён принтер" value={mode} onChange={e => setMode(e.target.value as PrintingState['mode'])}
+          helperText={mode === 'network' ? 'Только пока сервер в сети кафе (сейчас — на Маке)' : 'Работает и с сервером в интернете'}>
           <MenuItem value="agent">USB к кассовому ПК — печатает программа на ПК</MenuItem>
+          <MenuItem value="agent-lan">Сетевой кабель в роутер (LAN) — печатает программа на ПК</MenuItem>
+          <MenuItem value="network">Сетевой кабель в роутер (LAN) — печатает сервер напрямую</MenuItem>
         </TextField>
-        {mode === 'network' ? (
+        {mode !== 'agent' ? (
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField label="IP-адрес принтера" value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.1.87" sx={{ flex: 1 }}
               helperText="Есть на тестовой странице: выключите принтер, зажмите FEED и включите" />
@@ -92,14 +96,20 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
         </Box>
         <TextField label="Текст внизу счёта" value={footer} onChange={e => setFooter(e.target.value)} inputProps={{ maxLength: 200 }} />
 
-        {mode === 'network' && (
-          <Alert severity="info">
-            Сервер должен быть в той же сети, что и принтер (сейчас — ваш Мак в сети кафе). Когда сервер переедет в интернет,
-            переключитесь на «USB к кассовому ПК» или оставьте принтер в сети и запустите программу печати на кассовом ПК.
-          </Alert>
-        )}
-        {mode === 'agent' && <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2 }}>
-          <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Программа печати на кассовом ПК</Typography>
+        <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2 }}>
+          <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Программа связи на кассовом ПК</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Сервер в интернете не видит устройства внутри кафе. Программа на кассовом ПК сама забирает с сервера счета для печати
+            и запросы к кассе АТОЛ и УТМ ЕГАИС, выполняет их у себя и возвращает ответ.
+          </Typography>
+          <FormControlLabel sx={{ mb: 1 }} control={<Switch checked={relay} onChange={e => setRelay(e.target.checked)} />}
+            label="Касса АТОЛ и УТМ ЕГАИС — через эту программу" />
+          {relay && (
+            <Alert severity="info" sx={{ mb: 1 }}>
+              Адреса в настройках кассы и ЕГАИС указывайте так, как их видит кассовый ПК: обычно <b>http://127.0.0.1:16732</b> для АТОЛ
+              и <b>http://127.0.0.1:8080</b> для УТМ. Включайте, когда сервер переедет в интернет; пока сервер в сети кафе — можно не включать.
+            </Alert>
+          )}
           <Typography variant="body2" component="ol" sx={{ pl: 2.5, m: 0 }}>
             <li>Скачайте её здесь и перенесите на кассовый ПК (флешкой или почтой), например в папку C:\Cafe.</li>
             <li>Правой кнопкой по файлу → «Выполнить с помощью PowerShell». Откроется окно — его можно свернуть.</li>
@@ -117,7 +127,7 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
               try { await newToken.mutateAsync(); setMsg({ ok: true, text: 'Ключ сменён — скачайте программу заново' }); } catch (e) { setMsg({ ok: false, text: apiError(e) }); }
             }}>Сменить ключ</Button>
           </Box>
-        </Box>}
+        </Box>
         {msg && <Alert severity={msg.ok ? 'success' : 'error'}>{msg.text}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, flexWrap: 'wrap', gap: 1 }}>

@@ -11,10 +11,16 @@ namespace Cafe.API.Services.Printing
     {
         public bool Enabled { get; set; }
         /// <summary>
-        /// agent — принтер по USB к кассовому ПК, печатает программа на ПК;
-        /// network — принтер подключён к роутеру (LAN), сервер печатает прямо на него (порт 9100)
+        /// agent — принтер по USB к кассовому ПК, печатает программа на ПК (принтер Windows);
+        /// agent-lan — принтер в сети кафе (LAN), печатает программа на ПК по его IP (сервер в интернете);
+        /// network — принтер в сети кафе, сервер печатает прямо на него (сервер в той же сети)
         /// </summary>
         public string Mode { get; set; } = "agent";
+        /// <summary>
+        /// Касса АТОЛ и УТМ ЕГАИС — через программу на кассовом ПК. Нужно, когда сервер в интернете:
+        /// сам он до устройств в сети кафе не достаёт, а программа на ПК — достаёт.
+        /// </summary>
+        public bool RelayDevices { get; set; }
         /// <summary>IP принтера в сети (режим network)</summary>
         public string? Host { get; set; }
         public int Port { get; set; } = 9100;
@@ -42,6 +48,9 @@ namespace Cafe.API.Services.Printing
         /// <summary>Когда программа печати последний раз заходила за заданиями</summary>
         public static DateTime? AgentSeenAt { get; set; }
         public static string? AgentHost { get; set; }
+
+        /// <summary>Программа на кассовом ПК заходила за заданиями меньше минуты назад</summary>
+        public static bool AgentOnline => AgentSeenAt > DateTime.UtcNow.AddSeconds(-60);
 
         public PrintSettingsProvider(IServiceScopeFactory scopes) => _scopes = scopes;
 

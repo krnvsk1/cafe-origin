@@ -4,8 +4,10 @@ import { apiClient } from './client';
 /** Принтер счетов для гостя (пречек) и программа печати на кассовом ПК */
 export interface PrintingState {
   enabled: boolean;
-  /** agent — USB к кассовому ПК (печатает программа на ПК); network — принтер в сети, печатает сервер */
-  mode: 'agent' | 'network';
+  /** agent — USB к кассовому ПК; agent-lan — принтер в сети, печатает программа на ПК; network — принтер в сети, печатает сервер */
+  mode: 'agent' | 'agent-lan' | 'network';
+  /** Касса АТОЛ и УТМ ЕГАИС — через программу на кассовом ПК (сервер в интернете) */
+  relayDevices: boolean;
   host: string | null;
   port: number;
   printerName: string;
@@ -18,7 +20,7 @@ export interface PrintingState {
   recent: { id: number; kind: string; title: string; status: 'pending' | 'taken' | 'done' | 'error'; error: string | null; createdAt: string; doneAt: string | null }[];
 }
 
-export type PrintingInput = Pick<PrintingState, 'enabled' | 'mode' | 'host' | 'port' | 'printerName' | 'width' | 'codeTable' | 'encoding' | 'footer'>;
+export type PrintingInput = Pick<PrintingState, 'enabled' | 'mode' | 'relayDevices' | 'host' | 'port' | 'printerName' | 'width' | 'codeTable' | 'encoding' | 'footer'>;
 
 const KEY = ['printing'];
 

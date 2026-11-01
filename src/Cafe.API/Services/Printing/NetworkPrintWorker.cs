@@ -44,7 +44,7 @@ namespace Cafe.API.Services.Printing
         {
             using var scope = _scopes.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var jobs = await db.PrintJobs.Where(j => j.Status == PrintJobStatuses.Pending).OrderBy(j => j.Id).Take(5).ToListAsync(ct);
+            var jobs = await db.PrintJobs.Where(j => j.Status == PrintJobStatuses.Pending && j.Kind != "http").OrderBy(j => j.Id).Take(5).ToListAsync(ct);
             foreach (var job in jobs)
             {
                 job.Status = PrintJobStatuses.Taken;

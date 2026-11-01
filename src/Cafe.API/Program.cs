@@ -251,7 +251,8 @@ builder.Services.AddHostedService<PaymentTimeoutService>();
 // ЕГАИС через УТМ: настраивается в админке (Склад → ЕГАИС), appsettings Egais — значения по умолчанию
 builder.Services.Configure<Cafe.API.Services.Egais.EgaisOptions>(builder.Configuration.GetSection(Cafe.API.Services.Egais.EgaisOptions.SectionName));
 builder.Services.AddSingleton<Cafe.API.Services.Egais.EgaisSettingsProvider>();
-builder.Services.AddHttpClient<Cafe.API.Services.Egais.UtmClient>(client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient<Cafe.API.Services.Egais.UtmClient>(client => client.Timeout = TimeSpan.FromSeconds(30))
+    .AddHttpMessageHandler<Cafe.API.Services.Printing.DeviceRelayHandler>();
 builder.Services.AddScoped<Cafe.API.Services.Egais.EgaisService>();
 builder.Services.AddHostedService<Cafe.API.Services.Egais.EgaisSyncWorker>();
 
@@ -293,7 +294,10 @@ builder.Services.AddScoped<Cafe.API.Services.WaiterReadyNotifier>();
 
 // Онлайн-касса АТОЛ (АТОЛ Web Server в локальной сети): чеки по заказам кассы
 builder.Services.AddSingleton<Cafe.API.Services.Fiscal.FiscalSettingsProvider>();
-builder.Services.AddHttpClient<Cafe.API.Services.Fiscal.AtolClient>(client => client.Timeout = TimeSpan.FromSeconds(15));
+// Касса и УТМ — в сети кафе: с сервера в интернете запросы идут через программу на кассовом ПК
+builder.Services.AddTransient<Cafe.API.Services.Printing.DeviceRelayHandler>();
+builder.Services.AddHttpClient<Cafe.API.Services.Fiscal.AtolClient>(client => client.Timeout = TimeSpan.FromSeconds(30))
+    .AddHttpMessageHandler<Cafe.API.Services.Printing.DeviceRelayHandler>();
 builder.Services.AddScoped<Cafe.API.Services.Fiscal.FiscalService>();
 
 // Импорт меню с сайта заведения (FoodPicasso)

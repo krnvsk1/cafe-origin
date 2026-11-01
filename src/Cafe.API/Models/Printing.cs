@@ -14,8 +14,8 @@ namespace Cafe.API.Models
     }
 
     /// <summary>
-    /// Задание на печать для принтера счетов (RONGTA по USB к кассовому ПК).
-    /// Сервер готовит готовые байты ESC/POS, программа печати на ПК забирает задание и отправляет их на принтер.
+    /// Задание для программы на кассовом ПК: напечатать счёт на принтере (RONGTA) или передать запрос
+    /// устройству в сети кафе (АТОЛ Web Server, УТМ ЕГАИС), когда сервер в интернете и сам до них не достаёт.
     /// </summary>
     [Table("print_jobs")]
     public class PrintJob
@@ -25,7 +25,7 @@ namespace Cafe.API.Models
         [Column("id")]
         public int Id { get; set; }
 
-        /// <summary>precheck — счёт для гостя, test — проверочная печать</summary>
+        /// <summary>precheck — счёт для гостя, test — проверочная печать, http — запрос к устройству в кафе (АТОЛ, УТМ)</summary>
         [Required]
         [MaxLength(20)]
         [Column("kind")]
@@ -39,7 +39,7 @@ namespace Cafe.API.Models
         [Column("title")]
         public string Title { get; set; } = string.Empty;
 
-        /// <summary>Байты ESC/POS в base64</summary>
+        /// <summary>Печать — байты ESC/POS в base64; http — запрос (JSON: метод, адрес, тело)</summary>
         [Required]
         [Column("payload", TypeName = "text")]
         public string Payload { get; set; } = string.Empty;
@@ -52,6 +52,10 @@ namespace Cafe.API.Models
         [MaxLength(300)]
         [Column("error")]
         public string? Error { get; set; }
+
+        /// <summary>http — ответ устройства (JSON: код, тип, тело в base64)</summary>
+        [Column("result", TypeName = "text")]
+        public string? Result { get; set; }
 
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

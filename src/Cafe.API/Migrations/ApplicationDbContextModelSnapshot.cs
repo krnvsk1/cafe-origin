@@ -1862,6 +1862,10 @@ namespace Cafe.API.Migrations
                         .HasColumnType("text")
                         .HasColumnName("payload");
 
+                    b.Property<string>("Result")
+                        .HasColumnType("text")
+                        .HasColumnName("result");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)

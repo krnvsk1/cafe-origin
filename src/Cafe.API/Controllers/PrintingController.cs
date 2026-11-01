@@ -31,12 +31,6 @@ namespace Cafe.API.Controllers
             _print = print;
         }
 
-        public class ResultRequest
-        {
-            public bool Ok { get; set; }
-            public string? Error { get; set; }
-        }
-
         private async Task<PrintSettings?> AuthAsync()
         {
             var s = await _settings.GetAsync();
@@ -46,12 +40,13 @@ namespace Cafe.API.Controllers
             return ok ? s : null;
         }
 
-        // GET: api/print-agent/jobs?wait=20 — ждёт до wait секунд, пока не появится задание
+        // GET: api/print-agent/jobs?wait=20 — ждёт до wait секунд, пока не появится задание:
+        // счёт на печать (если печатает программа) или запрос к кассе/УТМ (если они «через программу»)
         [HttpGet("jobs")]
         public async Task<IActionResult> Jobs([FromQuery] int wait = 20, CancellationToken ct = default)
         {
             var s = await AuthAsync();
-            if (s == null) return Unauthorized(new { message = "Неверный ключ программы печати — скачайте её заново в настройках принтера" });
+            if (s == null) return Unauthorized(new { message = "Неверный ключ программы — скачайте её заново в настройках принтера" });
             PrintSettingsProvider.AgentSeenAt = DateTime.UtcNow;
             PrintSettingsProvider.AgentHost = Request.Headers["X-Print-Host"].ToString() is { Length: > 0 and <= 100 } h ? h : null;
             await _print.ExpireStaleAsync();
@@ -59,9 +54,13 @@ namespace Cafe.API.Controllers
             var deadline = DateTime.UtcNow.AddSeconds(Math.Clamp(wait, 0, 25));
             while (true)
             {
-                // В режиме «по сети» задания печатает сам сервер — программе на ПК их не отдаём
-                var jobs = s.Enabled && s.Mode == "agent"
-                    ? await _context.PrintJobs.Where(j => j.Status == PrintJobStatuses.Pending).OrderBy(j => j.Id).Take(5).ToListAsync(ct)
+                s = await _settings.GetAsync();
+                var printHere = s.Enabled && s.Mode is "agent" or "agent-lan";
+                var relay = s.RelayDevices;
+                var jobs = printHere || relay
+                    ? await _context.PrintJobs
+                        .Where(j => j.Status == PrintJobStatuses.Pending && (j.Kind == "http" ? relay : printHere))
+                        .OrderBy(j => j.Id).Take(5).ToListAsync(ct)
                     : new List<PrintJob>();
                 if (jobs.Count > 0)
                 {
@@ -71,16 +70,36 @@ namespace Cafe.API.Controllers
                         j.TakenAt = DateTime.UtcNow;
                     }
                     await _context.SaveChangesAsync(ct);
-                    return Ok(new { printer = s.PrinterName, jobs = jobs.Select(j => new { j.Id, j.Title, j.Payload }) });
+                    return Ok(AgentReply(s, jobs));
                 }
                 if (DateTime.UtcNow >= deadline || ct.IsCancellationRequested) break;
-                try { await Task.Delay(1000, ct); } catch (TaskCanceledException) { break; }
+                // Запросы к кассе ждут ответа — забираем их почти сразу
+                try { await Task.Delay(250, ct); } catch (TaskCanceledException) { break; }
                 PrintSettingsProvider.AgentSeenAt = DateTime.UtcNow;
             }
-            return Ok(new { printer = s.PrinterName, jobs = Array.Empty<object>() });
+            return Ok(AgentReply(s, new List<PrintJob>()));
         }
 
-        // POST: api/print-agent/jobs/{id}/result — напечатано или ошибка принтера
+        private static object AgentReply(PrintSettings s, List<PrintJob> jobs) => new
+        {
+            printer = s.PrinterName,
+            // Принтер в сети кафе: программа печатает на его IP
+            printerHost = s.Mode == "agent-lan" ? s.Host : null,
+            printerPort = s.Port,
+            jobs = jobs.Select(j => new { j.Id, type = j.Kind == "http" ? "http" : "print", j.Title, j.Payload })
+        };
+
+        public class ResultRequest
+        {
+            public bool Ok { get; set; }
+            public string? Error { get; set; }
+            /// <summary>Ответ устройства на http-запрос</summary>
+            public int? Status { get; set; }
+            public string? ContentType { get; set; }
+            public string? Body { get; set; }
+        }
+
+        // POST: api/print-agent/jobs/{id}/result — напечатано / ответ устройства / ошибка
         [HttpPost("jobs/{id:int}/result")]
         public async Task<IActionResult> Result(int id, [FromBody] ResultRequest r)
         {
@@ -88,7 +107,11 @@ namespace Cafe.API.Controllers
             var job = await _context.PrintJobs.FirstOrDefaultAsync(j => j.Id == id);
             if (job == null) return NotFound();
             job.Status = r.Ok ? PrintJobStatuses.Done : PrintJobStatuses.Error;
-            job.Error = r.Ok ? null : (string.IsNullOrWhiteSpace(r.Error) ? "Ошибка принтера" : r.Error.Trim()[..Math.Min(300, r.Error.Trim().Length)]);
+            var err = r.Error?.Trim();
+            job.Error = r.Ok ? null : (string.IsNullOrEmpty(err) ? "Ошибка устройства" : err[..Math.Min(300, err.Length)]);
+            if (r.Ok && job.Kind == "http")
+                job.Result = System.Text.Json.JsonSerializer.Serialize(new DeviceRelayHandler.RelayResponse(r.Status ?? 200, r.ContentType, r.Body),
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
             job.DoneAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
             return Ok();
@@ -116,6 +139,7 @@ namespace Cafe.API.Controllers
         {
             public bool Enabled { get; set; }
             public string Mode { get; set; } = "agent";
+            public bool RelayDevices { get; set; }
             public string? Host { get; set; }
             public int Port { get; set; } = 9100;
             public string PrinterName { get; set; } = string.Empty;
@@ -128,11 +152,11 @@ namespace Cafe.API.Controllers
         private async Task<object> StateAsync()
         {
             var s = await _settings.GetAsync();
-            var recent = await _context.PrintJobs.AsNoTracking().OrderByDescending(j => j.Id).Take(10)
+            var recent = await _context.PrintJobs.AsNoTracking().Where(j => j.Kind != "http").OrderByDescending(j => j.Id).Take(10)
                 .Select(j => new { j.Id, j.Kind, j.Title, j.Status, j.Error, j.CreatedAt, j.DoneAt }).ToListAsync();
             return new
             {
-                s.Enabled, s.Mode, s.Host, s.Port, s.PrinterName, s.Width, s.CodeTable, s.Encoding, s.Footer,
+                s.Enabled, s.Mode, s.RelayDevices, s.Host, s.Port, s.PrinterName, s.Width, s.CodeTable, s.Encoding, s.Footer,
                 agentSeenAt = PrintSettingsProvider.AgentSeenAt,
                 agentHost = PrintSettingsProvider.AgentHost,
                 recent
@@ -147,11 +171,11 @@ namespace Cafe.API.Controllers
         [HttpPut]
         public async Task<IActionResult> Save([FromBody] SaveRequest r)
         {
-            if (r.Mode is not ("agent" or "network")) return BadRequest(new { message = "Неизвестный способ подключения" });
-            if (r.Mode == "network" && !System.Net.IPAddress.TryParse(r.Host?.Trim(), out _))
+            if (r.Mode is not ("agent" or "agent-lan" or "network")) return BadRequest(new { message = "Неизвестный способ подключения" });
+            if (r.Enabled && r.Mode is "network" or "agent-lan" && !System.Net.IPAddress.TryParse(r.Host?.Trim(), out _))
                 return BadRequest(new { message = "Укажите IP-адрес принтера, например 192.168.1.87" });
             if (r.Port is < 1 or > 65535) return BadRequest(new { message = "Порт — от 1 до 65535 (обычно 9100)" });
-            if (r.Mode == "agent" && string.IsNullOrWhiteSpace(r.PrinterName)) return BadRequest(new { message = "Укажите имя принтера в Windows" });
+            if (r.Enabled && r.Mode == "agent" && string.IsNullOrWhiteSpace(r.PrinterName)) return BadRequest(new { message = "Укажите имя принтера в Windows" });
             if (r.Width is < 24 or > 64) return BadRequest(new { message = "Ширина строки — от 24 до 64 символов" });
             if (r.CodeTable is < 0 or > 255) return BadRequest(new { message = "Кодовая таблица — число от 0 до 255" });
             if (r.Encoding is not (866 or 1251)) return BadRequest(new { message = "Кодировка — 866 или 1251" });
@@ -160,6 +184,7 @@ namespace Cafe.API.Controllers
             {
                 Enabled = r.Enabled,
                 Mode = r.Mode,
+                RelayDevices = r.RelayDevices,
                 Host = string.IsNullOrWhiteSpace(r.Host) ? null : r.Host.Trim(),
                 Port = r.Port,
                 PrinterName = string.IsNullOrWhiteSpace(r.PrinterName) ? s.PrinterName : r.PrinterName.Trim(),
@@ -182,7 +207,7 @@ namespace Cafe.API.Controllers
             return Ok(new { job.Id });
         }
 
-        // GET: api/print-jobs/{id} лежит в WaiterController; здесь — новый ключ (старая программа перестанет печатать)
+        // POST: api/admin/printing/token — новый ключ (старая программа перестанет работать)
         [HttpPost("token")]
         public async Task<IActionResult> NewToken()
         {

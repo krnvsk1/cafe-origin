@@ -28,6 +28,7 @@ namespace Cafe.API.Migrations
                     payload = table.Column<string>(type: "text", nullable: false),
                     status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     error = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
+                    result = table.Column<string>(type: "text", nullable: true),
                     created_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
                     taken_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     done_at = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
