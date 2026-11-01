@@ -55,6 +55,7 @@ builder.Services.AddHealthChecks()
     .AddCheck<DiskSpaceHealthCheck>("disk", tags: new[] { "ready" })
     .AddCheck<JobsHealthCheck>("jobs");
 builder.Services.AddSingleton<AlertSettingsProvider>();
+builder.Services.AddSingleton<StatusReport>();
 builder.Services.AddHostedService<AlertService>();
 builder.Services.AddRateLimiter(o =>
 {

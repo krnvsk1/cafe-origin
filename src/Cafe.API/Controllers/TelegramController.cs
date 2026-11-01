@@ -228,6 +228,9 @@ namespace Cafe.API.Controllers
                     case "/orders":
                         await HandleOrdersAsync(chatId, fromId);
                         break;
+                    case "/status":
+                        await HandleStatusAsync(chatId);
+                        break;
                     case "/id":
                         // Удобно, чтобы узнать ID группы: для заказов (Telegram:StaffChatId) и отдельной — для тревог
                         await _telegram.SendMessageAsync(chatId, $"ID этого чата: <code>{chatId}</code>");
@@ -311,6 +314,19 @@ namespace Cafe.API.Controllers
             var lines = orders.Select(o => $"#{o.Id} — <b>{TelegramApi.Escape(o.Status)}</b> · {o.Total:0.##} ₽");
             await _telegram.SendMessageAsync(chatId, "Ваши последние заказы:\n" + string.Join('\n', lines),
                 _telegram.WebAppKeyboard("Мои заказы", "/orders"));
+        }
+
+        /// <summary>/status — сводка о сервере; отвечает только в чате тревог</summary>
+        private async Task HandleStatusAsync(long chatId)
+        {
+            var alerts = HttpContext.RequestServices.GetRequiredService<Cafe.API.Monitoring.AlertSettingsProvider>();
+            if (await alerts.ChatIdAsync() != chatId)
+            {
+                await _telegram.SendMessageAsync(chatId, "Команда /status работает только в чате тревог (он задаётся в «Состоянии системы»).");
+                return;
+            }
+            var report = HttpContext.RequestServices.GetRequiredService<Cafe.API.Monitoring.StatusReport>();
+            await _telegram.SendMessageAsync(chatId, await report.BuildHtmlAsync(SystemController.Version, SystemController.StartedAt));
         }
     }
 }

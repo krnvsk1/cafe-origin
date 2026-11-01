@@ -1,0 +1,19 @@
+# Мониторинг доступности: Uptime Kuma (веб-страница со статусами и графиками, удобна с телефона).
+# Запуск рядом с сервисом:  docker compose -f docker-compose.monitoring.yml up -d
+# Открыть: http://<адрес сервера>:3002 — при первом входе создать пользователя.
+# На боевом сервере лучше закрыть порт снаружи и открыть через HTTPS-прокси (Caddy) на поддомене, например status.ваш-домен.ru.
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "3002:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    # Чтобы проверять сервис на этом же компьютере по адресу host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  uptime_kuma_data:
