@@ -9,6 +9,7 @@ import {
   TableRestaurant as TableIcon, CheckCircle as ReadyIcon, Schedule as CookingIcon, DoneAll as ServedIcon,
   DeleteOutline as DeleteIcon, MoreVert as MoreIcon,
   NotificationsActiveOutlined as BellOnIcon, NotificationsOffOutlined as BellOffIcon, ScaleOutlined as ScaleIcon,
+  PrintOutlined as PrintIcon,
 } from '@mui/icons-material';
 import { usePushNotifications, type PushState } from '../api/push';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -16,7 +17,7 @@ import { useDishes } from '../api/hooks';
 import {
   useWaiterTables, useTableCheck, useOpenCheck, useAddRound, useCancelRound, useCloseCheck, useCancelCheck,
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
-  useServeItem, useMyChecks, useSetItemWeight,
+  useServeItem, useMyChecks, useSetItemWeight, usePrintCheck, fetchPrintJob,
   useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
   type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
@@ -552,6 +553,33 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const [voiding, setVoiding] = React.useState<CheckItem | null>(null);
   const [weighing, setWeighing] = React.useState<CheckItem | null>(null);
   const setItemWeight = useSetItemWeight();
+  const printCheck = usePrintCheck();
+  const [printing, setPrinting] = React.useState(false);
+
+  // Счёт для гостя уходит на принтер через программу печати на кассовом ПК — ждём её ответа
+  const printGuestCheck = async (checkId: number) => {
+    setPrinting(true);
+    setToast('Печатаем счёт…');
+    try {
+      const { jobId } = await printCheck.mutateAsync(checkId);
+      const started = Date.now();
+      while (Date.now() - started < 25000) {
+        await new Promise(r => setTimeout(r, 1500));
+        const job = await fetchPrintJob(jobId);
+        if (job.status === 'done') { setToast('Счёт напечатан'); return; }
+        if (job.status === 'error') { setToast(`Счёт не напечатан: ${job.error ?? 'ошибка принтера'}`); return; }
+        if (job.status === 'pending' && !job.agentOnline && Date.now() - started > 6000) {
+          setToast('Программа печати на кассовом ПК не запущена — счёт напечатается, когда её включат');
+          return;
+        }
+      }
+      setToast('Принтер долго не отвечает — проверьте его');
+    } catch (e) {
+      setToast(apiError(e));
+    } finally {
+      setPrinting(false);
+    }
+  };
   const serve = useServeItem();
   const serveItem = (itemId: number, delta: number | null) =>
     serve.mutate({ itemId, delta }, { onError: e => setToast(apiError(e)) });
@@ -565,6 +593,9 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   if (error || !check) return <Alert severity="error">{apiError(error, 'Чек не найден')}</Alert>;
 
   const isOpen = check.status === 'open';
+  // Счёт для гостя напечатан с текущей суммой (после дозаказа печатаем заново)
+  const printedNow = !!check.printedAt && check.printedTotal != null && Math.abs(check.printedTotal - check.total) < 0.01;
+  const needPrint = !!check.printEnabled && !printedNow;
   const active = check.orders.filter(o => o.status !== 'Отменён');
   const received = Number(cash.replace(',', '.')) || 0;
   const change = method === 'cash' && received > 0 ? received - check.total : null;
@@ -619,6 +650,17 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       )}
 
       <Menu anchorEl={menu} open={!!menu} onClose={() => setMenu(null)}>
+        {check.printEnabled && active.length > 0 && (
+          <MenuItem onClick={() => { setMenu(null); void printGuestCheck(check.id); }} disabled={printing}>
+            <ListItemIcon><PrintIcon fontSize="small" /></ListItemIcon>
+            <ListItemText primary={check.printedAt ? 'Распечатать счёт ещё раз' : 'Распечатать счёт'} />
+          </MenuItem>
+        )}
+        {needPrint && active.length > 0 && (
+          <MenuItem onClick={() => { setMenu(null); setErr(''); setCash(''); setClosing(true); }}>
+            <ListItemText primary="Закрыть чек без печати счёта" />
+          </MenuItem>
+        )}
         <MenuItem onClick={() => { setMenu(null); setDialog('split'); }} disabled={active.length === 0}>
           <ListItemText primary="Разделить счёт" secondary="Перенести блюда в другой счёт" />
         </MenuItem>
@@ -738,7 +780,12 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         <Box sx={{ position: 'fixed', left: 0, right: 0, bottom: 0, p: 1.5, pb: 'calc(12px + env(safe-area-inset-bottom))', bgcolor: 'background.paper',
           borderTop: '1px solid', borderColor: 'divider', display: 'flex', gap: 1, zIndex: 10 }}>
           <Button fullWidth variant="contained" color="secondary" size="large" startIcon={<AddIcon />} onClick={() => setPicker(true)}>Добавить блюда</Button>
-          {active.length > 0 ? (
+          {active.length > 0 && needPrint ? (
+            <Button fullWidth variant="outlined" size="large" startIcon={printing ? <CircularProgress size={18} /> : <PrintIcon />} disabled={printing}
+              onClick={() => printGuestCheck(check.id)}>
+              {check.printedAt ? 'Счёт изменился — распечатать' : 'Распечатать счёт'}
+            </Button>
+          ) : active.length > 0 ? (
             <Button fullWidth variant="outlined" size="large" onClick={() => { setErr(''); setCash(''); setClosing(true); }}>Закрыть чек</Button>
           ) : (
             <Button variant="text" color="error" onClick={async () => { try { await cancelCheck.mutateAsync(check.id); navigate('/waiter'); } catch (e) { setErr(apiError(e)); } }}>

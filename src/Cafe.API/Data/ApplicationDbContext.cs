@@ -65,6 +65,7 @@ namespace Cafe.API.Data
         public DbSet<TableCheck> TableChecks { get; set; } = null!;
         public DbSet<OrderItemVoid> OrderItemVoids { get; set; } = null!;
         public DbSet<WebPushSubscription> PushSubscriptions { get; set; } = null!;
+        public DbSet<PrintJob> PrintJobs { get; set; } = null!;
         public DbSet<VenueShift> VenueShifts { get; set; } = null!;
         public DbSet<WaiterShift> WaiterShifts { get; set; } = null!;
         public DbSet<OrderStationStatus> OrderStationStatuses { get; set; } = null!;
@@ -504,6 +505,12 @@ namespace Cafe.API.Data
             {
                 entity.HasIndex(e => e.Endpoint).IsUnique();
                 entity.HasIndex(e => e.UserId);
+            });
+
+            modelBuilder.Entity<PrintJob>(entity =>
+            {
+                entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.CheckId);
             });
 
             modelBuilder.Entity<OrderItemVoid>(entity =>

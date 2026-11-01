@@ -87,6 +87,11 @@ export interface TableCheck {
   paymentMethod: string | null;
   total: number;
   notServed: number;
+  /** Принтер счетов включён в настройках */
+  printEnabled?: boolean;
+  /** Когда печатали счёт для гостя и на какую сумму (дозаказали — печатать заново) */
+  printedAt?: string | null;
+  printedTotal?: number | null;
   orders: CheckOrder[];
 }
 
@@ -291,6 +296,16 @@ export const useShiftDetails = (id: number | null) =>
 export const useServeItem = () =>
   useWaiterMutation<{ itemId: number; delta: number | null }>(({ itemId, delta }) =>
     apiClient.post(`/api/kitchen/items/${itemId}/served`, { delta }).then(r => r.data));
+
+/** Напечатать счёт для гостя (пречек) на принтере счетов; вернёт задание печати */
+export const usePrintCheck = () =>
+  useWaiterMutation<number, { jobId: number }>(checkId =>
+    apiClient.post(`/api/waiter/checks/${checkId}/print`).then(r => r.data));
+
+export interface PrintJobState { id: number; status: 'pending' | 'taken' | 'done' | 'error'; error: string | null; agentOnline: boolean }
+
+export const fetchPrintJob = (id: number) =>
+  apiClient.get<PrintJobState>(`/api/waiter/print-jobs/${id}`).then(r => r.data);
 
 /** Поправить вес весового блюда (официант уточнил, повар взвесил) — сумма пересчитается */
 export const useSetItemWeight = () =>

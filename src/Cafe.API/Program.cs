@@ -281,6 +281,8 @@ builder.Services.AddHostedService<Cafe.API.Services.Edo.SbisSyncWorker>();
 
 // Название заведения (сайт, оплата, Telegram-бот)
 builder.Services.AddSingleton<Cafe.API.Services.BrandSettingsProvider>();
+builder.Services.AddSingleton<Cafe.API.Services.Printing.PrintSettingsProvider>();
+builder.Services.AddScoped<Cafe.API.Services.Printing.PrintService>();
 
 // Отмена блюд из чека официантом (с подтверждением кухни)
 builder.Services.AddScoped<Cafe.API.Services.VoidService>();

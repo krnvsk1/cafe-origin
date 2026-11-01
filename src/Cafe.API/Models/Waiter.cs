@@ -90,6 +90,14 @@ namespace Cafe.API.Models
         [MaxLength(500)]
         [Column("comment")]
         public string? Comment { get; set; }
+
+        /// <summary>Когда последний раз печатали счёт для гостя (пречек)</summary>
+        [Column("printed_at")]
+        public DateTime? PrintedAt { get; set; }
+
+        /// <summary>Сумма в напечатанном счёте: дозаказали после печати — счёт надо печатать заново</summary>
+        [Column("printed_total", TypeName = "numeric(12,2)")]
+        public decimal? PrintedTotal { get; set; }
     }
 
     public static class VoidStatuses

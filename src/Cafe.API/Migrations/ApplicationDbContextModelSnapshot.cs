@@ -1815,6 +1815,72 @@ namespace Cafe.API.Migrations
                     b.ToTable("order_station_statuses");
                 });
 
+            modelBuilder.Entity("Cafe.API.Models.PrintJob", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("CheckId")
+                        .HasColumnType("integer")
+                        .HasColumnName("check_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<DateTime?>("DoneAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("done_at");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("error");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payload");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("TakenAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("taken_at");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CheckId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("print_jobs");
+                });
+
             modelBuilder.Entity("Cafe.API.Models.PromoCode", b =>
                 {
                     b.Property<int>("Id")
@@ -2532,6 +2598,14 @@ namespace Cafe.API.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("payment_method");
+
+                    b.Property<DateTime?>("PrintedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("printed_at");
+
+                    b.Property<decimal?>("PrintedTotal")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("printed_total");
 
                     b.Property<string>("Status")
                         .IsRequired()

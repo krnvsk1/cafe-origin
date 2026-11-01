@@ -5,6 +5,7 @@ using Cafe.API.Data;
 using Cafe.API.Extensions;
 using Cafe.API.Models;
 using Cafe.API.Services;
+using Cafe.API.Services.Printing;
 
 namespace Cafe.API.Controllers
 {
@@ -31,8 +32,14 @@ namespace Cafe.API.Controllers
         private readonly ShiftService _shifts;
         private bool? _seesAll;
 
-        public WaiterController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, VoidService voids, ShiftService shifts, ILogger<WaiterController> logger)
+        private readonly PrintService _print;
+        private readonly BrandSettingsProvider _brand;
+
+        public WaiterController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, VoidService voids, ShiftService shifts, ILogger<WaiterController> logger,
+            PrintService print, BrandSettingsProvider brand)
         {
+            _print = print;
+            _brand = brand;
             _voids = voids;
             _shifts = shifts;
             _context = context;
@@ -335,6 +342,10 @@ namespace Cafe.API.Controllers
                 c.ClosedAt,
                 c.PaymentMethod,
                 total = c.Status == CheckStatuses.Closed ? c.Total : active.Sum(l => LineTotal(l.Item)),
+                // Счёт для гостя: можно ли печатать и печатали ли его с текущей суммой
+                printEnabled = (await _print.SettingsAsync()).Enabled,
+                c.PrintedAt,
+                c.PrintedTotal,
                 // Сколько блюд ещё не отдано (при закрытии предупреждаем)
                 notServed = active.Sum(l => l.Item.Quantity - Served(l)),
                 siblings,
@@ -365,6 +376,58 @@ namespace Cafe.API.Controllers
                     })
                 })
             });
+        }
+
+        /// <summary>Строки счёта для печати: блюда (с весом и добавками) из неотменённых подач</summary>
+        private static List<PrecheckLine> PrecheckLines(IEnumerable<CheckLine> lines) => lines
+            .Where(l => l.Order.Status != OrderStatuses.Cancelled && l.Item.Quantity > 0)
+            .OrderBy(l => l.Order.CreatedAt).ThenBy(l => l.Item.Id)
+            .Select(l =>
+            {
+                var addons = l.Item.SelectedAddons.Select(a => a.Quantity > 1 ? $"{a.AddonName} x{a.Quantity}" : a.AddonName).ToList();
+                var name = addons.Count > 0 ? $"{l.Item.Name} + {string.Join(", ", addons)}" : l.Item.Name;
+                var unit = l.Item.Price + l.Item.SelectedAddons.Sum(a => a.Price * a.Quantity);
+                return new PrecheckLine(name, l.Item.Quantity, unit, LineTotal(l.Item));
+            })
+            .ToList();
+
+        // POST: api/waiter/checks/{id}/print — напечатать счёт для гостя (не фискальный) на принтере счетов
+        [HttpPost("checks/{id:int}/print")]
+        [HasPermission(Permissions.Waiter, Permissions.ChecksAll)]
+        public async Task<IActionResult> Print(int id)
+        {
+            var c = await _context.TableChecks.Include(x => x.Table).FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
+            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт уже закрыт" });
+            var settings = await _print.SettingsAsync();
+            if (!settings.Enabled) return BadRequest(new { message = "Принтер счетов не настроен — включите его в «Настройке интеграций» → «Принтер счетов»" });
+
+            var lines = PrecheckLines(await LinesAsync(new List<int> { id }));
+            if (lines.Count == 0) return BadRequest(new { message = "В счёте нет блюд" });
+            var waiter = (await NamesAsync(new[] { c.WaiterId })).GetValueOrDefault(c.WaiterId ?? 0);
+            var label = string.IsNullOrWhiteSpace(c.Label) ? $"счёт №{c.Id}" : c.Label!;
+            var data = new PrecheckData((await _brand.GetAsync()).DisplayName, c.Table!.Name, label, waiter, c.Guests,
+                c.OpenedAt, DateTime.UtcNow, lines, settings.Footer);
+            var job = await _print.EnqueueAsync("precheck", c.Id, $"Счёт: стол {c.Table.Name}", PrintService.Precheck(settings, data), User.GetUserId());
+
+            c.PrintedAt = DateTime.UtcNow;
+            c.PrintedTotal = lines.Sum(l => l.Amount);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("🖨 Счёт #{CheckId} (стол {Table}) отправлен на печать: {Total} ₽", c.Id, c.Table.Name, c.PrintedTotal);
+            return Ok(new { jobId = job.Id });
+        }
+
+        // GET: api/waiter/print-jobs/{id} — напечатался ли счёт
+        [HttpGet("print-jobs/{id:int}")]
+        [HasPermission(Permissions.Waiter, Permissions.ChecksAll)]
+        public async Task<IActionResult> GetPrintJob(int id)
+        {
+            await _print.ExpireStaleAsync();
+            var j = await _context.PrintJobs.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            if (j == null) return NotFound(new { message = "Задание не найдено" });
+            var agentOnline = PrintSettingsProvider.AgentSeenAt > DateTime.UtcNow.AddSeconds(-60);
+            return Ok(new { j.Id, j.Status, j.Error, agentOnline });
         }
 
         // POST: api/waiter/checks/{id}/orders — дозаказ: новые блюда уходят на кухню отдельным заказом

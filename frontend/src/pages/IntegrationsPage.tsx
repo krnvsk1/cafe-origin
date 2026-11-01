@@ -20,6 +20,8 @@ import EdoSettingsDialog from './inventory/EdoSettingsDialog';
 import FiscalSettingsDialog from './inventory/FiscalSettingsDialog';
 import ReceiptLayoutDialog from './inventory/ReceiptLayoutDialog';
 import MercurySettingsDialog from './inventory/MercurySettingsDialog';
+import PrinterSettingsDialog from './inventory/PrinterSettingsDialog';
+import { usePrintingState, agentOnline } from '../api/printing';
 
 type Status = 'ok' | 'error' | 'off';
 
@@ -113,7 +115,8 @@ const IntegrationsPage: React.FC = () => {
   const { data: edo, isLoading: edoLoading } = useEdoState();
   const { data: fiscal, isLoading: fiscalLoading } = useFiscalState(true);
   const { data: mercury, isLoading: mercuryLoading } = useMercuryState();
-  const [open, setOpen] = React.useState<'egais' | 'chz' | 'sbis' | 'mercury' | 'kkt' | 'layout' | null>(null);
+  const { data: printing, isLoading: printingLoading } = usePrintingState();
+  const [open, setOpen] = React.useState<'egais' | 'chz' | 'sbis' | 'mercury' | 'kkt' | 'layout' | 'printer' | null>(null);
 
   // Переход из вкладки склада: /admin/integrations#chz — прокручиваем к нужной карточке
   React.useEffect(() => {
@@ -131,6 +134,9 @@ const IntegrationsPage: React.FC = () => {
   const fiscalStatus: Status = !fiscal?.enabled ? 'off' : fiscal.shiftError || fiscal.shiftState === 'expired' ? 'error' : 'ok';
   const mercuryConfigured = !!mercury?.enabled && !!mercury.login && mercury.hasPassword && mercury.hasApiKey;
   const mercuryStatus: Status = !mercuryConfigured ? 'off' : mercury!.lastError ? 'error' : 'ok';
+  const printerOnline = agentOnline(printing);
+  const lastPrint = printing?.recent[0];
+  const printerStatus: Status = !printing?.enabled ? 'off' : printerOnline && lastPrint?.status !== 'error' ? 'ok' : 'error';
 
   return (
     <Box sx={{ py: { xs: 2, sm: 3 }, maxWidth: 1000, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -228,12 +234,29 @@ const IntegrationsPage: React.FC = () => {
         )}
       />
 
+      <Card
+        id="printer"
+        title="Принтер счетов (RONGTA)"
+        purpose="Счёт для гостя перед оплатой: официант печатает его со своего телефона на чековом принтере у кассы"
+        loading={printingLoading}
+        status={printerStatus}
+        statusText={printerStatus === 'off' ? 'Не подключено'
+          : printerOnline ? `Программа печати на связи${printing?.agentHost ? ` · ${printing.agentHost}` : ''}` : 'Программа печати на кассовом ПК не запущена'}
+        details={printing?.enabled ? [
+          `Принтер: ${printing.printerName} · ${printing.width} символов в строке`,
+          lastPrint && `Последняя печать: ${lastPrint.title} — ${lastPrint.status === 'done' ? 'напечатано' : lastPrint.status === 'error' ? 'ошибка' : 'в очереди'} (${fmtDateTime(lastPrint.createdAt)})`,
+        ] : undefined}
+        error={printing?.enabled && lastPrint?.status === 'error' ? lastPrint.error : null}
+        onSetup={() => setOpen('printer')}
+      />
+
       <EgaisSettingsDialog open={open === 'egais'} onClose={() => setOpen(null)} />
       <ChzSettingsDialog open={open === 'chz'} onClose={() => setOpen(null)} />
       {fiscal && <ReceiptLayoutDialog open={open === 'layout'} state={fiscal} onClose={() => setOpen(null)} />}
       {fiscal && <FiscalSettingsDialog open={open === 'kkt'} state={fiscal} onClose={() => setOpen(null)} />}
       {edo && <EdoSettingsDialog open={open === 'sbis'} state={edo} onClose={() => setOpen(null)} />}
       {mercury && <MercurySettingsDialog open={open === 'mercury'} state={mercury} onClose={() => setOpen(null)} />}
+      {printing && <PrinterSettingsDialog open={open === 'printer'} state={printing} onClose={() => setOpen(null)} />}
     </Box>
   );
 };
