@@ -317,8 +317,9 @@ var app = builder.Build();
 app.Use(async (context, next) =>
 {
     var incoming = context.Request.Headers["X-Request-Id"].ToString();
+    // Свой номер запроса ASP.NET уже кладёт в журнал (RequestId) — берём его же, чтобы все строки одного запроса совпадали
     var requestId = incoming.Length is > 0 and <= 64 && incoming.All(c => char.IsLetterOrDigit(c) || c == '-')
-        ? incoming : Guid.NewGuid().ToString("N")[..12];
+        ? incoming : context.TraceIdentifier;
     context.TraceIdentifier = requestId;
     context.Response.Headers["X-Request-Id"] = requestId;
     using (Serilog.Context.LogContext.PushProperty("RequestId", requestId))
@@ -331,10 +332,10 @@ app.UseSerilogRequestLogging(o =>
     o.MessageTemplate = "HTTP {RequestMethod} {RequestPath} → {StatusCode} за {Elapsed:0} мс";
     o.GetLevel = (ctx, elapsed, ex) =>
         ex != null || ctx.Response.StatusCode >= 500 ? LogEventLevel.Error
-        : elapsed > 3000 ? LogEventLevel.Warning
-        // Живые подключения, проверки состояния и картинки — только в подробном режиме
+        // Живые подключения (они и должны длиться долго), проверки состояния и картинки — только в подробном режиме
         : ctx.Request.Path.StartsWithSegments("/api/events") || ctx.Request.Path.StartsWithSegments("/health")
           || ctx.Request.Path.StartsWithSegments("/metrics") || ctx.Request.Path.StartsWithSegments("/uploads") ? LogEventLevel.Debug
+        : elapsed > 3000 ? LogEventLevel.Warning
         : LogEventLevel.Information;
     o.EnrichDiagnosticContext = (diag, ctx) =>
     {

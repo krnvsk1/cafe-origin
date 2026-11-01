@@ -53,7 +53,7 @@ namespace Cafe.API.Controllers
             long? dbSize = null;
             try
             {
-                dbSize = await _context.Database.SqlQueryRaw<long>("SELECT pg_database_size(current_database()) AS \"Value\"").FirstAsync(ct);
+                dbSize = (await _context.Database.SqlQueryRaw<long>("SELECT pg_database_size(current_database()) AS \"Value\"").ToListAsync(ct)).FirstOrDefault();
             }
             catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogDebug(ex, "Размер базы не получен"); }
 
