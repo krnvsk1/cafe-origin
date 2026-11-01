@@ -11,8 +11,58 @@ using Cafe.API.Options;
 using Cafe.API.Authorization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Threading.RateLimiting;
+using Prometheus;
+using Serilog;
+using Serilog.Events;
+using Serilog.Formatting.Compact;
+using Cafe.API.Monitoring;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ========== Логи и мониторинг ==========
+// Консоль (в продакшене — JSON для сборщиков логов), файлы по дням в папке logs (JSON, хранятся 14 дней),
+// последние предупреждения и ошибки — в памяти для экрана «Состояние системы» и тревог в Telegram.
+var monitoring = builder.Configuration.GetSection("Monitoring").Get<MonitoringOptions>() ?? new MonitoringOptions();
+builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection("Monitoring"));
+var recentLogs = new RecentLogSink();
+builder.Services.AddSingleton(recentLogs);
+builder.Services.AddSingleton<JobMonitor>();
+builder.Host.UseSerilog((ctx, services, log) =>
+{
+    log.ReadFrom.Configuration(ctx.Configuration)
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
+        .MinimumLevel.Override("System.Net.Http.HttpClient", LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Service", "Cafe.API")
+        .Enrich.WithProperty("Environment", ctx.HostingEnvironment.EnvironmentName)
+        .WriteTo.Sink(recentLogs);
+    if (ctx.HostingEnvironment.IsDevelopment())
+        log.WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {RequestId}{NewLine}{Exception}");
+    else
+        log.WriteTo.Console(new CompactJsonFormatter());
+    log.WriteTo.File(new CompactJsonFormatter(), Path.Combine(monitoring.LogDirectory, "cafe-.json"),
+        rollingInterval: RollingInterval.Day, retainedFileCountLimit: Math.Max(1, monitoring.RetainDays),
+        fileSizeLimitBytes: 100 * 1024 * 1024, rollOnFileSizeLimit: true, shared: true);
+});
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>("database", HealthStatus.Unhealthy, new[] { "ready" })
+    .AddCheck<DiskSpaceHealthCheck>("disk", tags: new[] { "ready" })
+    .AddCheck<JobsHealthCheck>("jobs");
+builder.Services.AddHostedService<AlertService>();
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    // Ошибки из браузера: не больше 20 в минуту с одного адреса
+    o.AddPolicy("client-log", ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 
 // PostgreSQL: разрешить DateTime с Kind=Unspecified (преобразует в UTC)
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -262,29 +312,71 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Глобальный обработчик исключений — логирует реальную ошибку
+// Номер запроса: приходит от клиента в X-Request-Id или создаётся; есть в каждой строке лога и в ответе
+app.Use(async (context, next) =>
+{
+    var incoming = context.Request.Headers["X-Request-Id"].ToString();
+    var requestId = incoming.Length is > 0 and <= 64 && incoming.All(c => char.IsLetterOrDigit(c) || c == '-')
+        ? incoming : Guid.NewGuid().ToString("N")[..12];
+    context.TraceIdentifier = requestId;
+    context.Response.Headers["X-Request-Id"] = requestId;
+    using (Serilog.Context.LogContext.PushProperty("RequestId", requestId))
+        await next();
+});
+
+// Журнал запросов: метод, путь (без параметров — в них бывают токены), статус, время, пользователь
+app.UseSerilogRequestLogging(o =>
+{
+    o.MessageTemplate = "HTTP {RequestMethod} {RequestPath} → {StatusCode} за {Elapsed:0} мс";
+    o.GetLevel = (ctx, elapsed, ex) =>
+        ex != null || ctx.Response.StatusCode >= 500 ? LogEventLevel.Error
+        : elapsed > 3000 ? LogEventLevel.Warning
+        // Живые подключения, проверки состояния и картинки — только в подробном режиме
+        : ctx.Request.Path.StartsWithSegments("/api/events") || ctx.Request.Path.StartsWithSegments("/health")
+          || ctx.Request.Path.StartsWithSegments("/metrics") || ctx.Request.Path.StartsWithSegments("/uploads") ? LogEventLevel.Debug
+        : LogEventLevel.Information;
+    o.EnrichDiagnosticContext = (diag, ctx) =>
+    {
+        var userId = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (userId != null) diag.Set("UserId", userId);
+        diag.Set("ClientIp", ctx.Connection.RemoteIpAddress?.ToString());
+    };
+});
+
+// Глобальный обработчик исключений: ошибка — в журнал (и в Telegram), клиенту — номер запроса
 app.Use(async (context, next) =>
 {
     try
     {
         await next();
     }
-    catch (Exception ex)
+    catch (Exception ex) when (!context.RequestAborted.IsCancellationRequested)
     {
-        Console.WriteLine($"❌ UNHANDLED EXCEPTION: {ex.GetType().Name}: {ex.Message}");
-        if (ex.InnerException != null)
-            Console.WriteLine($"   Inner: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
-        Console.WriteLine($"   StackTrace: {ex.StackTrace}");
-
+        app.Logger.LogError(ex, "Необработанная ошибка: {Method} {Path}", context.Request.Method, context.Request.Path.Value);
+        if (context.Response.HasStarted) throw;
         context.Response.StatusCode = 500;
         context.Response.ContentType = "application/json";
-        // Детали ошибки показываем только в разработке, наружу — общее сообщение
+        // Детали ошибки показываем только в разработке, наружу — общее сообщение и номер запроса
         if (app.Environment.IsDevelopment())
-            await context.Response.WriteAsJsonAsync(new { Message = ex.Message, Detail = ex.InnerException?.Message });
+            await context.Response.WriteAsJsonAsync(new { Message = ex.Message, Detail = ex.InnerException?.Message, RequestId = context.TraceIdentifier });
         else
-            await context.Response.WriteAsJsonAsync(new { Message = "Внутренняя ошибка сервера" });
+            await context.Response.WriteAsJsonAsync(new { Message = $"Внутренняя ошибка сервера (запрос {context.TraceIdentifier})", RequestId = context.TraceIdentifier });
     }
 });
+
+app.UseRateLimiter();
+
+// Метрики Prometheus (/metrics): с токеном Monitoring:MetricsToken или только с этого компьютера
+app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/metrics"), branch => branch.Use(async (ctx, next) =>
+{
+    var token = monitoring.MetricsToken;
+    var allowed = string.IsNullOrEmpty(token)
+        ? ctx.Connection.RemoteIpAddress is { } ip && System.Net.IPAddress.IsLoopback(ip)
+        : ctx.Request.Headers.Authorization.ToString() == $"Bearer {token}";
+    if (!allowed) { ctx.Response.StatusCode = 404; return; }
+    await next();
+}));
+app.UseHttpMetrics();
 
 // CORS
 app.UseCors("AllowFrontend");
@@ -304,13 +396,32 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Проверки состояния для внешнего мониторинга (UptimeRobot, Docker, балансировщик):
+// /health/live — процесс жив; /health/ready — база и диск в порядке (иначе 503)
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = c => c.Tags.Contains("ready"),
+    ResultStatusCodes = { [HealthStatus.Healthy] = 200, [HealthStatus.Degraded] = 200, [HealthStatus.Unhealthy] = 503 },
+    ResponseWriter = async (ctx, report) =>
+    {
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsJsonAsync(new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.ToDictionary(e => e.Key, e => new { status = e.Value.Status.ToString(), description = e.Value.Description })
+        });
+    }
+});
+app.MapMetrics();
+
 // Seed database & initialize roles
 try
 {
     using (var scope = app.Services.CreateScope())
     {
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        Console.WriteLine("Database initializing...");
+        app.Logger.LogInformation("Инициализация базы данных…");
         DbInitializer.Initialize(dbContext);
 
         // Roles must be created AFTER migrations
@@ -320,7 +431,7 @@ try
             if (!await roleManager.RoleExistsAsync(role))
             {
                 await roleManager.CreateAsync(new IdentityRole<int>(role));
-                Console.WriteLine($"Created role: {role}");
+                app.Logger.LogInformation("Создана роль {Role}", role);
             }
         }
 
@@ -330,9 +441,15 @@ try
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"Error initializing database: {ex.Message}");
-    if (ex.InnerException != null)
-        Console.WriteLine($"Inner error: {ex.InnerException.Message}");
+    app.Logger.LogCritical(ex, "Не удалось подготовить базу данных");
 }
 
-app.Run();
+app.Logger.LogInformation("Cafe API {Version} запущен ({Environment})", Cafe.API.Controllers.SystemController.Version, app.Environment.EnvironmentName);
+try
+{
+    app.Run();
+}
+finally
+{
+    Log.CloseAndFlush();
+}

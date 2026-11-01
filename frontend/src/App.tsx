@@ -41,6 +41,7 @@ import {
   RemoveShoppingCartOutlined as VoidsIcon,
   TableRestaurantOutlined as FloorIcon,
   EventAvailableOutlined as ShiftsIcon,
+  MonitorHeartOutlined as SystemIcon,
   AppsRounded as AppsIcon,
   RestaurantMenuOutlined as ProductsIcon,
   AccountBalanceWalletOutlined as FinanceIcon,
@@ -89,6 +90,7 @@ import PosPage from './pages/PosPage';
 import WaiterPage from './pages/WaiterPage';
 import VoidsPage from './pages/VoidsPage';
 import ShiftsPage from './pages/ShiftsPage';
+import SystemPage from './pages/SystemPage';
 import FloorEditorPage from './pages/FloorEditorPage';
 import FinancePage from './pages/finance/FinancePage';
 import { P, useCan } from './auth/permissions';
@@ -265,6 +267,7 @@ function App() {
     { text: 'Честный знак', icon: <ChzIcon />, path: '/admin/chz', perms: [P.Chz], group: 'Госсистемы', hint: 'Маркировка: вывод из оборота' },
     { text: 'Пользователи', icon: <PeopleIcon />, path: '/admin/users', perms: [P.UsersView, P.UsersRoles], group: 'Команда', hint: 'Гости и сотрудники' },
     { text: 'Настройка интеграций', icon: <IntegrationsIcon />, path: '/admin/integrations', perms: [P.Settings], group: 'Команда', hint: 'Касса АТОЛ, ЕГАИС, Честный знак, Меркурий, СБИС' },
+    { text: 'Состояние системы', icon: <SystemIcon />, path: '/admin/system', perms: [P.Settings], group: 'Команда', hint: 'Сервер, база, фоновые задачи, ошибки' },
     { text: 'Роли и доступы', icon: <RolesIcon />, path: '/admin/roles', perms: [P.Roles], group: 'Команда', hint: 'Что доступно каждой роли' },
   ] as (ControlLink & { perms: string[] })[])
     .filter(link => isAuthenticated && can(...link.perms));
@@ -476,6 +479,7 @@ function App() {
                 {can(P.InventoryView, P.TechCards, P.Chz) && <Route path="/admin/inventory/:tab" element={<LegacyInventoryRedirect />} />}
                 {can(P.Finance) && <Route path="/admin/finance" element={<FinancePage />} />}
                 {can(P.Settings) && <Route path="/admin/integrations" element={<IntegrationsPage />} />}
+                {can(P.Settings) && <Route path="/admin/system" element={<SystemPage />} />}
                 {can(P.UsersView, P.UsersRoles) && <Route path="/admin/users" element={<UsersPage />} />}
                 {can(P.Roles) && <Route path="/admin/roles" element={<RolesPage />} />}
 

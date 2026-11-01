@@ -11,17 +11,19 @@ namespace Cafe.API.Services
     /// </summary>
     public class PaymentTimeoutService : BackgroundService
     {
+        private readonly Cafe.API.Monitoring.JobMonitor _jobs;
         private static readonly TimeSpan Interval = TimeSpan.FromMinutes(3);
 
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly YooKassaOptions _options;
         private readonly ILogger<PaymentTimeoutService> _logger;
 
-        public PaymentTimeoutService(IServiceScopeFactory scopeFactory, IOptions<YooKassaOptions> options, ILogger<PaymentTimeoutService> logger)
+        public PaymentTimeoutService(IServiceScopeFactory scopeFactory, IOptions<YooKassaOptions> options, ILogger<PaymentTimeoutService> logger, Cafe.API.Monitoring.JobMonitor jobs)
         {
             _scopeFactory = scopeFactory;
             _options = options.Value;
             _logger = logger;
+            _jobs = jobs;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -34,10 +36,12 @@ namespace Cafe.API.Services
                 try
                 {
                     await CheckAsync(stoppingToken);
+                    _jobs.Success("Проверка оплат");
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.LogWarning(ex, "Проверка неоплаченных заказов не удалась");
+                    _jobs.Failure("Проверка оплат", ex.Message);
                 }
             }
             while (await timer.WaitForNextTickAsync(stoppingToken));

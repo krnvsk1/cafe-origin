@@ -40,3 +40,7 @@ src/Cafe.API/wwwroot/uploads/*
 
 # Локальные настройки Claude Code (запуск серверов в панели браузера)
 .claude/launch.json
+
+# Журналы сервера (Serilog)
+src/Cafe.API/logs/
+logs/

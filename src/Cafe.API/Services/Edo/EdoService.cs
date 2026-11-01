@@ -326,15 +326,17 @@ namespace Cafe.API.Services.Edo
     /// <summary>Фоновая загрузка накладных из СБИС</summary>
     public class SbisSyncWorker : BackgroundService
     {
+        private readonly Cafe.API.Monitoring.JobMonitor _jobs;
         private readonly IServiceScopeFactory _scopes;
         private readonly SbisSettingsProvider _settings;
         private readonly ILogger<SbisSyncWorker> _logger;
 
-        public SbisSyncWorker(IServiceScopeFactory scopes, SbisSettingsProvider settings, ILogger<SbisSyncWorker> logger)
+        public SbisSyncWorker(IServiceScopeFactory scopes, SbisSettingsProvider settings, ILogger<SbisSyncWorker> logger, Cafe.API.Monitoring.JobMonitor jobs)
         {
             _scopes = scopes;
             _settings = settings;
             _logger = logger;
+            _jobs = jobs;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -354,10 +356,12 @@ namespace Cafe.API.Services.Edo
                 {
                     using var scope = _scopes.CreateScope();
                     await scope.ServiceProvider.GetRequiredService<EdoService>().SyncAsync(stoppingToken);
+                    _jobs.Success("СБИС");
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.LogWarning("СБИС: загрузка накладных не удалась — {Message}", ex.Message);
+                    _jobs.Failure("СБИС", ex.Message);
                 }
             }
         }

@@ -576,15 +576,17 @@ namespace Cafe.API.Services.Egais
     /// <summary>Фоновая проверка входящих в УТМ (настройки читаются каждый раз — их можно менять в админке)</summary>
     public class EgaisSyncWorker : BackgroundService
     {
+        private readonly Cafe.API.Monitoring.JobMonitor _jobs;
         private readonly IServiceScopeFactory _scopes;
         private readonly EgaisSettingsProvider _settings;
         private readonly ILogger<EgaisSyncWorker> _logger;
 
-        public EgaisSyncWorker(IServiceScopeFactory scopes, EgaisSettingsProvider settings, ILogger<EgaisSyncWorker> logger)
+        public EgaisSyncWorker(IServiceScopeFactory scopes, EgaisSettingsProvider settings, ILogger<EgaisSyncWorker> logger, Cafe.API.Monitoring.JobMonitor jobs)
         {
             _scopes = scopes;
             _settings = settings;
             _logger = logger;
+            _jobs = jobs;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -605,12 +607,14 @@ namespace Cafe.API.Services.Egais
                 {
                     using var scope = _scopes.CreateScope();
                     var result = await scope.ServiceProvider.GetRequiredService<EgaisService>().SyncAsync(stoppingToken);
+                    _jobs.Success("ЕГАИС");
                     if (result.WayBills + result.RegInfos + result.Tickets > 0)
                         _logger.LogInformation("ЕГАИС: накладных {W}, справок {R}, квитанций {T}", result.WayBills, result.RegInfos, result.Tickets);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.LogWarning("ЕГАИС: синхронизация не удалась — {Message}", ex.Message);
+                    _jobs.Failure("ЕГАИС", ex.Message);
                 }
             }
         }

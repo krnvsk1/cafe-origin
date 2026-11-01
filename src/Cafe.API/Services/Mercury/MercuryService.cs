@@ -159,15 +159,17 @@ namespace Cafe.API.Services.Mercury
     /// <summary>Фоновая загрузка входящих ВСД</summary>
     public class MercurySyncWorker : BackgroundService
     {
+        private readonly Cafe.API.Monitoring.JobMonitor _jobs;
         private readonly IServiceScopeFactory _scopes;
         private readonly MercurySettingsProvider _settings;
         private readonly ILogger<MercurySyncWorker> _logger;
 
-        public MercurySyncWorker(IServiceScopeFactory scopes, MercurySettingsProvider settings, ILogger<MercurySyncWorker> logger)
+        public MercurySyncWorker(IServiceScopeFactory scopes, MercurySettingsProvider settings, ILogger<MercurySyncWorker> logger, Cafe.API.Monitoring.JobMonitor jobs)
         {
             _scopes = scopes;
             _settings = settings;
             _logger = logger;
+            _jobs = jobs;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -185,10 +187,12 @@ namespace Cafe.API.Services.Mercury
                 {
                     using var scope = _scopes.CreateScope();
                     await scope.ServiceProvider.GetRequiredService<MercuryService>().SyncAsync(stoppingToken);
+                    _jobs.Success("Меркурий");
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.LogWarning("Меркурий: загрузка ВСД не удалась — {Message}", ex.Message);
+                    _jobs.Failure("Меркурий", ex.Message);
                 }
             }
         }
