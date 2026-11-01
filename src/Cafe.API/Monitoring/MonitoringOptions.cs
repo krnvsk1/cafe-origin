@@ -3,7 +3,10 @@ namespace Cafe.API.Monitoring
     /// <summary>Настройки мониторинга (раздел Monitoring в appsettings или переменные окружения Monitoring__...)</summary>
     public class MonitoringOptions
     {
-        /// <summary>Telegram-чат для тревог (ошибки сервера, база недоступна, сбои синхронизаций). Пусто — тревоги не шлём</summary>
+        /// <summary>
+        /// Telegram-чат для тревог по умолчанию (ошибки сервера, база недоступна, сбои синхронизаций).
+        /// Обычно задаётся в «Состоянии системы»; это значение — запасное. Пусто — тревоги не шлём
+        /// </summary>
         public long? TelegramChatId { get; set; }
 
         /// <summary>Одинаковую ошибку присылаем не чаще, чем раз в столько минут</summary>

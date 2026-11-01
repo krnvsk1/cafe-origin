@@ -23,11 +23,16 @@ namespace Cafe.API.Controllers
         private readonly JobMonitor _jobs;
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _env;
+        private readonly AlertSettingsProvider _alerts;
+        private readonly Microsoft.Extensions.Options.IOptions<Cafe.API.Options.TelegramOptions> _telegramOptions;
         private readonly ILogger<SystemController> _logger;
 
         public SystemController(HealthCheckService health, RecentLogSink logs, JobMonitor jobs, ApplicationDbContext context,
-            IWebHostEnvironment env, ILogger<SystemController> logger)
+            IWebHostEnvironment env, AlertSettingsProvider alerts, Microsoft.Extensions.Options.IOptions<Cafe.API.Options.TelegramOptions> telegramOptions,
+            ILogger<SystemController> logger)
         {
+            _alerts = alerts;
+            _telegramOptions = telegramOptions;
             _health = health;
             _logs = logs;
             _jobs = jobs;
@@ -73,6 +78,46 @@ namespace Cafe.API.Controllers
                 jobs = _jobs.All(),
                 logs = _logs.Snapshot(Math.Clamp(take, 1, 300)),
             });
+        }
+
+        public class AlertsRequest
+        {
+            /// <summary>ID Telegram-чата для тревог; null — выключить</summary>
+            public long? TelegramChatId { get; set; }
+        }
+
+        // GET: api/admin/system/alerts — куда приходят тревоги
+        [HttpGet("api/admin/system/alerts")]
+        [HasPermission(Permissions.Settings)]
+        public async Task<IActionResult> GetAlerts() => Ok(new
+        {
+            telegramChatId = await _alerts.ChatIdAsync(),
+            telegramEnabled = _telegramOptions.Value.Enabled,
+            ordersChatId = _telegramOptions.Value.StaffChatId,
+        });
+
+        // PUT: api/admin/system/alerts — чат тревог; чат заказов использовать нельзя
+        [HttpPut("api/admin/system/alerts")]
+        [HasPermission(Permissions.Settings)]
+        public async Task<IActionResult> SaveAlerts([FromBody] AlertsRequest r)
+        {
+            if (r.TelegramChatId != null && r.TelegramChatId == _telegramOptions.Value.StaffChatId)
+                return BadRequest(new { message = "Это чат, куда приходят заказы. Для тревог заведите отдельный чат" });
+            await _alerts.SaveAsync(new AlertSettings { TelegramChatId = r.TelegramChatId }, User.GetUserId());
+            return await GetAlerts();
+        }
+
+        // POST: api/admin/system/alerts/test — проверочная тревога в выбранный чат
+        [HttpPost("api/admin/system/alerts/test")]
+        [HasPermission(Permissions.Settings)]
+        public async Task<IActionResult> TestAlert([FromServices] Cafe.API.Services.TelegramApi telegram)
+        {
+            var chatId = await _alerts.ChatIdAsync();
+            if (chatId == null) return BadRequest(new { message = "Сначала укажите чат для тревог" });
+            if (!telegram.Enabled) return BadRequest(new { message = "Telegram-бот не настроен (Telegram:BotToken)" });
+            var ok = await telegram.SendMessageAsync(chatId.Value, "🟢 <b>Проверка тревог</b>
+Сюда будут приходить сообщения о сбоях сервера.");
+            return ok ? NoContent() : BadRequest(new { message = "Telegram не принял сообщение — проверьте ID чата и что бот добавлен в чат" });
         }
 
         public class ClientLogRequest

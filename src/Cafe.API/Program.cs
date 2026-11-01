@@ -54,6 +54,7 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>("database", HealthStatus.Unhealthy, new[] { "ready" })
     .AddCheck<DiskSpaceHealthCheck>("disk", tags: new[] { "ready" })
     .AddCheck<JobsHealthCheck>("jobs");
+builder.Services.AddSingleton<AlertSettingsProvider>();
 builder.Services.AddHostedService<AlertService>();
 builder.Services.AddRateLimiter(o =>
 {

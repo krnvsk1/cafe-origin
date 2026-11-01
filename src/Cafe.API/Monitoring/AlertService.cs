@@ -15,13 +15,15 @@ namespace Cafe.API.Monitoring
         private readonly IServiceProvider _services;
         private readonly HealthCheckService _health;
         private readonly MonitoringOptions _options;
+        private readonly AlertSettingsProvider _settings;
         private readonly ILogger<AlertService> _logger;
         private readonly Dictionary<string, DateTime> _lastSent = new();
         private readonly Dictionary<string, int> _suppressed = new();
 
         public AlertService(RecentLogSink sink, IServiceProvider services, HealthCheckService health,
-            IOptions<MonitoringOptions> options, ILogger<AlertService> logger)
+            IOptions<MonitoringOptions> options, AlertSettingsProvider settings, ILogger<AlertService> logger)
         {
+            _settings = settings;
             _sink = sink;
             _services = services;
             _health = health;
@@ -31,7 +33,7 @@ namespace Cafe.API.Monitoring
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            if (_options.TelegramChatId == null) return;
+            // Чат могут задать позже в «Состоянии системы» — следим всегда, а шлём, только если он задан
             await Task.WhenAll(ErrorsAsync(stoppingToken), HealthAsync(stoppingToken));
         }
 
@@ -101,10 +103,12 @@ namespace Cafe.API.Monitoring
         {
             try
             {
+                var chatId = await _settings.ChatIdAsync();
+                if (chatId == null) return;
                 var telegram = _services.GetRequiredService<TelegramApi>();
                 if (!telegram.Enabled) return;
                 if (html.Length > 3800) html = html[..3800] + "…";
-                await telegram.SendMessageAsync(_options.TelegramChatId!.Value, html, null, ct);
+                await telegram.SendMessageAsync(chatId.Value, html, null, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

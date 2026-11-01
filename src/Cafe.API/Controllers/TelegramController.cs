@@ -229,7 +229,7 @@ namespace Cafe.API.Controllers
                         await HandleOrdersAsync(chatId, fromId);
                         break;
                     case "/id":
-                        // Удобно, чтобы узнать ID группы для Telegram:StaffChatId
+                        // Удобно, чтобы узнать ID группы: для заказов (Telegram:StaffChatId) и отдельной — для тревог
                         await _telegram.SendMessageAsync(chatId, $"ID этого чата: <code>{chatId}</code>");
                         break;
                     default:

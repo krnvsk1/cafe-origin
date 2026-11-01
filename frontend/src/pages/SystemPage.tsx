@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Box, Typography, Paper, Chip, Alert, CircularProgress, ToggleButtonGroup, ToggleButton, Collapse, ButtonBase,
+  Box, Typography, Paper, Chip, Alert, CircularProgress, ToggleButtonGroup, ToggleButton, Collapse, ButtonBase, TextField, Button,
 } from '@mui/material';
 import { apiClient } from '../api/client';
 import { apiError } from '../api/inventory';
@@ -29,6 +29,52 @@ const STATUS: Record<string, { text: string; color: 'success' | 'warning' | 'err
 const when = (iso: string | null) => (iso ? parseUtc(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 const uptime = (m: number) => (m < 60 ? `${m} мин` : m < 1440 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${Math.floor(m / 1440)} дн ${Math.floor((m % 1440) / 60)} ч`);
 const shortSource = (s: string | null) => (s ? s.split('.').pop() : '');
+
+interface AlertsInfo { telegramChatId: number | null; telegramEnabled: boolean; ordersChatId: number | null }
+
+/** Куда приходят тревоги: отдельный Telegram-чат, не чат заказов */
+const AlertsSettings: React.FC = () => {
+  const qc = useQueryClient();
+  const { data } = useQuery<AlertsInfo>({ queryKey: ['system-alerts'], queryFn: () => apiClient.get('/api/admin/system/alerts').then(r => r.data) });
+  const [chat, setChat] = React.useState('');
+  const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null);
+  React.useEffect(() => { if (data) setChat(data.telegramChatId?.toString() ?? ''); }, [data]);
+  const save = useMutation({
+    mutationFn: (id: number | null) => apiClient.put('/api/admin/system/alerts', { telegramChatId: id }).then(r => r.data),
+    onSuccess: d => { qc.setQueryData(['system-alerts'], d); setMsg({ ok: true, text: 'Сохранено' }); },
+    onError: e => setMsg({ ok: false, text: apiError(e) }),
+  });
+  const test = useMutation({
+    mutationFn: () => apiClient.post('/api/admin/system/alerts/test'),
+    onSuccess: () => setMsg({ ok: true, text: 'Проверочное сообщение отправлено — посмотрите в чате' }),
+    onError: e => setMsg({ ok: false, text: apiError(e) }),
+  });
+  const trimmed = chat.trim();
+  const valid = trimmed === '' || /^-?\d+$/.test(trimmed);
+  const sameAsOrders = valid && trimmed !== '' && data?.ordersChatId != null && Number(trimmed) === data.ordersChatId;
+  const changed = trimmed !== (data?.telegramChatId?.toString() ?? '');
+
+  return (
+    <Paper variant="outlined" sx={{ borderRadius: '16px', p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      <Typography sx={{ fontWeight: 700 }}>Тревоги в Telegram</Typography>
+      <Typography variant="body2" color="text.secondary">
+        Сбои сервера, недоступная база, мало места, падающие синхронизации. Нужен отдельный чат — не тот, куда приходят заказы:
+        создайте группу, добавьте в неё бота, напишите в ней /id и вставьте сюда полученный номер.
+      </Typography>
+      {data && !data.telegramEnabled && <Alert severity="warning">Telegram-бот не настроен — тревоги отправлять некуда</Alert>}
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <TextField size="small" label="ID чата для тревог" placeholder="-1001234567890" value={chat}
+          onChange={e => { setChat(e.target.value); setMsg(null); }} sx={{ minWidth: 220 }}
+          error={!valid || sameAsOrders}
+          helperText={!valid ? 'Только цифры, у групп — с минусом' : sameAsOrders ? 'Это чат заказов — нужен другой' : 'Пусто — тревоги выключены'} />
+        <Button variant="contained" disabled={!valid || sameAsOrders || !changed || save.isPending}
+          onClick={() => save.mutate(trimmed === '' ? null : Number(trimmed))}>Сохранить</Button>
+        <Button disabled={!data?.telegramChatId || changed || test.isPending} onClick={() => test.mutate()}>Проверить</Button>
+      </Box>
+      {msg && <Alert severity={msg.ok ? 'success' : 'error'} onClose={() => setMsg(null)}>{msg.text}</Alert>}
+    </Paper>
+  );
+};
 
 /** Состояние системы: сервер, база, фоновые задачи, последние ошибки — обновляется раз в 30 секунд */
 const SystemPage: React.FC = () => {
@@ -130,8 +176,9 @@ const SystemPage: React.FC = () => {
           );
         })}
       </Paper>
+      <AlertsSettings />
       <Typography variant="body2" color="text.secondary">
-        Полный журнал — в папке logs на сервере (файл за каждый день). Тревоги в Telegram включаются настройкой Monitoring:TelegramChatId.
+        Полный журнал — в папке logs на сервере (файл за каждый день).
       </Typography>
     </Box>
   );
