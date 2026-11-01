@@ -76,7 +76,7 @@ export const FloorView: React.FC<{ plan: FloorPlan; tables: WaiterTable[]; highl
         const mine = cs.some(c => c.isMine);
         const color = cs.length === 0 ? theme.palette.divider : ready ? tokens.herb : mine ? tokens.saffron : theme.palette.text.secondary;
         const dim = highlightMine && !mine;
-        const caption = cs.length === 0 ? null : cs.every(c => c.hidden) ? (cs[0].waiter ?? 'занят') : money(cs.reduce((x, c) => x + c.total, 0));
+        const caption = cs.length === 0 ? null : cs.every(c => c.hidden) ? (shortName(cs[0].waiter) ?? 'занят') : money(cs.reduce((x, c) => x + c.total, 0));
         return (
           <React.Fragment key={pt.tableId}>
             <Box component="button" type="button" onClick={() => onTap(t)} aria-label={`Стол ${t.name}${caption ? `, ${caption}` : ''}`}
@@ -91,6 +91,8 @@ export const FloorView: React.FC<{ plan: FloorPlan; tables: WaiterTable[]; highl
             {caption && (
               <Typography onClick={() => onTap(t)} noWrap
                 sx={{ position: 'absolute', left: `${((pt.x + pt.w / 2) / plan.width) * 100}%`, top: `calc(${((pt.y + pt.h) / plan.height) * 100}% + 2px)`,
+                  // Не шире стола с небольшим запасом — длинное обрезается многоточием и не наезжает на соседей
+                  maxWidth: `${(Math.max(pt.w, 60) * 1.4 / plan.width) * 100}%`, overflow: 'hidden', textOverflow: 'ellipsis',
                   transform: 'translateX(-50%)', fontSize: { xs: '0.65rem', sm: '0.8rem' }, fontWeight: 700, lineHeight: 1.2, cursor: 'pointer',
                   color: ready ? tokens.herb : 'text.secondary', opacity: dim ? 0.35 : 1, pointerEvents: 'auto' }}>
                 {caption}
@@ -101,6 +103,13 @@ export const FloorView: React.FC<{ plan: FloorPlan; tables: WaiterTable[]; highl
       })}
     </Box>
   );
+};
+
+/** «Александр Сушков» → «Александр С.» — на плане зала мало места */
+const shortName = (name?: string | null) => {
+  if (!name) return null;
+  const [first, second] = name.trim().split(/\s+/);
+  return second ? `${first} ${second[0]}.` : first;
 };
 
 const TablesView: React.FC = () => {
@@ -182,12 +191,12 @@ const TablesView: React.FC = () => {
                 }}>
                 <Typography sx={{ fontWeight: 800, fontSize: '1.4rem', lineHeight: 1.1 }}>{t.name}</Typography>
                 {first && cs.every(c => c.hidden) ? (
-                  <Typography variant="caption" color="text.secondary" noWrap>занят · {first.waiter ?? 'другой официант'}</Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap>занят · {shortName(first.waiter) ?? 'другой официант'}</Typography>
                 ) : first ? (
                   <>
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9rem' }}>{money(total)}</Typography>
                     <Typography variant="caption" color="text.secondary" noWrap>
-                      {cs.length > 1 ? `${cs.length} ${plural(cs.length, ['счёт', 'счёта', 'счетов'])}` : first.isMine ? 'мой' : first.waiter} · {sinceText(first.openedAt)}
+                      {cs.length > 1 ? `${cs.length} ${plural(cs.length, ['счёт', 'счёта', 'счетов'])}` : first.isMine ? 'мой' : shortName(first.waiter)} · {sinceText(first.openedAt)}
                     </Typography>
                     {ready && <Typography variant="caption" sx={{ color: tokens.herb, fontWeight: 800 }}>готово — нести</Typography>}
                   </>
