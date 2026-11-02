@@ -1,0 +1,18 @@
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+ARG VITE_API_URL=
+ARG VITE_MEDIA_URL=
+ARG VITE_YANDEX_MAPS_API_KEY=
+ARG VITE_YANDEX_SUGGEST_API_KEY=
+ENV VITE_API_URL=$VITE_API_URL \
+	VITE_MEDIA_URL=$VITE_MEDIA_URL \
+	VITE_YANDEX_MAPS_API_KEY=$VITE_YANDEX_MAPS_API_KEY \
+	VITE_YANDEX_SUGGEST_API_KEY=$VITE_YANDEX_SUGGEST_API_KEY
+RUN npm run build
+
+FROM caddy:2.10-alpine
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/dist /srv

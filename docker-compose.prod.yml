@@ -1,0 +1,107 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: cafe
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: cafe
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cafe -d cafe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - cafe
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Cafe.API/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      PORT: "8080"
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=cafe;Username=cafe;Password=${POSTGRES_PASSWORD}"
+      JwtSettings__SecretKey: ${JWT_SECRET_KEY:?Задайте JWT_SECRET_KEY в .env}
+      Cors__AllowedOrigins__0: https://${DOMAIN}
+      Telegram__BotToken: ${TELEGRAM_BOT_TOKEN:-}
+      Telegram__BotUsername: ${TELEGRAM_BOT_USERNAME:-}
+      Telegram__WebhookSecret: ${TELEGRAM_WEBHOOK_SECRET:-}
+      Telegram__StaffChatId: ${TELEGRAM_STAFF_CHAT_ID:-}
+      Telegram__PublicApiUrl: https://${DOMAIN}
+      Telegram__WebAppUrl: https://${DOMAIN}
+      YooKassa__ShopId: ${YOOKASSA_SHOP_ID:-}
+      YooKassa__SecretKey: ${YOOKASSA_SECRET_KEY:-}
+      YooKassa__ReturnUrl: https://${DOMAIN}
+      Monitoring__MetricsToken: ${METRICS_TOKEN:-}
+    volumes:
+      - uploads:/app/wwwroot/uploads
+      - api_logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - cafe
+
+  caddy:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      additional_contexts:
+        deploy: ./deploy
+      args:
+        VITE_API_URL: https://${DOMAIN}
+        VITE_MEDIA_URL: https://${DOMAIN}
+        VITE_YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY:-}
+        VITE_YANDEX_SUGGEST_API_KEY: ${YANDEX_SUGGEST_API_KEY:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      DOMAIN: ${DOMAIN:?Задайте DOMAIN в .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    networks:
+      - cafe
+
+  backup:
+    image: postgres:17
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: cafe
+      POSTGRES_DB: cafe
+    volumes:
+      - ./backups:/backups
+      - ./deploy/backup.sh:/backup.sh:ro
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    restart: unless-stopped
+    networks:
+      - cafe
+
+volumes:
+  postgres_data:
+  uploads:
+  api_logs:
+  caddy_data:
+  caddy_config:
+
+networks:
+  cafe:
