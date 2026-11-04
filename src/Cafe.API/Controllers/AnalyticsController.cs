@@ -124,6 +124,20 @@ namespace Cafe.API.Controllers
                 .Select(r => r.Rating)
                 .ToListAsync();
 
+            // Закрыто на сотрудников (без оплаты и без чека): не выручка, сумма к удержанию с сотрудников
+            var staffChecks = await _context.TableChecks.AsNoTracking()
+                .Where(c => c.Status == Cafe.API.Models.CheckStatuses.Closed && c.PaymentMethod == Cafe.API.Models.CheckPayments.Staff
+                            && c.ClosedAt >= rangeStart && c.ClosedAt < rangeEnd)
+                .Select(c => new { c.ClosedAt, c.Total, c.StaffUserId })
+                .ToListAsync();
+            var staffNow = staffChecks.Where(c => c.ClosedAt >= periodStart).ToList();
+            var staffBefore = staffChecks.Where(c => c.ClosedAt < periodStart).ToList();
+            var staffNames = await WaiterController.StaffNamesAsync(_context, staffNow.Select(c => c.StaffUserId));
+            var staffByPerson = staffNow.GroupBy(c => c.StaffUserId ?? 0)
+                .Select(g => new { Name = staffNames.GetValueOrDefault(g.Key) ?? "—", Checks = g.Count(), Total = g.Sum(c => c.Total) })
+                .OrderByDescending(x => x.Total)
+                .ToList();
+
             double? Change(decimal now, decimal before) => before == 0 ? null : (double)Math.Round((now - before) / before * 100, 1);
 
             return Ok(new
@@ -150,8 +164,12 @@ namespace Cafe.API.Controllers
                     PointsSpent = -points.Where(p => p.Type == "spent").Sum(p => p.Amount),
                     PointsEarned = points.Where(p => p.Type is "earned" or "referral" or "admin_grant").Sum(p => p.Amount),
                     ReviewsCount = reviews.Count,
-                    AverageRating = reviews.Count > 0 ? Math.Round(reviews.Average(), 2) : (double?)null
+                    AverageRating = reviews.Count > 0 ? Math.Round(reviews.Average(), 2) : (double?)null,
+                    StaffTotal = staffNow.Sum(c => c.Total),
+                    StaffTotalChange = Change(staffNow.Sum(c => c.Total), staffBefore.Sum(c => c.Total)),
+                    StaffChecks = staffNow.Count
                 },
+                StaffByPerson = staffByPerson,
                 ByDay = byDay,
                 ByHour = byHour,
                 TopItems = topItems,
