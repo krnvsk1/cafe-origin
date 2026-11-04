@@ -97,12 +97,12 @@ export const useUpdateDishAvailability = () => {
   });
 };
 
-// 👇 Новый хук для обновления порядка сортировки
+// Порядок карточек; category — перенести карточку (с вариантами) в другой раздел
 export const useUpdateDishOrder = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: async (items: { id: number; sortOrder: number }[]) => {
+    mutationFn: async (items: { id: number; sortOrder: number; category?: string }[]) => {
       await apiClient.put('/api/dishes/reorder', items);
     },
     onSuccess: () => {

@@ -189,16 +189,25 @@ namespace Cafe.API.Controllers
             return Ok(new { Message = "Блюдо удалено" });
         }
 
-        // PUT: api/dish/reorder
+        // PUT: api/dish/reorder — порядок карточек; с Category карточка переезжает в раздел (вместе с вариантами).
+        // Порядок разделов на витрине — по первой карточке раздела, поэтому сквозная нумерация задаёт и его
         [HttpPut("reorder")]
         [HasPermission(Permissions.Menu)]
         public async Task<IActionResult> Reorder([FromBody] List<ReorderItem> items)
         {
+            var ids = items.Select(i => i.Id).ToList();
+            var dishes = await _context.Dishes.Where(d => ids.Contains(d.Id) || (d.ParentId != null && ids.Contains(d.ParentId.Value))).ToListAsync();
+            var byId = dishes.ToDictionary(d => d.Id);
             foreach (var item in items)
             {
-                var dish = await _context.Dishes.FindAsync(item.Id);
-                if (dish != null)
-                    dish.SortOrder = item.SortOrder;
+                if (!byId.TryGetValue(item.Id, out var dish)) continue;
+                dish.SortOrder = item.SortOrder;
+                if (item.Category == null) continue;
+                var category = item.Category.Trim();
+                if (category.Length > 50) return BadRequest(new { Message = "Название раздела — до 50 символов" });
+                if (dish.Category == category) continue;
+                dish.Category = category;
+                foreach (var child in dishes.Where(c => c.ParentId == dish.Id)) child.Category = category;
             }
 
             await _context.SaveChangesAsync();
@@ -249,5 +258,7 @@ namespace Cafe.API.Controllers
     {
         public int Id { get; set; }
         public int SortOrder { get; set; }
+        /// <summary>Раздел меню; null — не менять</summary>
+        public string? Category { get; set; }
     }
 }

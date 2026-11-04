@@ -51,7 +51,8 @@ import {
   Search as SearchIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
-import { useDishes, useDeleteDish, useUpdateDishAvailability } from '../api/hooks';
+import { useDishes, useDeleteDish, useUpdateDishAvailability, useUpdateDishOrder } from '../api/hooks';
+import MenuSectionsBoard, { buildSections, toReorderItems, type MenuSection } from '../components/MenuSectionsBoard';
 import { KitchenStationSelect, KitchenStationsButton } from '../components/KitchenStationControls';
 import { useKitchenStations } from '../api/staff';
 import { 
@@ -64,7 +65,7 @@ import {
   useDeleteAddon,
   useLinkAddonToDish
 } from '../hooks/useAddons';
-import type { AddonCategory, Addon } from '../types';
+import type { AddonCategory, Addon, Dish } from '../types';
 import MenuImportButton from '../components/MenuImportButton';
 
 interface TabPanelProps {
@@ -137,10 +138,11 @@ const AdminMenuPage: React.FC = () => {
   const [stock, setStock] = useState<'all' | 'on' | 'off'>('all');
   const [station, setStation] = useState<'all' | number>('all');
   const q = search.trim().toLowerCase();
-  const sections = useMemo(
-    () => Array.from(new Set(parents.map(p => p.category).filter((c): c is string => !!c))).sort((a, b) => a.localeCompare(b, 'ru')),
-    [parents],
-  );
+  // Разделы витрины по порядку; во время сохранения переноса — уже в новом порядке
+  const [movedSections, setMovedSections] = useState<MenuSection[] | null>(null);
+  React.useEffect(() => { setMovedSections(null); }, [dishes]);
+  const allSections = useMemo(() => movedSections ?? buildSections(parents), [movedSections, parents]);
+  const sections = useMemo(() => allSections.map(s => s.name).filter(n => n !== ''), [allSections]);
   const shownParents = useMemo(() => parents.filter(p => {
     const kids = dishes.filter(s => s.parentId === p.id);
     const items = kids.length ? kids : [p];
@@ -159,10 +161,22 @@ const AdminMenuPage: React.FC = () => {
     .map(c => (c.name.toLowerCase().includes(q) ? c : { ...c, addons: c.addons.filter(a => a.name.toLowerCase().includes(q)) }))
     .filter(c => c.name.toLowerCase().includes(q) || c.addons.length > 0), [categories, q]);
   const filtered = q !== '' || section !== 'all' || stock !== 'all' || station !== 'all';
+  const boardSections = useMemo(() => {
+    if (!filtered) return allSections;
+    const shown = new Set(shownParents.map(p => p.id));
+    return allSections.map(s => ({ ...s, cards: s.cards.filter(c => shown.has(c.id)) })).filter(s => s.cards.length > 0);
+  }, [filtered, allSections, shownParents]);
   const resetFilters = () => { setSearch(''); setSection('all'); setStock('all'); setStation('all'); };
   
   // Мутации
   const deleteProduct = useDeleteDish();
+  const updateOrder = useUpdateDishOrder();
+  const handleReorder = (next: MenuSection[]) => {
+    setMovedSections(next);
+    updateOrder.mutate(toReorderItems(next), {
+      onError: () => { setMovedSections(null); showMessage('Не удалось сохранить порядок', 'error'); },
+    });
+  };
   const updateAvailability = useUpdateDishAvailability();
   
   const createCategory = useCreateAddonCategory();
@@ -310,88 +324,8 @@ const AdminMenuPage: React.FC = () => {
       });
   };
 
-  return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Заголовок */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" component="h1" fontWeight={700}>
-          Управление меню
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-          <MenuImportButton />
-          <KitchenStationsButton />
-          <Button
-            variant="contained"
-            startIcon={<FastfoodIcon />}
-            onClick={() => navigate('/admin/create')}
-          >
-            Добавить товар
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<CategoryIcon />}
-            onClick={() => setCategoryDialog({ open: true, mode: 'create' })}
-          >
-            Добавить группу добавок
-          </Button>
-        </Box>
-      </Box>
-
-      {/* Табы */}
-      <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
-        <Tabs
-          value={tabValue}
-          onChange={(_, v) => setTabValue(v)}
-          sx={{
-            borderBottom: 1,
-            borderColor: 'divider',
-            bgcolor: alpha(theme.palette.primary.main, 0.02)
-          }}
-        >
-          <Tab label="Товары" />
-          <Tab label="Добавки" />
-        </Tabs>
-
-        {/* Поиск и фильтры */}
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', px: { xs: 2, sm: 3 }, pt: 2 }}>
-          <TextField size="small" placeholder={tabValue === 0 ? 'Поиск по названию и описанию' : 'Поиск групп и добавок'} value={search}
-            onChange={e => setSearch(e.target.value)} sx={{ flex: '1 1 240px' }}
-            slotProps={{ input: {
-              startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
-              endAdornment: search ? <InputAdornment position="end"><IconButton size="small" onClick={() => setSearch('')} aria-label="Очистить"><CloseIcon fontSize="small" /></IconButton></InputAdornment> : undefined,
-            } }} />
-          {tabValue === 0 && (
-            <>
-              <TextField select size="small" label="Раздел" value={section} onChange={e => setSection(e.target.value)} sx={{ minWidth: 160 }}>
-                <MenuItem value="all">Все разделы</MenuItem>
-                {sections.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                <MenuItem value=""><em>Без раздела</em></MenuItem>
-              </TextField>
-              <TextField select size="small" label="Наличие" value={stock} onChange={e => setStock(e.target.value as 'all' | 'on' | 'off')} sx={{ minWidth: 150 }}>
-                <MenuItem value="all">Все</MenuItem>
-                <MenuItem value="on">В продаже</MenuItem>
-                <MenuItem value="off">Есть снятые с продажи</MenuItem>
-              </TextField>
-              {stations.length > 1 && (
-                <TextField select size="small" label="Кухня" value={station}
-                  onChange={e => setStation(e.target.value === 'all' ? 'all' : Number(e.target.value))} sx={{ minWidth: 150 }}>
-                  <MenuItem value="all">Все кухни</MenuItem>
-                  {stations.map(st => <MenuItem key={st.id} value={st.id}>{st.name}</MenuItem>)}
-                </TextField>
-              )}
-            </>
-          )}
-          {filtered && (
-            <Button size="small" onClick={resetFilters} sx={{ color: 'text.secondary' }}>
-              Сбросить{tabValue === 0 ? ` · найдено ${shownParents.length} из ${parents.length}` : ''}
-            </Button>
-          )}
-        </Box>
-
-        {/* Панель товаров */}
-        <TabPanel value={tabValue} index={0}>
-          <Grid container spacing={2}>
-            {shownParents.map((parent) => {
+  // Карточка товара в разделе: ручка переноса, варианты по раскрытию
+  const renderCard = (parent: Dish, dragHandle: React.ReactNode) => {
               const children = dishes.filter(s => s.parentId === parent.id);
               const isExpanded = expandedParent === parent.id;
               const availableCount = children.filter(c => c.isAvailable).length;
@@ -403,7 +337,6 @@ const AdminMenuPage: React.FC = () => {
                 : parent.price;
 
               return (
-                <Grid key={parent.id} size={{ xs: 12 }}>
                   <Card
                     variant="outlined"
                     sx={{
@@ -422,6 +355,7 @@ const AdminMenuPage: React.FC = () => {
                     <CardContent sx={{ pb: '12px !important' }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}>
+                          {dragHandle}
                           <IconButton
                             size="small"
                             onClick={() => handleToggleParent(parent.id)}
@@ -667,10 +601,102 @@ const AdminMenuPage: React.FC = () => {
                       </Box>
                     </Collapse>
                   </Card>
-                </Grid>
               );
-            })}
-          </Grid>
+  };
+
+  return (
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      {/* Заголовок */}
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="h4" component="h1" fontWeight={700}>
+          Управление меню
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <MenuImportButton />
+          <KitchenStationsButton />
+          <Button
+            variant="contained"
+            startIcon={<FastfoodIcon />}
+            onClick={() => navigate('/admin/create')}
+          >
+            Добавить товар
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<CategoryIcon />}
+            onClick={() => setCategoryDialog({ open: true, mode: 'create' })}
+          >
+            Добавить группу добавок
+          </Button>
+        </Box>
+      </Box>
+
+      {/* Табы */}
+      <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
+        <Tabs
+          value={tabValue}
+          onChange={(_, v) => setTabValue(v)}
+          sx={{
+            borderBottom: 1,
+            borderColor: 'divider',
+            bgcolor: alpha(theme.palette.primary.main, 0.02)
+          }}
+        >
+          <Tab label="Товары" />
+          <Tab label="Добавки" />
+        </Tabs>
+
+        {/* Поиск и фильтры */}
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', px: { xs: 2, sm: 3 }, pt: 2 }}>
+          <TextField size="small" placeholder={tabValue === 0 ? 'Поиск по названию и описанию' : 'Поиск групп и добавок'} value={search}
+            onChange={e => setSearch(e.target.value)} sx={{ flex: '1 1 240px' }}
+            slotProps={{ input: {
+              startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+              endAdornment: search ? <InputAdornment position="end"><IconButton size="small" onClick={() => setSearch('')} aria-label="Очистить"><CloseIcon fontSize="small" /></IconButton></InputAdornment> : undefined,
+            } }} />
+          {tabValue === 0 && (
+            <>
+              <TextField select size="small" label="Раздел" value={section} onChange={e => setSection(e.target.value)} sx={{ minWidth: 160 }}>
+                <MenuItem value="all">Все разделы</MenuItem>
+                {sections.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+                <MenuItem value=""><em>Без раздела</em></MenuItem>
+              </TextField>
+              <TextField select size="small" label="Наличие" value={stock} onChange={e => setStock(e.target.value as 'all' | 'on' | 'off')} sx={{ minWidth: 150 }}>
+                <MenuItem value="all">Все</MenuItem>
+                <MenuItem value="on">В продаже</MenuItem>
+                <MenuItem value="off">Есть снятые с продажи</MenuItem>
+              </TextField>
+              {stations.length > 1 && (
+                <TextField select size="small" label="Кухня" value={station}
+                  onChange={e => setStation(e.target.value === 'all' ? 'all' : Number(e.target.value))} sx={{ minWidth: 150 }}>
+                  <MenuItem value="all">Все кухни</MenuItem>
+                  {stations.map(st => <MenuItem key={st.id} value={st.id}>{st.name}</MenuItem>)}
+                </TextField>
+              )}
+            </>
+          )}
+          {filtered && (
+            <Button size="small" onClick={resetFilters} sx={{ color: 'text.secondary' }}>
+              Сбросить{tabValue === 0 ? ` · найдено ${shownParents.length} из ${parents.length}` : ''}
+            </Button>
+          )}
+        </Box>
+
+        {/* Панель товаров */}
+        <TabPanel value={tabValue} index={0}>
+          {parents.length > 0 && (
+            <>
+              {filtered && shownParents.length > 0 && (
+                <Alert severity="info" sx={{ mb: 2 }}>Порядок меняется без поиска и фильтров — сбросьте их, чтобы перетаскивать разделы и карточки.</Alert>
+              )}
+              <MenuSectionsBoard
+                sections={boardSections}
+                locked={filtered}
+                onChange={handleReorder}
+                renderCard={renderCard}
+              />
+            </>
+          )}
 
           {parents.length > 0 && shownParents.length === 0 && (
             <Box sx={{ textAlign: 'center', py: 6 }}>
