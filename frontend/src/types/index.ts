@@ -99,6 +99,8 @@ export interface Dish {
     weight?: number | null;
     subtotal: number;           // Вычисляемое поле Price * Quantity
     selectedAddons?: OrderItemAddon[];
+    /** Счёт стола, если блюдо перенесли в другой счёт (иначе — счёт заказа) */
+    checkId?: number | null;
   }
   
   export interface Order {
@@ -126,6 +128,8 @@ export interface Dish {
     source?: string;
     /** Счёт стола, если заказ — подача официанта */
     checkId?: number | null;
+    /** Только на экране «Все заказы»: подачи официанта, собранные в один счёт */
+    rounds?: Order[];
   }
   
   // Для создания заказа (то, что отправляем на бэкенд)

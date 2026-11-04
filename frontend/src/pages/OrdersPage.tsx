@@ -47,7 +47,8 @@ import { formatScheduled } from '../utils/schedule';
 import { useRepeatOrder, describeRepeatResult } from '../api/reorder';
 import OrderReviewBlock from '../components/OrderReviewBlock';
 import { useAuthStore } from '../store/authStore';
-import type { Order, OrderStatus, OrderItemAddon, UpdateOrderDto } from '../types';
+import type { Order, OrderItem, OrderStatus, OrderItemAddon, UpdateOrderDto } from '../types';
+import { plural } from '../components/CartPanel';
 import { getStatusColor } from '../utils/statusColors';
 import { useCan, P } from '../auth/permissions';
 
@@ -160,6 +161,53 @@ const SOURCE_LABEL: Record<OrderSource, string> = { online: 'Сайт', pos: 'К
 const sourceOf = (o: Order): OrderSource => (o.source === 'pos' || o.source === 'waiter' ? o.source : 'online');
 const rub = (v: number) => `${v.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`;
 
+// Подачи официанта на экране «Все заказы» показываем одним счётом стола: блюда всех подач, общая сумма
+const STAGE: OrderStatus[] = ['Новый', 'Принят', 'Готовится', 'Готов', 'В пути', 'Доставлен', 'Выполнен'];
+const lineTotal = (i: OrderItem) => (i.price + (i.selectedAddons ?? []).reduce((s, a) => s + a.price * a.quantity, 0)) * i.quantity;
+
+const groupByCheck = (list: Order[]): Order[] => {
+  const result: Order[] = [];
+  const checks = new Map<number, Order[]>();
+  for (const o of list) {
+    if (sourceOf(o) !== 'waiter' || o.checkId == null) { result.push(o); continue; }
+    // Блюдо могли перенести в другой счёт — раскладываем по счёту блюда
+    const byCheck = new Map<number, OrderItem[]>();
+    for (const it of o.orderItems ?? []) {
+      const c = it.checkId ?? o.checkId;
+      if (!byCheck.has(c)) byCheck.set(c, []);
+      byCheck.get(c)!.push(it);
+    }
+    if (byCheck.size === 0) byCheck.set(o.checkId, []);
+    byCheck.forEach((items, c) => {
+      if (!checks.has(c)) checks.set(c, []);
+      checks.get(c)!.push({ ...o, checkId: c, orderItems: items });
+    });
+  }
+  checks.forEach((rounds, checkId) => {
+    rounds.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const live = rounds.filter(r => r.status !== 'Отменён');
+    const status: OrderStatus = live.length === 0 ? 'Отменён'
+      : STAGE[Math.min(...live.map(r => Math.max(0, STAGE.indexOf(r.status))))];
+    const items = live.flatMap(r => r.orderItems ?? []);
+    const first = rounds[0];
+    const last = rounds[rounds.length - 1];
+    result.push({
+      ...first,
+      checkId,
+      status,
+      orderItems: items,
+      total: Math.round(items.reduce((sum, it) => sum + lineTotal(it), 0) * 100) / 100,
+      createdAt: first.createdAt,
+      completedAt: live.every(r => r.completedAt) ? live.map(r => r.completedAt!).sort().pop() ?? null : null,
+      notes: rounds.map(r => r.notes).filter(Boolean).join('; ') || null,
+      rounds,
+      // В списке счёт стоит там же, где его последняя подача
+      id: last.id,
+    });
+  });
+  return result.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id - a.id);
+};
+
 const OrderCard: React.FC<{ 
   order: Order;
   isAdmin: boolean;
@@ -201,7 +249,7 @@ const OrderCard: React.FC<{
           <Box sx={{ flex: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
               <Typography variant="h6" component="span">
-                Заказ #{order.id}
+                {order.rounds ? `Счёт #${order.checkId}` : `Заказ #${order.id}`}
               </Typography>
               <StatusChip status={order.status} />
               <Chip size="small" variant="outlined" label={SOURCE_LABEL[sourceOf(order)]} />
@@ -211,7 +259,8 @@ const OrderCard: React.FC<{
               <Grid size={{ xs: 12, sm: 6 }}>
                 {sourceOf(order) === 'waiter' ? (
                   <Typography variant="body2" color="text.secondary">
-                    <strong>{order.customerName}</strong>{order.checkId ? ` · счёт #${order.checkId}` : ''} · в зале
+                    <strong>{order.customerName}</strong> · в зале
+                    {order.rounds && ` · ${order.rounds.length} ${plural(order.rounds.length, ['подача', 'подачи', 'подач'])} на кухню`}
                   </Typography>
                 ) : (
                   <>
@@ -291,7 +340,7 @@ const OrderCard: React.FC<{
                 </Tooltip>
               )}
 
-              {isAdmin && canManage && (
+              {isAdmin && canManage && !order.rounds && (
                 <>
                   <Tooltip title="Редактировать заказ">
                     <IconButton 
@@ -347,8 +396,18 @@ const OrderCard: React.FC<{
 
         <Collapse in={expanded}>
           <Box sx={{ mt: 3 }}>
+            {order.rounds && (
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" gutterBottom>Подачи на кухню:</Typography>
+                {order.rounds.map(r => (
+                  <Typography key={r.id} variant="body2" color="text.secondary">
+                    #{r.id} · {formatDate(r.createdAt)} · {r.status} · {(r.orderItems ?? []).map(i => `${i.quantity}× ${i.name}`).join(', ') || '—'}
+                  </Typography>
+                ))}
+              </Box>
+            )}
             <Typography variant="subtitle2" gutterBottom>
-              Состав заказа:
+              {order.rounds ? 'Состав счёта:' : 'Состав заказа:'}
             </Typography>
             <Paper 
               variant="outlined" 
@@ -427,7 +486,11 @@ const OrdersPage: React.FC = () => {
   const myOrdersQuery = useMyOrders(!isAdmin && isAuthenticated);
   
   // Выбираем данные в зависимости от роли
-  const orders = isAdmin ? allOrdersQuery.data || [] : myOrdersQuery.data || [];
+  // Подачи официанта — одним счётом стола
+  const orders = React.useMemo(
+    () => groupByCheck(isAdmin ? allOrdersQuery.data || [] : myOrdersQuery.data || []),
+    [isAdmin, allOrdersQuery.data, myOrdersQuery.data],
+  );
   const isLoading = isAdmin ? allOrdersQuery.isLoading : myOrdersQuery.isLoading;
   const error = isAdmin ? allOrdersQuery.error : myOrdersQuery.error;
   const refetch = isAdmin ? allOrdersQuery.refetch : myOrdersQuery.refetch;
