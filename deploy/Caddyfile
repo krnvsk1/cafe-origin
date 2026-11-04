@@ -31,3 +31,8 @@
 		file_server
 	}
 }
+
+# www и дополнительные домены из EXTRA_DOMAINS (через пробел; .рф — в виде xn--…) — переадресация на основной
+www.{$DOMAIN} {$EXTRA_DOMAINS} {
+	redir https://{$DOMAIN}{uri} permanent
+}
