@@ -111,7 +111,7 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
           const ft = returned ? `возврат · ФД ${c.fiscalReturn?.fiscalDocumentNumber ?? '—'}` : fiscalText(c.fiscal);
           return (
             <Box key={c.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, borderRadius: '10px', '&:hover': { bgcolor: 'action.hover' } }}>
-              <ButtonBase onClick={() => navigate(`/waiter/${c.id}`)}
+              <ButtonBase onClick={() => navigate(`/waiter/${c.id}`, { state: { from: '/admin/shifts' } })}
                 sx={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 1, flex: 1, minWidth: 0, textAlign: 'left', alignItems: 'center', py: 0.75, px: 1, borderRadius: '10px' }}>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 700 }} noWrap>Стол {c.table}{c.label ? ` · ${c.label}` : ''}</Typography>
@@ -167,7 +167,14 @@ const ShiftsPage: React.FC = () => {
   const today = todayMsk();
   const [from, setFrom] = React.useState(addDays(today, -13));
   const [to, setTo] = React.useState(today);
-  const [openId, setOpenId] = React.useState<number | null>(null);
+  // Раскрытая смена запоминается, чтобы после возврата из счёта она осталась открытой
+  const [openId, setOpenIdState] = React.useState<number | null>(() => {
+    try { const v = sessionStorage.getItem('shifts-open'); return v ? Number(v) : null; } catch { return null; }
+  });
+  const setOpenId = (id: number | null) => {
+    setOpenIdState(id);
+    try { if (id == null) sessionStorage.removeItem('shifts-open'); else sessionStorage.setItem('shifts-open', String(id)); } catch { /* ignore */ }
+  };
   const { data: current } = useShiftCurrent();
   const { data: shifts, isLoading, error } = useShifts(from, to);
 

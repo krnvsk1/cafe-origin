@@ -12,7 +12,7 @@ import {
   PrintOutlined as PrintIcon,
 } from '@mui/icons-material';
 import { usePushNotifications, type PushState } from '../api/push';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useDishes } from '../api/hooks';
 import {
   useWaiterTables, useTableCheck, useOpenCheck, useAddRound, useCancelRound, useCloseCheck, useCancelCheck,
@@ -554,6 +554,12 @@ const ItemState: React.FC<{ ready: number; served: number; qty: number; cancelle
 
 const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const navigate = useNavigate();
+  // Пришли из «Смен и счетов» — «назад» возвращает туда, а не к столам
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from;
+  const backTo = from ?? '/waiter';
+  const goBack = () => navigate(backTo);
+  const openCheck = (checkId: number) => navigate(`/waiter/${checkId}`, { state: location.state });
   const { data: check, isLoading, error } = useTableCheck(id);
   const addRound = useAddRound();
   const cancelRound = useCancelRound();
@@ -634,7 +640,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
     setMenu(null);
     try {
       const r = await open.mutateAsync({ tableId: check.table.id, guests: 1 });
-      navigate(`/waiter/${r.id}`);
+      openCheck(r.id);
     } catch (e) { setErr(apiError(e)); }
   };
 
@@ -650,7 +656,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pb: isOpen ? 12 : 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <IconButton onClick={() => navigate('/waiter')} aria-label="К столам"><BackIcon /></IconButton>
+        <IconButton onClick={goBack} aria-label={from ? 'Назад' : 'К столам'}><BackIcon /></IconButton>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontWeight: 800, fontSize: '1.4rem', lineHeight: 1.1 }}>Стол {check.table.name}</Typography>
           <Typography variant="body2" color="text.secondary" noWrap>
@@ -666,7 +672,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         <Box sx={{ display: 'flex', gap: 0.75, overflowX: 'auto', pb: 0.5 }}>
           <Chip color="primary" label={check.label ?? 'Этот счёт'} sx={{ flexShrink: 0 }} />
           {check.siblings.map(sb => (
-            <Chip key={sb.id} label={sb.label ?? `Счёт №${sb.id}`} onClick={() => navigate(`/waiter/${sb.id}`)} sx={{ flexShrink: 0 }} />
+            <Chip key={sb.id} label={sb.label ?? `Счёт №${sb.id}`} onClick={() => openCheck(sb.id)} sx={{ flexShrink: 0 }} />
           ))}
         </Box>
       )}
@@ -817,7 +823,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           ) : active.length > 0 ? (
             <Button fullWidth variant="outlined" size="large" onClick={() => { setErr(''); setCash(''); setClosing(true); }}>Закрыть счёт</Button>
           ) : (
-            <Button variant="text" color="error" onClick={async () => { try { await cancelCheck.mutateAsync(check.id); navigate('/waiter'); } catch (e) { setErr(apiError(e)); } }}>
+            <Button variant="text" color="error" onClick={async () => { try { await cancelCheck.mutateAsync(check.id); goBack(); } catch (e) { setErr(apiError(e)); } }}>
               Отменить
             </Button>
           )}
@@ -829,7 +835,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       {dialog === 'split' && <SplitDialog check={check} onClose={() => setDialog(null)} onDone={(target, isNew) => {
         setDialog(null);
         setToast(isNew ? 'Блюда перенесены в новый счёт — он в списке счетов стола' : 'Блюда перенесены');
-        if (isNew) navigate(`/waiter/${target}`);
+        if (isNew) openCheck(target);
       }} />}
       {dialog === 'move' && <MoveDialog check={check} onClose={() => setDialog(null)} onDone={name => { setDialog(null); setToast(`Счёт перенесён на стол ${name}`); }} />}
       {dialog === 'edit' && <EditCheckDialog check={check} onClose={() => setDialog(null)} />}
@@ -867,7 +873,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!done} onClose={() => navigate('/waiter')} maxWidth="xs" fullWidth>
+      <Dialog open={!!done} onClose={goBack} maxWidth="xs" fullWidth>
         <DialogContent sx={{ textAlign: 'center', pt: 4 }}>
           <ReadyIcon sx={{ fontSize: 56, color: tokens.herb }} />
           <Typography sx={{ fontWeight: 800, fontSize: '1.4rem' }}>Счёт закрыт</Typography>
@@ -886,7 +892,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
             ))}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button fullWidth variant="contained" color="secondary" size="large" onClick={() => navigate('/waiter')}>К столам</Button>
+          <Button fullWidth variant="contained" color="secondary" size="large" onClick={goBack}>{from ? 'Назад' : 'К столам'}</Button>
         </DialogActions>
       </Dialog>
     </Box>
