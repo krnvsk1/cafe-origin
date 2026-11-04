@@ -46,7 +46,7 @@ namespace Cafe.API.Services.Fiscal
             // Заказ из счёта стола: чек (и возврат) — по всему счёту, иначе суммы не сойдутся с чеком продажи
             if (order.CheckId != null || await _context.OrderItems.AnyAsync(i => i.OrderId == orderId && i.CheckId != null, ct)
                 || await _context.FiscalReceipts.AnyAsync(r => r.OrderId == orderId && r.CheckId != null, ct))
-                throw new FiscalException("Заказ из счёта стола — чек и возврат пробиваются по счёту в «Сменах и чеках»");
+                throw new FiscalException("Заказ из счёта стола — чек и возврат пробиваются по счёту в «Сменах и счетах»");
 
             var receipts = await _context.FiscalReceipts.Where(r => r.OrderId == orderId && r.CheckId == null).OrderBy(r => r.Id).ToListAsync(ct);
             var lines = await ReceiptLines.LoadAsync(_context, order, ct);

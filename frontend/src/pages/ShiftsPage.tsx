@@ -96,15 +96,15 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
             <Box key={w.id} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', py: 0.25 }}>
               <Typography sx={{ fontWeight: 700, flex: 1 }}>{w.name ?? `Сотрудник #${w.userId}`}</Typography>
               <Typography variant="body2" color="text.secondary">{time(w.openedAt)}–{w.closedAt ? time(w.closedAt) : 'сейчас'}</Typography>
-              <Typography variant="body2" color="text.secondary">{w.checks} чек.</Typography>
+              <Typography variant="body2" color="text.secondary">{w.checks} сч.</Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{money(w.revenue)}</Typography>
             </Box>
           ))}
         </Box>
       )}
       <Box>
-        <Typography variant="overline" color="text.secondary">Чеки</Typography>
-        {data.checks.length === 0 && <Typography color="text.secondary">Чеков в эту смену не было</Typography>}
+        <Typography variant="overline" color="text.secondary">Счета</Typography>
+        {data.checks.length === 0 && <Typography color="text.secondary">Счетов в эту смену не было</Typography>}
         {data.checks.map(c => {
           const sold = c.fiscal?.status === 'done';
           const returned = c.fiscalReturn?.status === 'done';
@@ -118,7 +118,7 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                   <Typography variant="body2" color="text.secondary" noWrap>
                     {c.waiter ?? '—'} · {time(c.openedAt)}{c.closedAt ? `–${time(c.closedAt)}` : ''}
                     {c.paymentMethod ? ` · ${c.paymentMethod === 'cash' ? 'наличные' : 'карта'}` : ''}
-                    {ft && <Box component="span" sx={{ color: sold || returned ? 'text.secondary' : 'error.main' }}> · чек: {ft}</Box>}
+                    {ft && <Box component="span" sx={{ color: sold || returned ? 'text.secondary' : 'error.main' }}> · кассовый чек: {ft}</Box>}
                   </Typography>
                   {note?.id === c.id && <Typography variant="body2" color={note.ok ? 'success.main' : 'error.main'}>{note.text}</Typography>}
                 </Box>
@@ -151,7 +151,7 @@ const ShiftCard: React.FC<{ s: ShiftRow; open: boolean; onToggle: () => void }> 
       <Box sx={{ textAlign: 'right' }}>
         <Typography sx={{ fontWeight: 800 }}>{money(s.revenue)}</Typography>
         <Typography variant="body2" color="text.secondary">
-          {s.checks} чек. · нал {money(s.cash)} · карта {money(s.card)}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
+          {s.checks} сч. · нал {money(s.cash)} · карта {money(s.card)}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
         </Typography>
       </Box>
       <ExpandIcon sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
@@ -173,7 +173,7 @@ const ShiftsPage: React.FC = () => {
 
   return (
     <Box sx={{ maxWidth: 1000, mx: 'auto', p: { xs: 2, md: 3 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Typography variant="h4" sx={{ fontWeight: 800 }}>Смены и чеки</Typography>
+      <Typography variant="h4" sx={{ fontWeight: 800 }}>Смены и счета</Typography>
 
       {current && <ShiftBar shift={current} hideMine />}
       {(seesAll || can(P.Pos)) && current?.unfiscalized != null && <UnfinishedReceipts />}

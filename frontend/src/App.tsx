@@ -240,8 +240,8 @@ function App() {
   // Разделы управления: показываются по правам ролей (и в окне «Управление», и в боковом меню)
   const staffLinks = ([
     { text: 'Касса', icon: <PosIcon />, path: '/pos', perms: [P.Pos], group: 'Смена', hint: 'Заказы у стойки: в зале и с собой' },
-    { text: 'Официант', icon: <WaiterIcon />, path: '/waiter', perms: [P.Waiter], group: 'Смена', hint: 'Чеки на столы с телефона' },
-    { text: 'Смены и чеки', icon: <ShiftsIcon />, path: '/admin/shifts', perms: [P.Shift, P.ChecksAll], group: 'Смена', hint: 'Открыть смену заведения, все чеки по сменам' },
+    { text: 'Официант', icon: <WaiterIcon />, path: '/waiter', perms: [P.Waiter], group: 'Смена', hint: 'Счета столов с телефона' },
+    { text: 'Смены и счета', icon: <ShiftsIcon />, path: '/admin/shifts', perms: [P.Shift, P.ChecksAll], group: 'Смена', hint: 'Открыть смену заведения, все счета по сменам' },
     { text: 'Зал и столы', icon: <FloorIcon />, path: '/admin/floor', perms: [P.TablesManage], group: 'Смена', hint: 'Расстановка столов и перегородок' },
     { text: 'Отменённые блюда', icon: <VoidsIcon />, path: '/admin/voids', perms: [P.Voids], group: 'Смена', hint: 'Что убрали из счетов и почему' },
     { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', perms: [P.Kitchen], group: 'Смена', hint: 'Новые заказы, приготовление, техкарты' },

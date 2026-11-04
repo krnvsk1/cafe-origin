@@ -287,7 +287,7 @@ namespace Cafe.API.Controllers
         public async Task<IActionResult> Get(int id)
         {
             var c = await _context.TableChecks.AsNoTracking().Include(x => x.Table).FirstOrDefaultAsync(x => x.Id == id);
-            if (c == null) return NotFound(new { message = "Чек не найден" });
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
             if (await DenyAsync(c) is { } deny) return deny;
             var waiter = (await NamesAsync(new[] { c.WaiterId })).GetValueOrDefault(c.WaiterId ?? 0);
             var lines = await LinesAsync(new List<int> { id });
@@ -445,10 +445,10 @@ namespace Cafe.API.Controllers
         public async Task<IActionResult> AddRound(int id, [FromBody] RoundRequest r)
         {
             var c = await _context.TableChecks.Include(x => x.Table).FirstOrDefaultAsync(x => x.Id == id);
-            if (c == null) return NotFound(new { message = "Чек не найден" });
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
             if (await DenyAsync(c) is { } deny) return deny;
             if (await NeedShiftAsync() is { } noShift) return noShift;
-            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Чек уже закрыт" });
+            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт уже закрыт" });
             if (r.Items.Count == 0) return BadRequest(new { message = "Добавьте блюда" });
             if (r.Items.Count > 100) return BadRequest(new { message = "Слишком много позиций за раз" });
             if (r.Items.Any(i => i.Quantity <= 0 || i.Quantity > 99 || i.Addons.Any(a => a.Quantity <= 0 || a.Quantity > 20)))
@@ -490,7 +490,7 @@ namespace Cafe.API.Controllers
         public async Task<IActionResult> CancelRound(int id, int orderId)
         {
             var c = await _context.TableChecks.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
-            if (c == null) return NotFound(new { message = "Чек не найден" });
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
             if (await DenyAsync(c) is { } deny) return deny;
             var order = await _context.Orders.AsNoTracking().Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == orderId);
             if (order == null) return NotFound(new { message = "Заказ не найден" });
@@ -532,9 +532,9 @@ namespace Cafe.API.Controllers
             var method = r.PaymentMethod?.Trim().ToLowerInvariant();
             if (method is not ("cash" or "card")) return BadRequest(new { message = "Выберите способ оплаты" });
             var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
-            if (c == null) return NotFound(new { message = "Чек не найден" });
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
             if (await DenyAsync(c) is { } deny) return deny;
-            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Чек уже закрыт" });
+            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт уже закрыт" });
 
             var lines = (await LinesAsync(new List<int> { id })).Where(l => l.Order.Status != OrderStatuses.Cancelled).ToList();
             if (lines.Count == 0) return BadRequest(new { message = "В счёте нет блюд — его можно просто отменить" });
@@ -617,9 +617,9 @@ namespace Cafe.API.Controllers
         public async Task<IActionResult> CancelCheck(int id)
         {
             var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
-            if (c == null) return NotFound(new { message = "Чек не найден" });
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
             if (await DenyAsync(c) is { } deny) return deny;
-            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Чек уже закрыт" });
+            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт уже закрыт" });
             if ((await LinesAsync(new List<int> { id })).Any(l => l.Order.Status != OrderStatuses.Cancelled))
                 return BadRequest(new { message = "В счёте есть блюда — перенесите их, отмените подачу или закройте счёт оплатой" });
             c.Status = CheckStatuses.Cancelled;

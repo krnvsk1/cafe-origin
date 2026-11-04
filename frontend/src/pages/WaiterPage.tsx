@@ -239,7 +239,7 @@ const TablesView: React.FC = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button onClick={() => setOpening(null)} sx={{ color: 'text.secondary' }}>Отмена</Button>
-          <Button variant="contained" color="secondary" size="large" onClick={confirmOpen} disabled={open.isPending}>Открыть чек</Button>
+          <Button variant="contained" color="secondary" size="large" onClick={confirmOpen} disabled={open.isPending}>Открыть счёт</Button>
         </DialogActions>
       </Dialog>
       <Snackbar open={!!toast} autoHideDuration={2500} onClose={() => setToast('')} message={toast} />
@@ -295,14 +295,14 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
         </Button>
       )}
       {venue && isWaiter && !mine && (
-        <Button size="small" onClick={() => setMyChecks(true)} sx={{ alignSelf: 'flex-start' }}>Мои чеки за прошлую смену</Button>
+        <Button size="small" onClick={() => setMyChecks(true)} sx={{ alignSelf: 'flex-start' }}>Мои счета за прошлую смену</Button>
       )}
       {venue && (mine && isWaiter || shift.canManageVenue) && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', bgcolor: 'background.paper', borderRadius: '12px', px: 1.5, py: 0.75 }}>
           {mine && isWaiter && (
             <>
               <Typography variant="body2" sx={{ fontWeight: 700 }}>Моя смена с {timeOf(mine.openedAt)}</Typography>
-              <Button size="small" onClick={() => setMyChecks(true)}>Мои чеки</Button>
+              <Button size="small" onClick={() => setMyChecks(true)}>Мои счета</Button>
               <Button size="small" color="inherit" onClick={() => setConfirm('mine')} disabled={busy}>Закончить</Button>
             </>
           )}
@@ -314,7 +314,7 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
       )}
       {!!shift.unfiscalized && (
         <Alert severity="error" action={<Button color="inherit" size="small" href="/admin/shifts">Открыть</Button>}>
-          Непробитых кассовых чеков: {shift.unfiscalized} — пробейте их в «Сменах и чеках»
+          Непробитых кассовых чеков: {shift.unfiscalized} — пробейте их в «Сменах и счетах»
         </Alert>
       )}
       {err && <Alert severity="error" onClose={() => setErr('')}>{err}</Alert>}
@@ -327,7 +327,7 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
           <Typography color="text.secondary">
             {confirm === 'venue'
               ? (shift.totalOpenChecks ? `Открытых счетов: ${shift.totalOpenChecks}. Их нужно закрыть или отменить.` : 'Смены официантов закроются вместе со сменой заведения.')
-                + (shift.unfiscalized ? ` Внимание: непробитых кассовых чеков — ${shift.unfiscalized}. Пробейте их до Z-отчёта в «Сменах и чеках».` : '')
+                + (shift.unfiscalized ? ` Внимание: непробитых кассовых чеков — ${shift.unfiscalized}. Пробейте их до Z-отчёта в «Сменах и счетах».` : '')
               : (mine?.openChecks ? `У вас открыто счетов: ${mine.openChecks}. Закройте их или попросите менеджера передать другому официанту.` : 'Новые счета открыть будет нельзя, пока не начнёте смену снова.')}
           </Typography>
         </DialogContent>
@@ -606,13 +606,13 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
     try {
       const f = await checkFiscal.mutateAsync(check!.id);
       setDone(d => (d ? { ...d, fiscal: f } : d));
-      if (!done) setToast(f.status === 'done' ? 'Кассовый чек пробит' : `Чек не пробит: ${f.error ?? 'ошибка кассы'}`);
+      if (!done) setToast(f.status === 'done' ? 'Кассовый чек пробит' : `Кассовый чек не пробит: ${f.error ?? 'ошибка кассы'}`);
     } catch (e) { setToast(apiError(e)); }
   };
   const [err, setErr] = React.useState('');
 
   if (isLoading) return <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }}><CircularProgress /></Box>;
-  if (error || !check) return <Alert severity="error">{apiError(error, 'Чек не найден')}</Alert>;
+  if (error || !check) return <Alert severity="error">{apiError(error, 'Счёт не найден')}</Alert>;
 
   const isOpen = check.status === 'open';
   // Счёт для гостя напечатан с текущей суммой (после дозаказа печатаем заново)
@@ -680,7 +680,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         )}
         {needPrint && active.length > 0 && (
           <MenuItem onClick={() => { setMenu(null); setErr(''); setCash(''); setClosing(true); }}>
-            <ListItemText primary="Закрыть чек без печати счёта" />
+            <ListItemText primary="Закрыть счёт без печати" />
           </MenuItem>
         )}
         <MenuItem onClick={() => { setMenu(null); setDialog('split'); }} disabled={active.length === 0}>
@@ -703,7 +703,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         )}
       </Menu>
 
-      {!isOpen && <Alert severity={check.status === 'closed' ? 'success' : 'info'}>{check.status === 'closed' ? `Чек закрыт · ${check.paymentMethod === 'cash' ? 'наличные' : 'карта'}` : 'Чек отменён'}</Alert>}
+      {!isOpen && <Alert severity={check.status === 'closed' ? 'success' : 'info'}>{check.status === 'closed' ? `Счёт закрыт · ${check.paymentMethod === 'cash' ? 'наличные' : 'карта'}` : 'Счёт отменён'}</Alert>}
       {check.status === 'closed' && check.fiscalEnabled && (check.fiscal?.status === 'done'
         ? <Typography variant="body2" color="text.secondary">Кассовый чек пробит{check.fiscal.fiscalDocumentNumber ? ` · ФД ${check.fiscal.fiscalDocumentNumber}` : ''}</Typography>
         : (
@@ -815,7 +815,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
               {check.printedAt ? 'Счёт изменился — распечатать' : 'Распечатать счёт'}
             </Button>
           ) : active.length > 0 ? (
-            <Button fullWidth variant="outlined" size="large" onClick={() => { setErr(''); setCash(''); setClosing(true); }}>Закрыть чек</Button>
+            <Button fullWidth variant="outlined" size="large" onClick={() => { setErr(''); setCash(''); setClosing(true); }}>Закрыть счёт</Button>
           ) : (
             <Button variant="text" color="error" onClick={async () => { try { await cancelCheck.mutateAsync(check.id); navigate('/waiter'); } catch (e) { setErr(apiError(e)); } }}>
               Отменить
@@ -870,7 +870,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       <Dialog open={!!done} onClose={() => navigate('/waiter')} maxWidth="xs" fullWidth>
         <DialogContent sx={{ textAlign: 'center', pt: 4 }}>
           <ReadyIcon sx={{ fontSize: 56, color: tokens.herb }} />
-          <Typography sx={{ fontWeight: 800, fontSize: '1.4rem' }}>Чек закрыт</Typography>
+          <Typography sx={{ fontWeight: 800, fontSize: '1.4rem' }}>Счёт закрыт</Typography>
           <Typography color="text.secondary">{money(done?.total ?? 0)}</Typography>
           {done?.change != null && done.change > 0 && (
             <Typography sx={{ fontWeight: 800, fontSize: '1.6rem', mt: 1.5 }}>Сдача {money(done.change)}</Typography>
@@ -1051,10 +1051,10 @@ const MyChecksDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { data, isLoading, error } = useMyChecks(true);
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Мои чеки за смену</DialogTitle>
+      <DialogTitle>Мои счета за смену</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         {isLoading && <Box sx={{ display: 'grid', placeItems: 'center', py: 3 }}><CircularProgress /></Box>}
-        {error && <Alert severity="error">{apiError(error, 'Не удалось загрузить чеки')}</Alert>}
+        {error && <Alert severity="error">{apiError(error, 'Не удалось загрузить счета')}</Alert>}
         {data && (
           <>
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
@@ -1073,7 +1073,7 @@ const MyChecksDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               Закрыто {data.summary.closed}{data.summary.open ? ` · открыто ${data.summary.open}` : ''}
               {data.shift ? ` · смена с ${timeOf(data.shift.openedAt)}${data.shift.closedAt ? ` до ${timeOf(data.shift.closedAt)}` : ''}` : ''}
             </Typography>
-            {data.checks.length === 0 && <Typography color="text.secondary">Чеков пока нет</Typography>}
+            {data.checks.length === 0 && <Typography color="text.secondary">Счетов пока нет</Typography>}
             {data.checks.map(c => (
               <Box key={c.id} component="button" type="button" onClick={() => { onClose(); navigate(`/waiter/${c.id}`); }}
                 sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%', textAlign: 'left', font: 'inherit', color: 'text.primary',
