@@ -113,7 +113,10 @@ namespace Cafe.API.Services
                     s.LastUsedAt = DateTime.UtcNow;
                     sent++;
                 }
-                catch (WebPushException ex) when (ex.StatusCode is HttpStatusCode.Gone or HttpStatusCode.NotFound)
+                // 404/410 — подписки нет; 403 «VAPID credentials … do not correspond» — подписка сделана под другим ключом
+                // (например, до переноса базы): доставить её нельзя, браузер переподпишется сам при открытии сайта
+                catch (WebPushException ex) when (ex.StatusCode is HttpStatusCode.Gone or HttpStatusCode.NotFound
+                    || (ex.StatusCode == HttpStatusCode.Forbidden && ex.Message.Contains("do not correspond", StringComparison.OrdinalIgnoreCase)))
                 {
                     db.PushSubscriptions.Remove(s);
                 }

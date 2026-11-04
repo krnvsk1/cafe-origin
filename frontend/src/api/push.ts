@@ -31,6 +31,30 @@ const registration = () => navigator.serviceWorker.register('/sw.js').then(() =>
 
 const saveSubscription = (sub: PushSubscription) => apiClient.post('/api/push/subscribe', sub.toJSON());
 
+const sameKey = (a: ArrayBuffer | null | undefined, b: Uint8Array) => {
+  if (!a) return false;
+  const x = new Uint8Array(a);
+  return x.length === b.length && x.every((v, i) => v === b[i]);
+};
+
+/**
+ * Подписка этого браузера на текущий ключ сервера. Подписку, сделанную под другим ключом
+ * (например, до переноса базы на хостинг), сервер доставить не может — пересоздаём её молча.
+ */
+const ensureSubscription = async (reg: ServiceWorkerRegistration) => {
+  const { data } = await apiClient.get<{ publicKey: string }>('/api/push/key');
+  const key = keyToBytes(data.publicKey);
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && !sameKey(sub.options?.applicationServerKey, key)) {
+    await apiClient.post('/api/push/unsubscribe', { endpoint: sub.endpoint }).catch(() => undefined);
+    await sub.unsubscribe().catch(() => false);
+    sub = null;
+  }
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+  await saveSubscription(sub);
+  return sub;
+};
+
 /**
  * Выход из аккаунта: этот браузер больше не получает уведомления прежнего сотрудника.
  * Иначе после входа под другим (например, поваром) уведомления официанта продолжат приходить сюда.
@@ -60,10 +84,10 @@ export const usePushNotifications = () => {
         // Подтянуть свежую версию service worker, если она вышла
         reg?.update().catch(() => undefined);
         const sub = reg ? await reg.pushManager.getSubscription() : null;
-        if (sub && Notification.permission === 'granted') {
-          // Подписка этого телефона привязывается к тому, кто сейчас вошёл
-          saveSubscription(sub).catch(() => undefined);
+        if (reg && sub && Notification.permission === 'granted') {
+          // Подписка этого телефона привязывается к тому, кто сейчас вошёл (и обновляется, если сменился ключ сервера)
           if (alive) setState('on');
+          ensureSubscription(reg).catch(() => undefined);
         } else if (alive) setState('off');
       } catch { if (alive) setState('off'); }
     })();
@@ -76,10 +100,7 @@ export const usePushNotifications = () => {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') { setState(permission === 'denied' ? 'denied' : 'off'); return false; }
       const reg = await registration();
-      const { data } = await apiClient.get<{ publicKey: string }>('/api/push/key');
-      let sub = await reg.pushManager.getSubscription();
-      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyToBytes(data.publicKey) });
-      await saveSubscription(sub);
+      await ensureSubscription(reg);
       setState('on');
       return true;
     } finally { setBusy(false); }
