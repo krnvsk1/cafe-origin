@@ -61,7 +61,12 @@ const AlertsSettings: React.FC = () => {
         Сбои сервера, недоступная база, мало места, падающие синхронизации. Нужен отдельный чат — не тот, куда приходят заказы:
         создайте группу, добавьте в неё бота, напишите в ней /id и вставьте сюда полученный номер.
       </Typography>
-      {data && !data.telegramEnabled && <Alert severity="warning">Telegram-бот не настроен — тревоги отправлять некуда</Alert>}
+      {data && !data.telegramEnabled && (
+        <Alert severity="warning">
+          Telegram-бот не подключён — тревоги отправлять некуда. На сервере впишите токен бота от @BotFather в файл .env
+          (TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME) и перезапустите API.
+        </Alert>
+      )}
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <TextField size="small" label="ID чата для тревог" placeholder="-1001234567890" value={chat}
           onChange={e => { setChat(e.target.value); setMsg(null); }} sx={{ minWidth: 220 }}
@@ -69,7 +74,7 @@ const AlertsSettings: React.FC = () => {
           helperText={!valid ? 'Только цифры, у групп — с минусом' : sameAsOrders ? 'Это чат заказов — нужен другой' : 'Пусто — тревоги выключены'} />
         <Button variant="contained" disabled={!valid || sameAsOrders || !changed || save.isPending}
           onClick={() => save.mutate(trimmed === '' ? null : Number(trimmed))}>Сохранить</Button>
-        <Button disabled={!data?.telegramChatId || changed || test.isPending} onClick={() => test.mutate()}>Проверить</Button>
+        <Button disabled={!data?.telegramEnabled || !data?.telegramChatId || changed || test.isPending} onClick={() => test.mutate()}>Проверить</Button>
       </Box>
       {msg && <Alert severity={msg.ok ? 'success' : 'error'} onClose={() => setMsg(null)}>{msg.text}</Alert>}
     </Paper>

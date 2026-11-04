@@ -96,8 +96,8 @@ export const useKitchenOrders = () =>
   useQuery<KitchenOrder[]>({
     queryKey: ['kitchen-orders'],
     queryFn: () => apiClient.get('/api/kitchen/orders').then(res => res.data),
-    // Подстраховка на случай обрыва живого потока
-    refetchInterval: 60 * 1000,
+    // Подстраховка на случай обрыва живого потока (телевизор, прокси): новый заказ появится не позже чем через 15 секунд
+    refetchInterval: 15 * 1000,
   });
 
 export const useSetOrderStatus = () => {

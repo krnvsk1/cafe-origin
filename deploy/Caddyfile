@@ -3,7 +3,9 @@
 }
 
 {$DOMAIN} {
-	encode gzip
+	# Живые события заказов (SSE) не сжимаем: сжатие копит события, и кухня видит заказ с задержкой
+	@compress not path /api/events*
+	encode @compress gzip
 
 	@sse path /api/events*
 	handle @sse {
