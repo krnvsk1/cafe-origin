@@ -461,7 +461,7 @@ namespace Cafe.API.Controllers
             var waiterName = (await NamesAsync(new[] { waiterId })).GetValueOrDefault(waiterId ?? 0);
             var order = new Order
             {
-                CustomerName = $"Стол {c.Table!.Name}",
+                CustomerName = TableLabel(c.Table!.Name),
                 Phone = string.Empty,
                 Address = "В зале",
                 DeliveryType = SalesChannels.DineIn,
@@ -588,6 +588,13 @@ namespace Cafe.API.Controllers
             catch (FiscalException ex) { return new { status = FiscalStatuses.Error, error = ex.Message }; }
         }
 
+        /// <summary>«Стол 4» из названия «4» или «Стол 4» — без «Стол Стол 4»</summary>
+        public static string TableLabel(string name)
+        {
+            var n = name.Trim();
+            return n.StartsWith("стол", StringComparison.OrdinalIgnoreCase) ? n : $"Стол {n}";
+        }
+
         // POST: api/waiter/checks/{id}/fiscal/return — чек возврата по счёту (гость вернул деньги): зеркало чека продажи
         [HttpPost("checks/{id:int}/fiscal/return")]
         [HasPermission(Permissions.ChecksAll)]
@@ -658,7 +665,7 @@ namespace Cafe.API.Controllers
             c.TableId = table.Id;
             // Подписи заказов на кухне и в кассе
             var orders = await _context.Orders.Where(o => o.CheckId == id).ToListAsync();
-            foreach (var o in orders) o.CustomerName = $"Стол {table.Name}";
+            foreach (var o in orders) o.CustomerName = TableLabel(table.Name);
             await _context.SaveChangesAsync();
             foreach (var o in orders) _events.Publish(new OrderEvent("updated", o.Id, o.UserId, o.Status, null, DateTime.UtcNow));
             return NoContent();

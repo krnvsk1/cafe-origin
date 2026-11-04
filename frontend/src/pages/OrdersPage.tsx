@@ -155,6 +155,11 @@ const EditOrderDialog: React.FC<{
 };
 
 // Компонент одной карточки заказа
+type OrderSource = 'online' | 'pos' | 'waiter';
+const SOURCE_LABEL: Record<OrderSource, string> = { online: 'Сайт', pos: 'Касса', waiter: 'Официант' };
+const sourceOf = (o: Order): OrderSource => (o.source === 'pos' || o.source === 'waiter' ? o.source : 'online');
+const rub = (v: number) => `${v.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`;
+
 const OrderCard: React.FC<{ 
   order: Order;
   isAdmin: boolean;
@@ -199,19 +204,30 @@ const OrderCard: React.FC<{
                 Заказ #{order.id}
               </Typography>
               <StatusChip status={order.status} />
+              <Chip size="small" variant="outlined" label={SOURCE_LABEL[sourceOf(order)]} />
             </Box>
 
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Клиент: <strong>{order.customerName}</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Телефон: <strong>{order.phone}</strong>
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Адрес: <strong>{order.address || 'Самовывоз'}</strong>
-                </Typography>
+                {sourceOf(order) === 'waiter' ? (
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>{order.customerName}</strong>{order.checkId ? ` · счёт #${order.checkId}` : ''} · в зале
+                  </Typography>
+                ) : (
+                  <>
+                    <Typography variant="body2" color="text.secondary">
+                      Клиент: <strong>{order.customerName}</strong>
+                    </Typography>
+                    {order.phone && (
+                      <Typography variant="body2" color="text.secondary">
+                        Телефон: <strong>{order.phone}</strong>
+                      </Typography>
+                    )}
+                    <Typography variant="body2" color="text.secondary">
+                      {order.deliveryType === 'Доставка' || (!order.deliveryType && order.address) ? 'Адрес' : 'Получение'}: <strong>{order.address || 'Самовывоз'}</strong>
+                    </Typography>
+                  </>
+                )}
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <Typography variant="body2" color="text.secondary">
@@ -250,7 +266,7 @@ const OrderCard: React.FC<{
                 fontWeight: 'bold'
               }}
             >
-              {order.total} ₽
+              {rub(order.total)}
             </Typography>
             
             <Box sx={{ display: 'flex', gap: 1 }}>
@@ -446,6 +462,7 @@ const OrdersPage: React.FC = () => {
   });
 
   const [statusFilter, setStatusFilter] = React.useState<OrderStatus | 'all'>('all');
+  const [sourceFilter, setSourceFilter] = React.useState<OrderSource | 'all'>('all');
   const [searchId, setSearchId] = React.useState('');
   const [searchName, setSearchName] = React.useState('');
   const [searchPhone, setSearchPhone] = React.useState('');
@@ -488,12 +505,13 @@ const OrdersPage: React.FC = () => {
     
     return filtered.filter(order => {
       if (statusFilter !== 'all' && order.status !== statusFilter) return false;
+      if (sourceFilter !== 'all' && sourceOf(order) !== sourceFilter) return false;
       if (searchId && !order.id.toString().includes(searchId)) return false;
       if (searchName && !order.customerName.toLowerCase().includes(searchName.toLowerCase())) return false;
       if (searchPhone && !order.phone.includes(searchPhone)) return false;
       return true;
     });
-  }, [orders, statusFilter, searchId, searchName, searchPhone, isAdmin, user]);
+  }, [orders, statusFilter, sourceFilter, searchId, searchName, searchPhone, isAdmin, user]);
 
   const stats = React.useMemo(() => {
     const total = orders.reduce((sum, order) => sum + order.total, 0);
@@ -672,15 +690,31 @@ const OrdersPage: React.FC = () => {
         </Box>
       )}
 
+      {/* Откуда заказ */}
+      {!isLoading && isAdmin && orders.length > 0 && (
+        <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>Откуда:</Typography>
+          {(['all', 'online', 'pos', 'waiter'] as const).map(src => (
+            <Chip
+              key={src}
+              label={src === 'all' ? 'Все' : `${SOURCE_LABEL[src]} · ${orders.filter(o => sourceOf(o) === src).length}`}
+              onClick={() => setSourceFilter(src)}
+              color={sourceFilter === src ? 'primary' : 'default'}
+              variant={sourceFilter === src ? 'filled' : 'outlined'}
+            />
+          ))}
+        </Box>
+      )}
+
       {/* Фильтр по статусам */}
-      {!isLoading && filteredOrders.length > 0 && (
+      {!isLoading && orders.length > 0 && (
         <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
           <Chip
             label="Все"
             onClick={() => setStatusFilter('all')}
             color={statusFilter === 'all' ? 'primary' : 'default'}
           />
-          {['Новый', 'Принят', 'Готовится', 'Готов', 'В пути', 'Доставлен', 'Отменён'].map(status => (
+          {['Новый', 'Принят', 'Готовится', 'Готов', 'В пути', 'Доставлен', 'Выполнен', 'Отменён'].map(status => (
             <Chip
               key={status}
               label={status}

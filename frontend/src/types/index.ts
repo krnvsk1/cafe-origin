@@ -122,6 +122,10 @@ export interface Dish {
     deliveryType?: string;
     discountAmount?: number;
     promoCodeId?: number | null;
+    /** Откуда заказ: online — сайт/Telegram, pos — касса, waiter — официант (подача на кухню) */
+    source?: string;
+    /** Счёт стола, если заказ — подача официанта */
+    checkId?: number | null;
   }
   
   // Для создания заказа (то, что отправляем на бэкенд)

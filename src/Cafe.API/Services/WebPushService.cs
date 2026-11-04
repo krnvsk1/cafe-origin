@@ -175,7 +175,7 @@ namespace Cafe.API.Services
                 var lines = fresh.Where(x => (x.Item.CheckId ?? order.CheckId) == c.Id).Select(x => $"{x.Qty} × {x.Item.Name}").ToList();
                 if (lines.Count == 0) continue;
                 var allReady = order.OrderItems.Where(i => (i.CheckId ?? order.CheckId) == c.Id).All(i => now.GetValueOrDefault(i.Id) >= i.Quantity);
-                var table = c.Table?.Name is { Length: > 0 } n ? $"Стол {n}" : "Стол";
+                var table = c.Table?.Name is { Length: > 0 } n ? Cafe.API.Controllers.WaiterController.TableLabel(n) : "Стол";
                 var label = string.IsNullOrEmpty(c.Label) ? "" : $" · {c.Label}";
                 var body = string.Join(", ", lines);
                 if (body.Length > 180) body = body[..177] + "…";

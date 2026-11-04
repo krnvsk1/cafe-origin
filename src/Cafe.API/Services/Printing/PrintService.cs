@@ -38,7 +38,7 @@ namespace Cafe.API.Services.Printing
             var p = new EscPos(s.Width, s.CodeTable, s.Encoding);
             if (!string.IsNullOrWhiteSpace(d.Brand)) p.Line(d.Brand, EscPos.Align.Center, bold: true, big: true);
             p.Line("СЧЁТ", EscPos.Align.Center, bold: true);
-            p.Line($"Стол {d.Table} · {d.CheckLabel}", EscPos.Align.Center);
+            p.Line($"{Cafe.API.Controllers.WaiterController.TableLabel(d.Table)} · {d.CheckLabel}", EscPos.Align.Center);
             p.Separator();
             var msk = d.PrintedUtc.AddHours(3);
             p.Pair(msk.ToString("dd.MM.yyyy HH:mm"), d.Guests is > 0 ? $"Гостей: {d.Guests}" : "");
