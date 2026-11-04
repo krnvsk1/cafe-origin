@@ -17,6 +17,7 @@ import { Close as CloseIcon, Phone as PhoneIcon, Sms as SmsIcon, Person as Perso
 import { apiClient } from '../api/client';
 import { getStoredReferral, clearStoredReferral } from '../utils/referral';
 import { useAuthStore } from '../store/authStore';
+import TelegramLogin from './TelegramLogin';
 
 interface AuthModalProps {
   open: boolean;
@@ -300,6 +301,18 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
             >
               {loading ? <CircularProgress size={24} color="inherit" /> : 'Получить код'}
             </Button>
+
+            {/* Вход через Telegram — без телефона и SMS; кнопки нет, если бот не подключён */}
+            <TelegramLogin
+              divider
+              onSuccess={r => {
+                if (r.user && r.accessToken) {
+                  setAuth(r.user as Parameters<typeof setAuth>[0], r.accessToken, r.refreshToken || '');
+                  handleClose();
+                }
+              }}
+              onError={setError}
+            />
           </Box>
         )}
 

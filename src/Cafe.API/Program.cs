@@ -238,6 +238,7 @@ builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
 builder.Services.AddHttpClient<TelegramApi>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddSingleton<TelegramAuth>();
+builder.Services.AddSingleton<TelegramLoginSessions>();
 builder.Services.AddHostedService<TelegramNotifier>();
 // Без публичного адреса (локально) команды бота забираем опросом
 builder.Services.AddHostedService<TelegramPollingService>();
