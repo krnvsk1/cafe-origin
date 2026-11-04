@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { FieldHint, TitleWithHint } from '../../components/Hint';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Switch, FormControlLabel, Alert,
   CircularProgress, Box, Typography, InputAdornment, useMediaQuery, useTheme,
@@ -86,7 +87,7 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
 
             <FormControlLabel
               control={<Switch checked={enabled} onChange={e => setEnabled(e.target.checked)} />}
-              label={<Box><Typography sx={{ fontWeight: 600 }}>Работать с ЕГАИС</Typography><Typography variant="body2" color="text.secondary">Получать накладные на алкоголь и отправлять акты приёмки</Typography></Box>}
+              label={<TitleWithHint hint="Получать накладные на алкоголь и отправлять акты приёмки"><Typography sx={{ fontWeight: 600 }}>Работать с ЕГАИС</Typography></TitleWithHint>}
               sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
             />
 
@@ -98,7 +99,7 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
                   onChange={e => { setUtmUrl(e.target.value); setTest(null); }}
                   placeholder="http://localhost:8080"
                   fullWidth
-                  helperText="Компьютер в заведении, где установлен УТМ с ключом. Если сервер на другом компьютере — укажите его адрес в сети, например http://192.168.1.20:8080"
+                  helperText={<FieldHint text="Компьютер в заведении, где установлен УТМ с ключом. Если сервер на другом компьютере — укажите его адрес в сети, например http://192.168.1.20:8080" />}
                 />
                 <Button onClick={runTest} disabled={testing || !utmUrl.trim()} sx={{ bgcolor: t.surfaceMuted, flexShrink: 0, mt: 0.5, minHeight: 48 }}>
                   {testing ? <CircularProgress size={18} /> : 'Проверить'}
@@ -117,7 +118,7 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
               value={fsrarId}
               onChange={e => setFsrarId(e.target.value.replace(/\D/g, '').slice(0, 12))}
               placeholder="030000000000"
-              helperText="Точно как на главной странице УТМ — по нему ЕГАИС проверяет подпись запросов"
+              helperText={<FieldHint text="Точно как на главной странице УТМ — по нему ЕГАИС проверяет подпись запросов" />}
               slotProps={{ htmlInput: { inputMode: 'numeric' } }}
             />
             {detected && detected !== fsrarId.trim() && (
@@ -134,7 +135,7 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
               type="number"
               value={minutes}
               onChange={e => setMinutes(e.target.value)}
-              helperText="0 — только по кнопке «Проверить входящие»"
+              helperText={<FieldHint text="0 — только по кнопке «Проверить входящие»" />}
               slotProps={{
                 input: { startAdornment: <InputAdornment position="start">каждые</InputAdornment>, endAdornment: <InputAdornment position="end">мин</InputAdornment> },
                 htmlInput: { min: 0, max: 1440, inputMode: 'numeric' },
@@ -146,12 +147,12 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
               <Typography sx={{ fontWeight: 700 }}>Если с этим УТМ работает iiko или другая программа</Typography>
               <FormControlLabel
                 control={<Switch checked={sendActs} onChange={e => setSendActs(e.target.checked)} />}
-                label={<Box><Typography sx={{ fontWeight: 600 }}>Отправлять акты приёмки из сервиса</Typography><Typography variant="body2" color="text.secondary">Выключите, если накладные подтверждает iiko — тогда здесь товар только оприходуется на склад</Typography></Box>}
+                label={<TitleWithHint hint="Выключите, если накладные подтверждает iiko — тогда здесь товар только оприходуется на склад"><Typography sx={{ fontWeight: 600 }}>Отправлять акты приёмки из сервиса</Typography></TitleWithHint>}
                 sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
               />
               <FormControlLabel
                 control={<Switch checked={deleteProcessed} onChange={e => setDeleteProcessed(e.target.checked)} />}
-                label={<Box><Typography sx={{ fontWeight: 600 }}>Удалять прочитанные документы из УТМ</Typography><Typography variant="body2" color="text.secondary">Включайте, только если с УТМ работает один этот сервис — иначе iiko не увидит накладные</Typography></Box>}
+                label={<TitleWithHint hint="Включайте, только если с УТМ работает один этот сервис — иначе iiko не увидит накладные"><Typography sx={{ fontWeight: 600 }}>Удалять прочитанные документы из УТМ</Typography></TitleWithHint>}
                 sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
               />
             </Box>

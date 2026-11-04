@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { FieldHint, Hint, TitleWithHint } from '../../components/Hint';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Typography, Alert, FormControlLabel, Switch, MenuItem,
 } from '@mui/material';
@@ -61,14 +62,11 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Кассовый ПК: принтер счетов и связь</DialogTitle>
+      <DialogTitle><TitleWithHint hint="Официант печатает счёт для гостя перед оплатой на чековом принтере (RONGTA RP33x: USB и LAN).">Кассовый ПК: принтер счетов и связь</TitleWithHint></DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Typography variant="body2" color="text.secondary">
-          Официант печатает счёт для гостя перед оплатой на чековом принтере (RONGTA RP33x: USB и LAN).
-        </Typography>
         <FormControlLabel control={<Switch checked={enabled} onChange={e => setEnabled(e.target.checked)} />} label="Печатать счета для гостей" />
         <TextField select label="Как подключён принтер" value={mode} onChange={e => setMode(e.target.value as PrintingState['mode'])}
-          helperText={mode === 'network' ? 'Только пока сервер в сети кафе (сейчас — на Маке)' : 'Работает и с сервером в интернете'}>
+          helperText={<FieldHint text={mode === 'network' ? 'Только пока сервер в сети кафе (сейчас — на Маке)' : 'Работает и с сервером в интернете'} />}>
           <MenuItem value="agent">USB к кассовому ПК — печатает программа на ПК</MenuItem>
           <MenuItem value="agent-lan">Сетевой кабель в роутер (LAN) — печатает программа на ПК</MenuItem>
           <MenuItem value="network">Сетевой кабель в роутер (LAN) — печатает сервер напрямую</MenuItem>
@@ -76,12 +74,12 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
         {mode !== 'agent' ? (
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField label="IP-адрес принтера" value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.1.87" sx={{ flex: 1 }}
-              helperText="Есть на тестовой странице: выключите принтер, зажмите FEED и включите" />
+              helperText={<FieldHint text="Есть на тестовой странице: выключите принтер, зажмите FEED и включите" />} />
             <TextField label="Порт" value={port} onChange={e => setPort(e.target.value.replace(/\D/g, ''))} sx={{ width: 110 }} />
           </Box>
         ) : (
           <TextField label="Имя принтера в Windows" value={printerName} onChange={e => setPrinterName(e.target.value)}
-            helperText="Как в «Параметры → Принтеры и сканеры» на кассовом ПК. В Interpos он назывался «Printer bar»." />
+            helperText={<FieldHint text="Как в «Параметры → Принтеры и сканеры» на кассовом ПК. В Interpos он назывался «Printer bar»." />} />
         )}
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <TextField select label="Ширина ленты" value={width} onChange={e => setWidth(e.target.value)} sx={{ minWidth: 200 }}>
@@ -90,35 +88,24 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
             <MenuItem value="32">58 мм — 32 символа</MenuItem>
           </TextField>
           <TextField select label="Русские буквы" value={codePage} onChange={e => setCodePage(e.target.value)} sx={{ flex: 1, minWidth: 240 }}
-            helperText="Если в проверочной странице кракозябры — выберите другую">
+            helperText={<FieldHint text="Если в проверочной странице кракозябры — выберите другую" />}>
             {CODE_PAGES.map(c => <MenuItem key={c.key} value={c.key}>{c.label}</MenuItem>)}
           </TextField>
         </Box>
         <TextField label="Текст внизу счёта" value={footer} onChange={e => setFooter(e.target.value)} inputProps={{ maxLength: 200 }} />
 
         <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2 }}>
-          <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Программа связи на кассовом ПК</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Сервер в интернете не видит устройства внутри кафе. Программа на кассовом ПК сама забирает с сервера счета для печати
-            и запросы к кассе АТОЛ и УТМ ЕГАИС, выполняет их у себя и возвращает ответ.
+          <Typography sx={{ fontWeight: 700, mb: 0.5 }}>
+            <TitleWithHint hint="Сервер в интернете не видит устройства внутри кафе. Программа на кассовом ПК сама забирает с сервера счета для печати и запросы к кассе АТОЛ и УТМ ЕГАИС, выполняет их у себя и возвращает ответ.">
+              Программа связи на кассовом ПК
+            </TitleWithHint>
           </Typography>
           <FormControlLabel sx={{ mb: 1 }} control={<Switch checked={relay} onChange={e => setRelay(e.target.checked)} />}
-            label="Касса АТОЛ и УТМ ЕГАИС — через эту программу" />
-          {relay && (
-            <Alert severity="info" sx={{ mb: 1 }}>
+            label={<TitleWithHint hint={<Typography variant="body2">
               Адреса в настройках кассы и ЕГАИС указывайте так, как их видит кассовый ПК: обычно <b>http://127.0.0.1:16732</b> для АТОЛ
-              и <b>http://127.0.0.1:8080</b> для УТМ. Включайте, когда сервер переедет в интернет; пока сервер в сети кафе — можно не включать.
-            </Alert>
-          )}
-          <Typography variant="body2" component="ol" sx={{ pl: 2.5, m: 0 }}>
-            <li>Скачайте её здесь и перенесите на кассовый ПК (флешкой или почтой), например в папку C:\Cafe.</li>
-            <li>Правой кнопкой по файлу → «Выполнить с помощью PowerShell». Откроется окно — его можно свернуть.</li>
-            <li>Программа сама добавится в автозагрузку и будет запускаться вместе с Windows.</li>
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Скачивайте с того адреса сайта, по которому кассовый ПК видит сервер: программа запомнит его.
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+              и <b>http://127.0.0.1:8080</b> для УТМ. Включайте, когда сервер в интернете; пока сервер в сети кафе — можно не включать.
+            </Typography>}>Касса АТОЛ и УТМ ЕГАИС — через эту программу</TitleWithHint>} />
+          <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
             <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => downloadPrintAgent().catch(e => setMsg({ ok: false, text: apiError(e) }))}>
               Скачать программу
             </Button>
@@ -126,6 +113,14 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
               if (!window.confirm('Старая программа перестанет печатать — её нужно будет скачать заново. Продолжить?')) return;
               try { await newToken.mutateAsync(); setMsg({ ok: true, text: 'Ключ сменён — скачайте программу заново' }); } catch (e) { setMsg({ ok: false, text: apiError(e) }); }
             }}>Сменить ключ</Button>
+            <Hint label="Как установить" title={<Box>
+              <Typography variant="body2" component="ol" sx={{ pl: 2.5, m: 0 }}>
+                <li>Скачайте программу и перенесите на кассовый ПК (флешкой или почтой), например в папку C:\Cafe.</li>
+                <li>Правой кнопкой по файлу → «Выполнить с помощью PowerShell». Откроется окно — его можно свернуть.</li>
+                <li>Программа сама добавится в автозагрузку и будет запускаться вместе с Windows.</li>
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}>Скачивайте с того адреса сайта, по которому кассовый ПК видит сервер: программа запомнит его.</Typography>
+            </Box>} />
           </Box>
         </Box>
         {msg && <Alert severity={msg.ok ? 'success' : 'error'}>{msg.text}</Alert>}

@@ -1,6 +1,7 @@
 import * as React from 'react';
+import { FieldHint, TitleWithHint } from '../../components/Hint';
 import {
-  Box, Typography, Button, TextField, Switch, FormControlLabel, Alert, CircularProgress,
+  Box, Button, TextField, Switch, FormControlLabel, Alert, CircularProgress,
   Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment,
 } from '@mui/material';
 import { useSaveEdoSettings, testEdoSettings, type EdoState } from '../../api/edo';
@@ -59,12 +60,8 @@ const EdoSettingsDialog: React.FC<{ open: boolean; state: EdoState; onClose: () 
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Подключение к СБИС</DialogTitle>
+      <DialogTitle><TitleWithHint hint="Сервис заходит в СБИС (Saby) от имени пользователя и забирает входящие УПД. Лучше завести отдельного сотрудника с доступом только к входящим документам и без подтверждения входа по SMS.">Подключение к СБИС</TitleWithHint></DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
-        <Typography variant="body2" color="text.secondary">
-          Сервис заходит в СБИС (Saby) от имени пользователя и забирает входящие УПД. Лучше завести отдельного
-          сотрудника с доступом только к входящим документам и без подтверждения входа по SMS.
-        </Typography>
         <FormControlLabel control={<Switch checked={enabled} onChange={e => setEnabled(e.target.checked)} />} label="Загружать накладные из СБИС" />
         <TextField label="Логин СБИС" value={login} onChange={e => setLogin(e.target.value)} autoComplete="off" />
         <TextField
@@ -83,7 +80,7 @@ const EdoSettingsDialog: React.FC<{ open: boolean; state: EdoState; onClose: () 
             type="number"
             value={minutes}
             onChange={e => setMinutes(e.target.value)}
-            helperText="0 — только вручную"
+            helperText={<FieldHint text="0 — только вручную" />}
             slotProps={{ input: { endAdornment: <InputAdornment position="end">мин</InputAdornment> }, htmlInput: { min: 0, max: 1440 } }}
           />
           <TextField
@@ -91,7 +88,7 @@ const EdoSettingsDialog: React.FC<{ open: boolean; state: EdoState; onClose: () 
             type="number"
             value={days}
             onChange={e => setDays(e.target.value)}
-            helperText="С какой даты забрать накладные"
+            helperText={<FieldHint text="С какой даты забрать накладные" />}
             slotProps={{ input: { endAdornment: <InputAdornment position="end">дн</InputAdornment> }, htmlInput: { min: 1, max: 90 } }}
           />
         </Box>

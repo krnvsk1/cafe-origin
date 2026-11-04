@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { FieldHint, TitleWithHint } from '../../components/Hint';
 import {
   Box, Typography, Button, TextField, IconButton, Tooltip, ToggleButtonGroup, ToggleButton, Alert, CircularProgress,
   Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, useMediaQuery, useTheme, Chip,
@@ -194,17 +195,13 @@ const ReceiptLayoutDialog: React.FC<{ open: boolean; state: FiscalState; onClose
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth fullScreen={fullScreen}>
-      <DialogTitle>Вид чека</DialogTitle>
+      <DialogTitle><TitleWithHint hint="Название продавца, ИНН, позиции, итог, СНО и фискальные реквизиты касса печатает сама — по закону их менять нельзя (на образце они серые). Здесь — ваш текст до и после них и QR-код.">Вид чека</TitleWithHint></DialogTitle>
       <DialogContent sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) auto' }, gap: 3, alignItems: 'start' }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1, minWidth: 0 }}>
-          <Typography variant="body2" color="text.secondary">
-            Название продавца, ИНН, позиции, итог, СНО и фискальные реквизиты касса печатает сама — по закону их менять нельзя
-            (на образце они серые). Здесь — ваш текст до и после них и QR-код.
-          </Typography>
           <LinesEditor title="Сверху чека" lines={layout.header} onChange={header => setLayout({ ...layout, header })} />
           <LinesEditor title="Внизу чека" lines={layout.footer} onChange={footer => setLayout({ ...layout, footer })} />
           <TextField label="QR-код внизу (ссылка)" value={layout.qr ?? ''} onChange={e => setLayout({ ...layout, qr: e.target.value || null })}
-            placeholder="https://cafe.example/review" helperText="Например, на отзыв, меню или Telegram; пусто — без QR" />
+            placeholder="https://cafe.example/review" helperText={<FieldHint text="Например, на отзыв, меню или Telegram; пусто — без QR" />} />
           <TextField select label="Ширина ленты" value={layout.width} onChange={e => setLayout({ ...layout, width: Number(e.target.value) as ReceiptLayout['width'] })}
             sx={{ maxWidth: 260 }}>
             <MenuItem value={32}>57 мм (32 символа)</MenuItem>

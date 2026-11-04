@@ -22,6 +22,7 @@ import ReceiptLayoutDialog from './inventory/ReceiptLayoutDialog';
 import MercurySettingsDialog from './inventory/MercurySettingsDialog';
 import PrinterSettingsDialog from './inventory/PrinterSettingsDialog';
 import { usePrintingState, agentOnline } from '../api/printing';
+import { TitleWithHint } from '../components/Hint';
 
 type Status = 'ok' | 'error' | 'off';
 
@@ -46,8 +47,7 @@ const Card: React.FC<{
     <Box id={id} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
       {loading ? <CircularProgress size={28} sx={{ m: 0.25 }} /> : <StatusIcon status={status} />}
       <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 800, fontSize: '1.15rem' }}>{title}</Typography>
-        <Typography variant="body2" color="text.secondary">{purpose}</Typography>
+        <Typography sx={{ fontWeight: 800, fontSize: '1.15rem' }}><TitleWithHint hint={purpose}>{title}</TitleWithHint></Typography>
         {!loading && (
           <>
             <Typography sx={{ fontWeight: 700, mt: 1, color: status === 'ok' ? tokens.herb : status === 'error' ? tokens.chili : 'text.secondary' }}>
@@ -92,8 +92,9 @@ const BrandCard: React.FC = () => {
     <Panel sx={{ scrollMarginTop: 96 }}>
       <Box id="brand" sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         <Box>
-          <Typography sx={{ fontWeight: 800, fontSize: '1.15rem' }}>Название заведения</Typography>
-          <Typography variant="body2" color="text.secondary">На сайте и во вкладке браузера, в описании онлайн-оплаты и в Telegram-боте</Typography>
+          <Typography sx={{ fontWeight: 800, fontSize: '1.15rem' }}>
+            <TitleWithHint hint="На сайте и во вкладке браузера, в описании онлайн-оплаты и в Telegram-боте">Название заведения</TitleWithHint>
+          </Typography>
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 2fr auto' }, gap: 1.5, alignItems: 'start' }}>
           <TextField size="small" label="Название" value={name} onChange={e => setName(e.target.value)} slotProps={{ htmlInput: { maxLength: 60 } }} />
@@ -144,8 +145,9 @@ const IntegrationsPage: React.FC = () => {
   return (
     <Box sx={{ py: { xs: 2, sm: 3 }, maxWidth: 1000, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Box>
-        <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.6rem', sm: '2rem' } }}>Настройка интеграций</Typography>
-        <Typography color="text.secondary">Подключение к онлайн-кассе, государственным системам (ЕГАИС, Честный знак, Меркурий) и ЭДО.</Typography>
+        <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.6rem', sm: '2rem' } }}>
+          <TitleWithHint hint="Подключение к онлайн-кассе, государственным системам (ЕГАИС, Честный знак, Меркурий) и ЭДО.">Настройка интеграций</TitleWithHint>
+        </Typography>
       </Box>
 
       <BrandCard />

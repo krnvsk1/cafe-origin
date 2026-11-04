@@ -1,6 +1,7 @@
 import * as React from 'react';
+import { FieldHint, TitleWithHint } from '../../components/Hint';
 import {
-  Typography, Button, TextField, Switch, FormControlLabel, Alert, CircularProgress, MenuItem,
+  Button, TextField, Switch, FormControlLabel, Alert, CircularProgress, MenuItem,
   Dialog, DialogTitle, DialogContent, DialogActions, Box,
 } from '@mui/material';
 import {
@@ -49,18 +50,14 @@ const FiscalSettingsDialog: React.FC<{ open: boolean; state: FiscalState; onClos
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Онлайн-касса АТОЛ</DialogTitle>
+      <DialogTitle><TitleWithHint hint="На компьютере, к которому подключена касса, должен работать АТОЛ Web Server (входит в драйвер ДТО 10, порт 16732). Сервис отправляет туда чек сразу после оплаты на кассе — чек печатается и уходит в ФН и ОФД. Если касса занята iiko, отключите в iiko печать чеков, иначе чек пробьётся дважды.">Онлайн-касса АТОЛ</TitleWithHint></DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
-        <Typography variant="body2" color="text.secondary">
-          На компьютере, к которому подключена касса, должен работать АТОЛ Web Server (входит в драйвер ДТО 10,
-          порт 16732). Сервис отправляет туда чек сразу после оплаты на кассе — чек печатается и уходит в ФН и ОФД.
-          Если касса занята iiko, отключите в iiko печать чеков, иначе чек пробьётся дважды.
-        </Typography>
         <FormControlLabel control={<Switch checked={form.enabled} onChange={e => set('enabled', e.target.checked)} />} label="Пробивать чеки на кассе" />
         <TextField label="Адрес АТОЛ Web Server" value={form.url} onChange={e => set('url', e.target.value)} placeholder="http://192.168.1.86:16732"
-          helperText="IP компьютера с кассой в локальной сети и порт 16732" />
+          helperText={<FieldHint text="IP компьютера с кассой в локальной сети и порт 16732" />} />
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
-          <TextField select label="Система налогообложения" value={form.taxationType} onChange={e => set('taxationType', e.target.value)}>
+          <TextField select label="Система налогообложения" value={form.taxationType} onChange={e => set('taxationType', e.target.value)}
+            helperText={<FieldHint text="Систему налогообложения и ставку НДС уточните у бухгалтера: они должны совпадать с регистрацией кассы, иначе касса откажет." />}>
             {TAXATION_TYPES.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
           </TextField>
           <TextField select label="НДС" value={form.vat} onChange={e => set('vat', e.target.value)}>
@@ -77,9 +74,6 @@ const FiscalSettingsDialog: React.FC<{ open: boolean; state: FiscalState; onClos
           control={<Switch checked={form.sendToCustomer} onChange={e => set('sendToCustomer', e.target.checked)} />}
           label="Отправлять электронный чек на телефон гостя, если он указан"
         />
-        <Typography variant="caption" color="text.secondary">
-          Систему налогообложения и ставку НДС уточните у бухгалтера: они должны совпадать с регистрацией кассы, иначе касса откажет.
-        </Typography>
         {result && <Alert severity={result.ok ? 'success' : 'error'}>{result.text}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>

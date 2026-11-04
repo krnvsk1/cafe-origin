@@ -1,6 +1,7 @@
 import * as React from 'react';
+import { FieldHint, TitleWithHint } from '../../components/Hint';
 import {
-  Box, Typography, Button, TextField, Switch, FormControlLabel, Alert, CircularProgress,
+  Box, Button, TextField, Switch, FormControlLabel, Alert, CircularProgress,
   Dialog, DialogTitle, DialogContent, DialogActions, InputAdornment, useMediaQuery, useTheme,
 } from '@mui/material';
 import { useQueryClient } from '@tanstack/react-query';
@@ -66,12 +67,8 @@ const MercurySettingsDialog: React.FC<{ open: boolean; state: MercuryState; onCl
 
   return (
     <Dialog open={open} onClose={() => !busy && onClose()} fullScreen={fullScreen} maxWidth="sm" fullWidth>
-      <DialogTitle>Подключение к Меркурию</DialogTitle>
+      <DialogTitle><TitleWithHint hint="Доступ к Ветис.API выдаёт Россельхознадзор по заявке: в письме приходят API-ключ, логин и пароль и issuerId. Логин ВетИС — пользователь Меркурия, от имени которого гасятся ВСД. GUID площадки — в карточке площадки в Цербере.">Подключение к Меркурию</TitleWithHint></DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
-        <Typography variant="body2" color="text.secondary">
-          Доступ к Ветис.API выдаёт Россельхознадзор по заявке: в письме приходят API-ключ, логин и пароль и issuerId.
-          Логин ВетИС — пользователь Меркурия, от имени которого гасятся ВСД. GUID площадки — в карточке площадки в Цербере.
-        </Typography>
         <FormControlLabel control={<Switch checked={f.enabled} onChange={e => setF({ ...f, enabled: e.target.checked })} />} label="Работать с Меркурием" />
         <TextField label="API-ключ" value={f.apiKey} onChange={set('apiKey')} autoComplete="off"
           placeholder={state.hasApiKey ? 'Сохранён — введите, чтобы заменить' : ''} slotProps={{ inputLabel: { shrink: state.hasApiKey || !!f.apiKey } }} />
@@ -80,13 +77,13 @@ const MercurySettingsDialog: React.FC<{ open: boolean; state: MercuryState; onCl
           <TextField label="Пароль API" type="password" value={f.password} onChange={set('password')} autoComplete="new-password"
             placeholder={state.hasPassword ? 'Сохранён' : ''} slotProps={{ inputLabel: { shrink: state.hasPassword || !!f.password } }} />
         </Box>
-        <TextField label="issuerId" value={f.issuerId} onChange={set('issuerId')} helperText="Идентификатор хозяйствующего субъекта из письма о доступе" />
+        <TextField label="issuerId" value={f.issuerId} onChange={set('issuerId')} helperText={<FieldHint text="Идентификатор хозяйствующего субъекта из письма о доступе" />} />
         <TextField label="Логин пользователя ВетИС" value={f.initiatorLogin} onChange={set('initiatorLogin')} placeholder="ivanov_ii_210101" />
         <TextField label="GUID площадки" value={f.enterpriseGuid} onChange={set('enterpriseGuid')} placeholder="7a0c9a4b-…" />
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-          <TextField label="Проверять каждые" type="number" value={f.minutes} onChange={set('minutes')} helperText="0 — только вручную"
+          <TextField label="Проверять каждые" type="number" value={f.minutes} onChange={set('minutes')} helperText={<FieldHint text="0 — только вручную" />}
             slotProps={{ input: { endAdornment: <InputAdornment position="end">мин</InputAdornment> }, htmlInput: { min: 0, max: 1440 } }} />
-          <TextField label="ВСД за последние" type="number" value={f.days} onChange={set('days')} helperText="Не больше 31 дня"
+          <TextField label="ВСД за последние" type="number" value={f.days} onChange={set('days')} helperText={<FieldHint text="Не больше 31 дня" />}
             slotProps={{ input: { endAdornment: <InputAdornment position="end">дн</InputAdornment> }, htmlInput: { min: 1, max: 31 } }} />
         </Box>
         <FormControlLabel control={<Switch checked={f.sandbox} onChange={e => setF({ ...f, sandbox: e.target.checked })} />}

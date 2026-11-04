@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { FieldHint, TitleWithHint } from '../../components/Hint';
 import {
   Box, Typography, Button, TextField, Switch, FormControlLabel, Alert, CircularProgress, Chip,
   Dialog, DialogTitle, DialogContent, IconButton, useMediaQuery, useTheme,
@@ -36,7 +37,7 @@ export const ChzSettings: React.FC<{ state: ChzState; onDone: () => void }> = ({
         label="ИНН организации"
         value={inn}
         onChange={e => setInn(e.target.value.replace(/\D/g, '').slice(0, 12))}
-        helperText="Тот же, что в сертификате КЭП руководителя"
+        helperText={<FieldHint text="Тот же, что в сертификате КЭП руководителя" />}
         slotProps={{ htmlInput: { inputMode: 'numeric' } }}
         sx={{ maxWidth: 320 }}
       />
@@ -46,13 +47,13 @@ export const ChzSettings: React.FC<{ state: ChzState; onDone: () => void }> = ({
           value={fiasId}
           onChange={e => setFiasId(e.target.value.trim())}
           placeholder="0c5b2444-70a0-4932-980c-b4dc0d3f02b5"
-          helperText="Обязателен для пива и воды. ЛК Честного знака → Профиль → Места осуществления деятельности"
+          helperText={<FieldHint text="Обязателен для пива и воды. ЛК Честного знака → Профиль → Места осуществления деятельности" />}
         />
         <TextField
           label="КПП"
           value={kpp}
           onChange={e => setKpp(e.target.value.replace(/\D/g, '').slice(0, 9))}
-          helperText={inn.length === 12 ? 'У ИП нет — оставьте пустым' : 'Для организации'}
+          helperText={<FieldHint text={inn.length === 12 ? 'У ИП нет — оставьте пустым' : 'Для организации'} />}
           slotProps={{ htmlInput: { inputMode: 'numeric' } }}
         />
       </Box>
@@ -74,7 +75,7 @@ export const ChzSettings: React.FC<{ state: ChzState; onDone: () => void }> = ({
       </Box>
       <FormControlLabel
         control={<Switch checked={sandbox} onChange={e => setSandbox(e.target.checked)} />}
-        label={<Box><Typography>Тестовый контур (песочница)</Typography><Typography variant="body2" color="text.secondary">Для проверки без реального вывода кодов</Typography></Box>}
+        label={<TitleWithHint hint="Для проверки без реального вывода кодов"><Typography>Тестовый контур (песочница)</Typography></TitleWithHint>}
         sx={{ alignItems: 'flex-start', '& .MuiSwitch-root': { mt: -0.5 } }}
       />
       <Box sx={{ display: 'flex', gap: 1 }}>
