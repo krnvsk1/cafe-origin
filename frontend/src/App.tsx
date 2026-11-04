@@ -94,7 +94,7 @@ import FloorEditorPage from './pages/FloorEditorPage';
 import FinancePage from './pages/finance/FinancePage';
 import { P, useCan } from './auth/permissions';
 import { apiClient } from './api/client';
-import { useIsFullscreen } from './hooks/useFullscreen';
+import { useIsFullscreen, useIsWidePage } from './hooks/useFullscreen';
 import ControlCenter, { type ControlLink } from './components/ControlCenter';
 
 const queryClient = new QueryClient({
@@ -136,6 +136,7 @@ function App() {
   const { theme: themeMode, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isFullscreen = useIsFullscreen();
+  const isWidePage = useIsWidePage();
   const [authOpen, setAuthOpen] = useState(false);
   const [promoInfo, setPromoInfo] = useState<PromoCodeValidation | null>(null);
   const [pointsDiscount, setPointsDiscount] = useState(0);
@@ -433,7 +434,7 @@ function App() {
             <Container
               maxWidth={false}
               sx={{
-                maxWidth: isFullscreen ? 'none' : 1320,
+                maxWidth: isFullscreen || isWidePage ? 'none' : 1320,
                 pt: isFullscreen ? 2 : { xs: 2, md: 3 },
                 pb: isFullscreen ? 2 : { xs: 12, md: 6 },
                 flex: 1,

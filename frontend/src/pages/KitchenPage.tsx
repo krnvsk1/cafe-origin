@@ -20,7 +20,7 @@ import {
 } from '../utils/sound';
 import { formatScheduled } from '../utils/schedule';
 import FullscreenButton from '../components/FullscreenButton';
-import { useWorkScreen } from '../hooks/useFullscreen';
+import { useWorkScreen, useWidePage, useScreenScale } from '../hooks/useFullscreen';
 import KitchenTechCardDialog from '../components/KitchenTechCardDialog';
 import WeightEditDialog from '../components/WeightEditDialog';
 import { useSetItemWeight } from '../api/waiter';
@@ -258,6 +258,9 @@ const KitchenCard: React.FC<{
 
 const KitchenPage: React.FC = () => {
   useWorkScreen();
+  // На телевизоре — во всю ширину и крупно; раскладка как на экране ~1600 px
+  useWidePage();
+  const scale = useScreenScale(1600);
   const { data: orders, isLoading, error } = useKitchenOrders();
   const invalidate = useInvalidateOnOrderEvent();
   const now = useNow();
@@ -328,7 +331,7 @@ const KitchenPage: React.FC = () => {
   const current = visible.filter(o => !o.isLater);
 
   return (
-    <Box>
+    <Box style={scale > 1 ? { zoom: scale } : undefined}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <Typography variant="h4" fontWeight={700}>{station == null ? 'Кухня' : stations.find(s => s.id === station)?.name}</Typography>
         <Box sx={{ flex: 1, display: 'flex', gap: 1, flexWrap: 'wrap', ml: 1 }}>

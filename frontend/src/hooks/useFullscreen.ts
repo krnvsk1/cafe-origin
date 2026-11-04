@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 /**
  * «Во весь экран» для рабочих экранов (официант, кухня, касса).
@@ -42,6 +42,35 @@ const isFullscreenNow = () => !!document.fullscreenElement || (focus && workScre
 
 /** Развёрнут ли рабочий экран: шапку и подвал приложение прячет (см. App) */
 export const useIsFullscreen = (): boolean => useSyncExternalStore(subscribe, isFullscreenNow, () => false);
+
+let wideScreens = 0;
+const isWideNow = () => wideScreens > 0;
+
+/** Страница на всю ширину экрана (кухня на телевизоре), без ограничения ширины содержимого */
+export const useWidePage = () => {
+  useEffect(() => {
+    wideScreens += 1;
+    emit();
+    return () => { wideScreens -= 1; emit(); };
+  }, []);
+};
+
+export const useIsWidePage = (): boolean => useSyncExternalStore(subscribe, isWideNow, () => false);
+
+/**
+ * Масштаб для больших экранов (телевизор на кухне): всё крупнее, чтобы читалось издалека,
+ * а раскладка — как на экране шириной около baseWidth. На обычных мониторах и планшетах — 1.
+ */
+export const useScreenScale = (baseWidth = 1600, max = 2.5): number => {
+  const read = () => (typeof window === 'undefined' ? 1 : Math.min(max, Math.max(1, window.innerWidth / baseWidth)));
+  const [scale, setScale] = useState(read);
+  useEffect(() => {
+    const onResize = () => setScale(read());
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return scale;
+};
 
 /** Рабочий экран, где можно убрать всё лишнее (официант, кухня, касса) */
 export const useWorkScreen = () => {
