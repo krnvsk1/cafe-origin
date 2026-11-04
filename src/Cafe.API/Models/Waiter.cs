@@ -79,10 +79,19 @@ namespace Cafe.API.Models
         [Column("closed_at")]
         public DateTime? ClosedAt { get; set; }
 
-        /// <summary>cash или card — при закрытии</summary>
+        /// <summary>cash, card или staff (закрыт на сотрудника — без оплаты и без чека ККТ) — при закрытии</summary>
         [MaxLength(20)]
         [Column("payment_method")]
         public string? PaymentMethod { get; set; }
+
+        /// <summary>Сотрудник, на которого закрыт счёт (питание персонала и т.п.) — сумма к удержанию с него</summary>
+        [Column("staff_user_id")]
+        public int? StaffUserId { get; set; }
+
+        /// <summary>Причина закрытия на сотрудника: «Питание», «Домой», «Угощение», своя</summary>
+        [MaxLength(60)]
+        [Column("staff_reason")]
+        public string? StaffReason { get; set; }
 
         [Column("total", TypeName = "numeric(12,2)")]
         public decimal Total { get; set; }
@@ -98,6 +107,14 @@ namespace Cafe.API.Models
         /// <summary>Сумма в напечатанном счёте: дозаказали после печати — счёт надо печатать заново</summary>
         [Column("printed_total", TypeName = "numeric(12,2)")]
         public decimal? PrintedTotal { get; set; }
+    }
+
+    public static class CheckPayments
+    {
+        public const string Cash = "cash";
+        public const string Card = "card";
+        /// <summary>На сотрудника: денег не принимают, чек ККТ не нужен — сумма удерживается с сотрудника</summary>
+        public const string Staff = "staff";
     }
 
     public static class VoidStatuses

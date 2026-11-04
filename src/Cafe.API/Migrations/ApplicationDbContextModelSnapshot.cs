@@ -2617,6 +2617,15 @@ namespace Cafe.API.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("printed_total");
 
+                    b.Property<string>("StaffReason")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("staff_reason");
+
+                    b.Property<int?>("StaffUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("staff_user_id");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)

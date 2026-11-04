@@ -74,6 +74,18 @@ const FiscalSettingsDialog: React.FC<{ open: boolean; state: FiscalState; onClos
           control={<Switch checked={form.sendToCustomer} onChange={e => set('sendToCustomer', e.target.checked)} />}
           label="Отправлять электронный чек на телефон гостя, если он указан"
         />
+        <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 1.5 }}>
+          <FormControlLabel
+            control={<Switch checked={!!form.staffChecks} onChange={e => set('staffChecks', e.target.checked)} />}
+            label={<TitleWithHint hint={'При закрытии счёта появится вариант «На сотрудника»: питание персонала, «себе домой», угощение. Деньги не принимаются, чек в АТОЛ не отправляется, на принтер счетов выходит счёт на сотрудника. Сумма не попадает в выручку и наличные — она видна в «Сменах и счетах» как «к удержанию» по каждому сотруднику.\n\nЕсли сотрудник платит деньгами — закрывайте обычной оплатой: тогда нужен кассовый чек.'}>Закрытие счёта на сотрудника (без оплаты и без чека)</TitleWithHint>}
+          />
+          {form.staffChecks && (
+            <FormControlLabel sx={{ ml: 4, display: 'flex' }}
+              control={<Switch size="small" checked={form.staffChecksManagersOnly ?? true} onChange={e => set('staffChecksManagersOnly', e.target.checked)} />}
+              label="Только менеджер (официант так закрыть не сможет)"
+            />
+          )}
+        </Box>
         {result && <Alert severity={result.ok ? 'success' : 'error'}>{result.text}</Alert>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>

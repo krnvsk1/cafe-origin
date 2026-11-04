@@ -85,6 +85,9 @@ export interface TableCheck {
   openedAt: string;
   closedAt: string | null;
   paymentMethod: string | null;
+  /** Счёт закрыт на сотрудника (без оплаты и без чека) */
+  staffName?: string | null;
+  staffReason?: string | null;
   total: number;
   notServed: number;
   /** Принтер счетов включён в настройках */
@@ -139,9 +142,42 @@ export const useCancelRound = () =>
   useWaiterMutation<{ checkId: number; orderId: number }>(({ checkId, orderId }) =>
     apiClient.post(`/api/waiter/checks/${checkId}/orders/${orderId}/cancel`).then(r => r.data));
 
+export type CheckPayment = 'cash' | 'card' | 'staff';
+
+/** Способ оплаты счёта словами */
+export const payLabel = (m: string | null | undefined) =>
+  m === 'cash' ? 'наличные' : m === 'card' ? 'карта' : m === 'staff' ? 'на сотрудника' : m ?? '';
+
+export interface CloseCheckResult {
+  total: number;
+  change: number | null;
+  fiscal: FiscalResult | null;
+  /** Почему чек в АТОЛ не отправлялся: staff — закрыт на сотрудника, disabled — онлайн-касса выключена */
+  fiscalSkipped?: 'staff' | 'disabled' | null;
+  staff?: string | null;
+  printJobId?: number | null;
+  printError?: string | null;
+}
+
 export const useCloseCheck = () =>
-  useWaiterMutation<{ checkId: number; paymentMethod: 'cash' | 'card'; cashReceived: number | null }, { total: number; change: number | null; fiscal: FiscalResult | null }>(
+  useWaiterMutation<{ checkId: number; paymentMethod: CheckPayment; cashReceived: number | null; staffUserId?: number | null; staffReason?: string | null }, CloseCheckResult>(
     ({ checkId, ...body }) => apiClient.post(`/api/waiter/checks/${checkId}/close`, body).then(r => r.data));
+
+/** Закрытие на сотрудника: включено ли, можно ли мне, кого выбрать */
+export interface StaffChecksInfo {
+  enabled: boolean;
+  allowed: boolean;
+  managersOnly: boolean;
+  staff: { id: number; name: string }[] | null;
+  reasons: string[];
+}
+export const useStaffChecksInfo = (enabled: boolean) =>
+  useQuery<StaffChecksInfo>({
+    queryKey: [KEY, 'staff-checks'],
+    queryFn: () => apiClient.get('/api/waiter/staff-checks').then(r => r.data),
+    enabled,
+    staleTime: 60_000,
+  });
 
 export const useCancelCheck = () =>
   useWaiterMutation<number>(id => apiClient.post(`/api/waiter/checks/${id}/cancel`).then(r => r.data));
@@ -268,6 +304,8 @@ export interface ShiftRow {
   revenue: number;
   cash: number;
   card: number;
+  /** На сотрудников — не выручка, к удержанию */
+  staff?: number;
 }
 
 export interface ShiftDetails {
@@ -278,10 +316,13 @@ export interface ShiftDetails {
   openedBy: string | null;
   closedBy: string | null;
   waiters: { id: number; userId: number; name: string | null; openedAt: string; closedAt: string | null; checks: number; revenue: number }[];
+  /** Закрыто на сотрудников: к удержанию по людям */
+  staff?: { userId: number; name: string; checks: number; total: number }[];
   checks: {
     id: number; table: string | null; label: string | null; waiter: string | null; waiterId: number | null;
     status: 'open' | 'closed' | 'cancelled'; guests: number | null; openedAt: string; closedAt: string | null;
     paymentMethod: string | null; total: number;
+    staffName?: string | null; staffReason?: string | null;
     fiscal: CheckFiscalState | null;
     fiscalReturn: CheckFiscalState | null;
   }[];
@@ -360,7 +401,7 @@ export const useSetItemWeight = () =>
 
 export interface MyChecks {
   shift: { id: number; openedAt: string; closedAt: string | null } | null;
-  summary: { closed: number; revenue: number; cash: number; card: number; open: number };
+  summary: { closed: number; revenue: number; cash: number; card: number; staff?: number; open: number };
   checks: {
     id: number; table: string | null; label: string | null; status: 'open' | 'closed' | 'cancelled'; guests: number | null;
     openedAt: string; closedAt: string | null; paymentMethod: string | null; total: number;

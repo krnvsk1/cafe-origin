@@ -5,7 +5,7 @@ import {
 import { ExpandMore as ExpandIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import {
-  useShiftCurrent, useShifts, useShiftDetails, parseUtc, useUnfinishedReceipts, useRetryReceipt, useReturnCheckFiscal,
+  useShiftCurrent, useShifts, useShiftDetails, parseUtc, useUnfinishedReceipts, useRetryReceipt, useReturnCheckFiscal, payLabel,
   type ShiftRow, type ShiftDetails, type UnfinishedReceipt,
 } from '../api/waiter';
 import { apiError } from '../api/inventory';
@@ -55,7 +55,7 @@ const UnfinishedReceipts: React.FC = () => {
           <Box sx={{ flex: 1, minWidth: 200 }}>
             <Typography sx={{ fontWeight: 700 }}>
               {r.kind === 'sell' ? 'Продажа' : 'Возврат'} · {r.checkId != null ? `стол ${r.table ?? '—'}${r.label ? ` · ${r.label}` : ''}` : `заказ #${r.orderId}`}
-              {' · '}{money(r.total)}{r.paymentMethod ? ` · ${r.paymentMethod === 'cash' ? 'наличные' : 'карта'}` : ''}
+              {' · '}{money(r.total)}{r.paymentMethod ? ` · ${payLabel(r.paymentMethod)}` : ''}
             </Typography>
             <Typography variant="body2" color={r.status === 'processing' ? 'warning.main' : 'error.main'}>
               {parseUtc(r.createdAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {r.error ?? (r.status === 'processing' ? 'касса не ответила' : 'не пробит')}
@@ -102,6 +102,18 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
           ))}
         </Box>
       )}
+      {data.staff && data.staff.length > 0 && (
+        <Box>
+          <Typography variant="overline" color="text.secondary">На сотрудников · к удержанию (не выручка, без чека)</Typography>
+          {data.staff.map(st => (
+            <Box key={st.userId} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', py: 0.25 }}>
+              <Typography sx={{ fontWeight: 700, flex: 1 }}>{st.name}</Typography>
+              <Typography variant="body2" color="text.secondary">{st.checks} сч.</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{money(st.total)}</Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
       <Box>
         <Typography variant="overline" color="text.secondary">Счета</Typography>
         {data.checks.length === 0 && <Typography color="text.secondary">Счетов в эту смену не было</Typography>}
@@ -117,7 +129,9 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                   <Typography sx={{ fontWeight: 700 }} noWrap>Стол {c.table}{c.label ? ` · ${c.label}` : ''}</Typography>
                   <Typography variant="body2" color="text.secondary" noWrap>
                     {c.waiter ?? '—'} · {time(c.openedAt)}{c.closedAt ? `–${time(c.closedAt)}` : ''}
-                    {c.paymentMethod ? ` · ${c.paymentMethod === 'cash' ? 'наличные' : 'карта'}` : ''}
+                    {c.paymentMethod === 'staff'
+                      ? ` · на сотрудника: ${c.staffName ?? '—'}${c.staffReason ? ` (${c.staffReason})` : ''} · в АТОЛ не отправлялся`
+                      : c.paymentMethod ? ` · ${payLabel(c.paymentMethod)}` : ''}
                     {ft && <Box component="span" sx={{ color: sold || returned ? 'text.secondary' : 'error.main' }}> · кассовый чек: {ft}</Box>}
                   </Typography>
                   {note?.id === c.id && <Typography variant="body2" color={note.ok ? 'success.main' : 'error.main'}>{note.text}</Typography>}
@@ -151,7 +165,7 @@ const ShiftCard: React.FC<{ s: ShiftRow; open: boolean; onToggle: () => void }> 
       <Box sx={{ textAlign: 'right' }}>
         <Typography sx={{ fontWeight: 800 }}>{money(s.revenue)}</Typography>
         <Typography variant="body2" color="text.secondary">
-          {s.checks} сч. · нал {money(s.cash)} · карта {money(s.card)}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
+          {s.checks} сч. · нал {money(s.cash)} · карта {money(s.card)}{s.staff ? ` · на сотрудников ${money(s.staff)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
         </Typography>
       </Box>
       <ExpandIcon sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />

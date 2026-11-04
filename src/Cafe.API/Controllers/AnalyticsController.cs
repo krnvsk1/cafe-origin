@@ -51,6 +51,8 @@ namespace Cafe.API.Controllers
             var orders = await _context.Orders.AsNoTracking()
                 .Where(o => o.CreatedAt >= rangeStart && o.CreatedAt < rangeEnd)
                 .Where(o => o.PaymentMethod != "online" || o.PaymentStatus == "paid" || o.PaymentStatus == "refunded")
+                // Закрытые на сотрудника — не выручка (без оплаты, к удержанию с сотрудника)
+                .Where(o => o.PaymentMethod != "staff")
                 .Include(o => o.OrderItems)
                 .ToListAsync();
 

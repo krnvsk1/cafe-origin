@@ -13,9 +13,12 @@ namespace Cafe.API.Services.Printing
     /// <summary>Строка счёта: название (с добавками), количество, цена, сумма</summary>
     public record PrecheckLine(string Name, int Quantity, decimal Price, decimal Amount);
 
+    /// <summary>Счёт закрыт на сотрудника: кто и почему — сумма к удержанию</summary>
+    public record PrecheckStaff(string Name, string Reason);
+
     public record PrecheckData(
         string Brand, string Table, string CheckLabel, string? Waiter, int? Guests,
-        DateTime OpenedUtc, DateTime PrintedUtc, IReadOnlyList<PrecheckLine> Lines, string? Footer);
+        DateTime OpenedUtc, DateTime PrintedUtc, IReadOnlyList<PrecheckLine> Lines, string? Footer, PrecheckStaff? Staff = null);
 
     /// <summary>Очередь печати: сервер готовит документ ESC/POS, программа на кассовом ПК его печатает</summary>
     public class PrintService
@@ -37,12 +40,17 @@ namespace Cafe.API.Services.Printing
         {
             var p = new EscPos(s.Width, s.CodeTable, s.Encoding);
             if (!string.IsNullOrWhiteSpace(d.Brand)) p.Line(d.Brand, EscPos.Align.Center, bold: true, big: true);
-            p.Line("СЧЁТ", EscPos.Align.Center, bold: true);
+            p.Line(d.Staff == null ? "СЧЁТ" : "СЧЁТ НА СОТРУДНИКА", EscPos.Align.Center, bold: true);
             p.Line($"{Cafe.API.Controllers.WaiterController.TableLabel(d.Table)} · {d.CheckLabel}", EscPos.Align.Center);
             p.Separator();
             var msk = d.PrintedUtc.AddHours(3);
             p.Pair(msk.ToString("dd.MM.yyyy HH:mm"), d.Guests is > 0 ? $"Гостей: {d.Guests}" : "");
             if (!string.IsNullOrWhiteSpace(d.Waiter)) p.Line($"Официант: {d.Waiter}");
+            if (d.Staff != null)
+            {
+                p.Line($"Сотрудник: {d.Staff.Name}", bold: true);
+                p.Line($"Причина: {d.Staff.Reason}");
+            }
             p.Separator();
             foreach (var l in d.Lines)
             {
@@ -50,10 +58,16 @@ namespace Cafe.API.Services.Printing
                 p.Pair($"  {l.Quantity} x {Money(l.Price)}", Money(l.Amount));
             }
             p.Separator();
-            p.Pair("ИТОГО", Money(d.Lines.Sum(l => l.Amount)), bold: true);
+            p.Pair(d.Staff == null ? "ИТОГО" : "К УДЕРЖАНИЮ", Money(d.Lines.Sum(l => l.Amount)), bold: true);
             p.Separator('=');
             p.Line("Это не кассовый чек", EscPos.Align.Center);
-            if (!string.IsNullOrWhiteSpace(d.Footer)) p.Line(d.Footer!, EscPos.Align.Center);
+            if (d.Staff != null)
+            {
+                p.Line("Без оплаты — на сотрудника", EscPos.Align.Center);
+                p.Feed();
+                p.Pair("Подпись сотрудника", "________");
+            }
+            else if (!string.IsNullOrWhiteSpace(d.Footer)) p.Line(d.Footer!, EscPos.Align.Center);
             return p.Cut().ToArray();
         }
 

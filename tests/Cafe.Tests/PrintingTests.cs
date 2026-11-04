@@ -40,6 +40,21 @@ namespace Cafe.Tests
         }
 
         [Fact]
+        public void Precheck_ForStaff_ShowsEmployeeAndAmountToWithhold()
+        {
+            var s = new PrintSettings { Width = 48, CodeTable = 17, Encoding = 866, Footer = "Спасибо!" };
+            var data = new PrecheckData("Кафе", "5", "счёт №12", "Никита", null, DateTime.UtcNow, DateTime.UtcNow,
+                new[] { new PrecheckLine("Борщ", 1, 300, 300) }, s.Footer, new PrecheckStaff("Анна Петрова", "Питание персонала"));
+            var text = Text(PrintService.Precheck(s, data));
+            Assert.Contains("НА СОТРУДНИКА", text);
+            Assert.Contains("Сотрудник: Анна Петрова", text);
+            Assert.Contains("Причина: Питание персонала", text);
+            Assert.Contains("К УДЕРЖАНИЮ", text);
+            Assert.Contains("Это не кассовый чек", text);
+            Assert.DoesNotContain("Спасибо!", text);
+        }
+
+        [Fact]
         public void Pair_FitsWidth()
         {
             var p = new EscPos(32, 17, 866).Pair("ИТОГО", "1 450,00");

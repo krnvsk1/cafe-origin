@@ -9,6 +9,10 @@ export interface FiscalSettings {
   paymentObject: string;
   cashierInn: string | null;
   sendToCustomer: boolean;
+  /** Можно закрыть счёт «на сотрудника»: без оплаты и без чека ККТ, сумма к удержанию */
+  staffChecks: boolean;
+  /** Закрывать на сотрудника может только менеджер */
+  staffChecksManagersOnly: boolean;
 }
 
 export interface LayoutLine {

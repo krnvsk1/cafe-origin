@@ -36,11 +36,13 @@ namespace Cafe.API.Controllers
         private readonly PrintService _print;
         private readonly BrandSettingsProvider _brand;
         private readonly FiscalService _fiscal;
+        private readonly FiscalSettingsProvider _fiscalSettings;
 
         public WaiterController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, VoidService voids, ShiftService shifts, ILogger<WaiterController> logger,
-            PrintService print, BrandSettingsProvider brand, FiscalService fiscal)
+            PrintService print, BrandSettingsProvider brand, FiscalService fiscal, FiscalSettingsProvider fiscalSettings)
         {
             _fiscal = fiscal;
+            _fiscalSettings = fiscalSettings;
             _print = print;
             _brand = brand;
             _voids = voids;
@@ -110,10 +112,16 @@ namespace Cafe.API.Controllers
 
         public class CloseRequest
         {
-            /// <summary>cash или card</summary>
+            /// <summary>cash, card или staff (на сотрудника — без оплаты и без чека)</summary>
             public string PaymentMethod { get; set; } = "cash";
             public decimal? CashReceived { get; set; }
+            /// <summary>Для staff: на кого закрыть и почему</summary>
+            public int? StaffUserId { get; set; }
+            public string? StaffReason { get; set; }
         }
+
+        /// <summary>Причины по умолчанию для закрытия на сотрудника</summary>
+        public static readonly string[] StaffReasons = { "Питание персонала", "Себе домой", "Угощение от заведения" };
 
         // ==================== Доступ ====================
 
@@ -344,6 +352,8 @@ namespace Cafe.API.Controllers
                 c.OpenedAt,
                 c.ClosedAt,
                 c.PaymentMethod,
+                staffName = c.StaffUserId == null ? null : (await NamesAsync(new[] { c.StaffUserId })).GetValueOrDefault(c.StaffUserId.Value),
+                c.StaffReason,
                 total = c.Status == CheckStatuses.Closed ? c.Total : active.Sum(l => LineTotal(l.Item)),
                 // Счёт для гостя: можно ли печатать и печатали ли его с текущей суммой
                 printEnabled = (await _print.SettingsAsync()).Enabled,
@@ -530,8 +540,20 @@ namespace Cafe.API.Controllers
         public async Task<IActionResult> Close(int id, [FromBody] CloseRequest r)
         {
             var method = r.PaymentMethod?.Trim().ToLowerInvariant();
-            if (method is not ("cash" or "card")) return BadRequest(new { message = "Выберите способ оплаты" });
-            var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
+            if (method is not (CheckPayments.Cash or CheckPayments.Card or CheckPayments.Staff)) return BadRequest(new { message = "Выберите способ оплаты" });
+            string? staffName = null, staffReason = null;
+            if (method == CheckPayments.Staff)
+            {
+                var fo = await _fiscalSettings.GetAsync();
+                if (!fo.StaffChecks) return BadRequest(new { message = "Закрытие на сотрудника выключено — включите его в «Настройке интеграций» → «Онлайн-касса»" });
+                if (fo.StaffChecksManagersOnly && !await SeesAllAsync()) return StatusCode(403, new { message = "Закрыть счёт на сотрудника может только менеджер" });
+                if (r.StaffUserId is not int staffId || !(await StaffAsync()).TryGetValue(staffId, out staffName))
+                    return BadRequest(new { message = "Выберите сотрудника" });
+                staffReason = r.StaffReason?.Trim();
+                if (string.IsNullOrEmpty(staffReason)) return BadRequest(new { message = "Укажите причину" });
+                if (staffReason.Length > 60) staffReason = staffReason[..60];
+            }
+            var c = await _context.TableChecks.Include(x => x.Table).FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Счёт не найден" });
             if (await DenyAsync(c) is { } deny) return deny;
             if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Счёт уже закрыт" });
@@ -547,6 +569,11 @@ namespace Cafe.API.Controllers
             c.ClosedAt = now;
             c.PaymentMethod = method;
             c.Total = total;
+            if (method == CheckPayments.Staff)
+            {
+                c.StaffUserId = r.StaffUserId;
+                c.StaffReason = staffReason;
+            }
             await _context.SaveChangesAsync();
 
             // Заказ кухни оплачен, когда закрыты все счета, куда попали его блюда
@@ -566,11 +593,32 @@ namespace Cafe.API.Controllers
             await _context.SaveChangesAsync();
             foreach (var o in orders)
                 _events.Publish(new OrderEvent("updated", o.Id, o.UserId, o.Status, null, now));
-            _logger.LogInformation("🍽 Счёт #{CheckId} закрыт: {Total} ₽ ({Method})", c.Id, total, method);
+            _logger.LogInformation("🍽 Счёт #{CheckId} закрыт: {Total} ₽ ({Method}{Staff})", c.Id, total, method,
+                staffName == null ? "" : $": {staffName}, {staffReason}");
+
+            if (method == CheckPayments.Staff)
+            {
+                // Без оплаты — чек ККТ не нужен; на принтер счетов — счёт на сотрудника с суммой к удержанию
+                int? printJobId = null;
+                string? printError = null;
+                var settings = await _print.SettingsAsync();
+                if (settings.Enabled)
+                {
+                    var waiter = (await NamesAsync(new[] { c.WaiterId })).GetValueOrDefault(c.WaiterId ?? 0);
+                    var label = string.IsNullOrWhiteSpace(c.Label) ? $"счёт №{c.Id}" : c.Label!;
+                    var data = new PrecheckData((await _brand.GetAsync()).DisplayName, c.Table!.Name, label, waiter, c.Guests,
+                        c.OpenedAt, now, PrecheckLines(lines), settings.Footer, new PrecheckStaff(staffName!, staffReason!));
+                    var job = await _print.EnqueueAsync("precheck", c.Id, $"На сотрудника: {staffName}", PrintService.Precheck(settings, data), User.GetUserId());
+                    printJobId = job.Id;
+                }
+                else printError = "Принтер счетов не настроен — счёт на сотрудника не напечатан";
+                return Ok(new { c.Id, total, change = (decimal?)null, orderIds, fiscal = (object?)null, fiscalSkipped = "staff", staff = staffName, printJobId, printError });
+            }
 
             // Онлайн-касса включена — сразу пробиваем чек на АТОЛ. Ошибка кассы не мешает закрытию: чек можно повторить
             object? fiscal = null;
-            if (await _fiscal.EnabledAsync())
+            var fiscalEnabled = await _fiscal.EnabledAsync();
+            if (fiscalEnabled)
                 fiscal = await FiscalAsync(c.Id);
             return Ok(new
             {
@@ -578,8 +626,30 @@ namespace Cafe.API.Controllers
                 total,
                 change = method == "cash" && r.CashReceived.HasValue ? r.CashReceived.Value - total : (decimal?)null,
                 orderIds,
-                fiscal
+                fiscal,
+                fiscalSkipped = fiscalEnabled ? null : "disabled"
             });
+        }
+
+        /// <summary>Сотрудники (все, у кого есть роль кроме «гость»): id → имя</summary>
+        private async Task<Dictionary<int, string>> StaffAsync()
+        {
+            var ids = await (from ur in _context.UserRoles
+                             join role in _context.Roles on ur.RoleId equals role.Id
+                             where role.Name != AppRoles.User
+                             select (int?)ur.UserId).Distinct().ToListAsync();
+            return await NamesAsync(ids);
+        }
+
+        // GET: api/waiter/staff-checks — можно ли закрыть счёт на сотрудника, список сотрудников и причин
+        [HttpGet("staff-checks")]
+        [HasPermission(Permissions.Waiter)]
+        public async Task<IActionResult> StaffChecks()
+        {
+            var o = await _fiscalSettings.GetAsync();
+            var allowed = o.StaffChecks && (!o.StaffChecksManagersOnly || await SeesAllAsync());
+            var staff = allowed ? (await StaffAsync()).OrderBy(x => x.Value).Select(x => new { id = x.Key, name = x.Value }).ToList() : null;
+            return Ok(new { enabled = o.StaffChecks, allowed, managersOnly = o.StaffChecksManagersOnly, staff, reasons = StaffReasons });
         }
 
         private async Task<object> FiscalAsync(int checkId)
@@ -803,9 +873,10 @@ namespace Cafe.API.Controllers
                 summary = new
                 {
                     closed = closed.Count,
-                    revenue = closed.Sum(c => c.Total),
+                    revenue = closed.Where(c => c.PaymentMethod != CheckPayments.Staff).Sum(c => c.Total),
                     cash = closed.Where(c => c.PaymentMethod == "cash").Sum(c => c.Total),
                     card = closed.Where(c => c.PaymentMethod == "card").Sum(c => c.Total),
+                    staff = closed.Where(c => c.PaymentMethod == CheckPayments.Staff).Sum(c => c.Total),
                     open = openIds.Count,
                 },
                 checks = checks.Select(c => new

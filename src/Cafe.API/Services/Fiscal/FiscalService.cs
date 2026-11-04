@@ -65,6 +65,7 @@ namespace Cafe.API.Services.Fiscal
             var check = await _context.TableChecks.AsNoTracking().FirstOrDefaultAsync(c => c.Id == checkId, ct)
                         ?? throw new FiscalException("Счёт не найден");
             if (check.Status != CheckStatuses.Closed) throw new FiscalException("Чек пробивается после оплаты счёта");
+            if (check.PaymentMethod == CheckPayments.Staff) throw new FiscalException("Счёт закрыт на сотрудника без оплаты — кассовый чек не нужен");
             if (check.PaymentMethod is not ("cash" or "card")) throw new FiscalException("Не указан способ оплаты счёта");
             if (check.Total <= 0) throw new FiscalException("Сумма счёта — 0 ₽, чек не нужен");
 

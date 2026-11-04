@@ -225,9 +225,10 @@ namespace Cafe.API.Controllers
                     waiters = waiters.Where(w => w.VenueShiftId == s.Id).Select(w => w.UserId).Distinct().Count(),
                     checks = cs.Count,
                     openChecks = cs.Count(c => c.Status == CheckStatuses.Open),
-                    revenue = closed.Sum(c => c.Total),
-                    cash = closed.Where(c => c.PaymentMethod == "cash").Sum(c => c.Total),
-                    card = closed.Where(c => c.PaymentMethod == "card").Sum(c => c.Total),
+                    revenue = closed.Where(c => c.PaymentMethod != CheckPayments.Staff).Sum(c => c.Total),
+                    cash = closed.Where(c => c.PaymentMethod == CheckPayments.Cash).Sum(c => c.Total),
+                    card = closed.Where(c => c.PaymentMethod == CheckPayments.Card).Sum(c => c.Total),
+                    staff = closed.Where(c => c.PaymentMethod == CheckPayments.Staff).Sum(c => c.Total),
                 };
             }));
         }
@@ -242,7 +243,9 @@ namespace Cafe.API.Controllers
             var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table).Where(c => c.VenueShiftId == id).OrderBy(c => c.OpenedAt).ToListAsync();
             var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == id).OrderBy(w => w.OpenedAt).ToListAsync();
             var names = await WaiterController.StaffNamesAsync(_context,
-                waiters.Select(w => (int?)w.UserId).Concat(checks.Select(c => c.WaiterId)).Append(s.OpenedByUserId).Append(s.ClosedByUserId));
+                waiters.Select(w => (int?)w.UserId).Concat(checks.Select(c => c.WaiterId)).Concat(checks.Select(c => c.StaffUserId))
+                    .Append(s.OpenedByUserId).Append(s.ClosedByUserId));
+            var staffChecks = checks.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff).ToList();
             var openTotals = await OpenTotalsAsync(checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList());
             var ids = checks.Select(c => (int?)c.Id).ToList();
             var receipts = await _context.FiscalReceipts.AsNoTracking().Where(r => ids.Contains(r.CheckId)).OrderBy(r => r.Id).ToListAsync();
@@ -273,9 +276,17 @@ namespace Cafe.API.Controllers
                         w.OpenedAt,
                         w.ClosedAt,
                         checks = mine.Count,
-                        revenue = mine.Where(c => c.Status == CheckStatuses.Closed).Sum(c => c.Total),
+                        revenue = mine.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff).Sum(c => c.Total),
                     };
                 }),
+                // На сотрудников: без оплаты и без чека — суммы к удержанию по людям
+                staff = staffChecks.GroupBy(c => c.StaffUserId ?? 0).Select(g => new
+                {
+                    userId = g.Key,
+                    name = names.GetValueOrDefault(g.Key) ?? "—",
+                    checks = g.Count(),
+                    total = g.Sum(c => c.Total),
+                }).OrderByDescending(x => x.total),
                 checks = checks.Select(c => new
                 {
                     c.Id,
@@ -288,6 +299,8 @@ namespace Cafe.API.Controllers
                     c.OpenedAt,
                     c.ClosedAt,
                     c.PaymentMethod,
+                    staffName = c.StaffUserId == null ? null : names.GetValueOrDefault(c.StaffUserId.Value),
+                    c.StaffReason,
                     total = Total(c),
                     fiscal = FiscalOf(c.Id, FiscalKinds.Sell),
                     fiscalReturn = FiscalOf(c.Id, FiscalKinds.Return),
