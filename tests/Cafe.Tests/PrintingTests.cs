@@ -55,6 +55,18 @@ namespace Cafe.Tests
             Assert.Contains("$Token = 'abc123'", script);
             Assert.Contains("/api/print-agent/jobs", script);
         }
+
+        [Fact]
+        public void AgentScript_ParamIsFirstStatement_AndKnowsDriverMode()
+        {
+            var script = PrintAgentScript.Build("https://cafe.example", "t");
+            // В PowerShell param() должен идти первым — до него только комментарии и пустые строки
+            var first = script.Split('\n').Select(l => l.Trim()).First(l => l.Length > 0 && !l.StartsWith('#'));
+            Assert.StartsWith("param(", first);
+            Assert.Contains("atolDriverBase", script);
+            Assert.Contains("/api/v2/requests", script);
+            Assert.Contains("AddIn.Fptr10", script);
+        }
     
         [Fact]
         public async Task NetworkSend_DeliversBytesToPort9100Style()

@@ -21,6 +21,11 @@ namespace Cafe.API.Services.Printing
         /// сам он до устройств в сети кафе не достаёт, а программа на ПК — достаёт.
         /// </summary>
         public bool RelayDevices { get; set; }
+        /// <summary>
+        /// Касса — напрямую через драйвер ККТ 10 на кассовом ПК (как у Interpos), без АТОЛ Web Server:
+        /// программа связи сама выполняет задания кассы. Работает вместе с RelayDevices.
+        /// </summary>
+        public bool AtolViaDriver { get; set; }
         /// <summary>IP принтера в сети (режим network)</summary>
         public string? Host { get; set; }
         public int Port { get; set; } = 9100;

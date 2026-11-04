@@ -249,7 +249,7 @@ const IntegrationsPage: React.FC = () => {
           : !needsAgent ? `Принтер по сети · ${printing?.host}:${printing?.port}`
           : printerOnline ? `Программа печати на связи${printing?.agentHost ? ` · ${printing.agentHost}` : ''}` : 'Программа печати на кассовом ПК не запущена'}
         details={printing?.enabled || printing?.relayDevices ? [
-          printing.relayDevices && 'Касса АТОЛ и УТМ ЕГАИС — через программу на кассовом ПК',
+          printing.relayDevices && `Касса АТОЛ и УТМ ЕГАИС — через программу на кассовом ПК${printing.atolViaDriver ? ' (касса — через драйвер ККТ 10)' : ''}`,
           printing.enabled && (printing.mode === 'agent' ? `Принтер: ${printing.printerName} · ${printing.width} символов в строке` : `Принтер в сети: ${printing.host}:${printing.port} · ${printing.width} символов в строке`),
           lastPrint && `Последняя печать: ${lastPrint.title} — ${lastPrint.status === 'done' ? 'напечатано' : lastPrint.status === 'error' ? 'ошибка' : 'в очереди'} (${fmtDateTime(lastPrint.createdAt)})`,
         ] : undefined}

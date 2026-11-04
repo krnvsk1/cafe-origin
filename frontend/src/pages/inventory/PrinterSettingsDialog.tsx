@@ -23,6 +23,7 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
   const [enabled, setEnabled] = React.useState(state.enabled);
   const [mode, setMode] = React.useState<PrintingState['mode']>(state.mode ?? 'agent');
   const [relay, setRelay] = React.useState(!!state.relayDevices);
+  const [viaDriver, setViaDriver] = React.useState(!!state.atolViaDriver);
   const [host, setHost] = React.useState(state.host ?? '');
   const [port, setPort] = React.useState(String(state.port ?? 9100));
   const [printerName, setPrinterName] = React.useState(state.printerName);
@@ -36,6 +37,7 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
     setEnabled(state.enabled);
     setMode(state.mode ?? 'agent');
     setRelay(!!state.relayDevices);
+    setViaDriver(!!state.atolViaDriver);
     setHost(state.host ?? '');
     setPort(String(state.port ?? 9100));
     setPrinterName(state.printerName);
@@ -47,7 +49,7 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
   }, [open]);
 
   const cp = CODE_PAGES.find(c => c.key === codePage) ?? CODE_PAGES[0];
-  const input = () => ({ enabled, mode, relayDevices: relay, host: host.trim() || null, port: Number(port) || 9100, printerName: printerName.trim(), width: Number(width) || 48, codeTable: cp.codeTable, encoding: cp.encoding, footer: footer.trim() || null });
+  const input = () => ({ enabled, mode, relayDevices: relay, atolViaDriver: relay && viaDriver, host: host.trim() || null, port: Number(port) || 9100, printerName: printerName.trim(), width: Number(width) || 48, codeTable: cp.codeTable, encoding: cp.encoding, footer: footer.trim() || null });
 
   const handleSave = async (thenTest = false) => {
     setMsg(null);
@@ -105,6 +107,15 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
               Адреса в настройках кассы и ЕГАИС указывайте так, как их видит кассовый ПК: обычно <b>http://127.0.0.1:16732</b> для АТОЛ
               и <b>http://127.0.0.1:8080</b> для УТМ. Включайте, когда сервер в интернете; пока сервер в сети кафе — можно не включать.
             </Typography>}>Касса АТОЛ и УТМ ЕГАИС — через эту программу</TitleWithHint>} />
+          {relay && (
+            <FormControlLabel sx={{ mb: 1, ml: 2 }} control={<Switch checked={viaDriver} onChange={e => setViaDriver(e.target.checked)} />}
+              label={<TitleWithHint hint={<Typography variant="body2">
+                Программа на кассовом ПК сама работает с драйвером ККТ АТОЛ 10 — как Interpos, без АТОЛ Web Server.
+                После включения скачайте программу заново и запустите. Подключение к кассе (модель и порт, как в Interpos) задаётся
+                ярлыком «Cafe — настройка кассы» на рабочем столе. Пока Interpos держит кассу, наш сервис может видеть её занятой —
+                чеки должна пробивать одна программа.
+              </Typography>}>Касса — через драйвер ККТ 10 на этом ПК (без Web Server)</TitleWithHint>} />
+          )}
           <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
             <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => downloadPrintAgent().catch(e => setMsg({ ok: false, text: apiError(e) }))}>
               Скачать программу

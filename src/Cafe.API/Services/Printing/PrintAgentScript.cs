@@ -15,8 +15,24 @@ namespace Cafe.API.Services.Printing
 # Программа связи Cafe для кассового ПК: печать счетов на принтер и связь сервера с кассой АТОЛ и УТМ ЕГАИС.
 # Запуск: правой кнопкой -> «Выполнить с помощью PowerShell». Окно можно свернуть, но не закрывать.
 # При первом запуске программа добавляется в автозагрузку Windows.
+# Касса «через драйвер ККТ 10»: настройка подключения к кассе — ярлык «Cafe — настройка кассы» на рабочем столе (или запуск с -AtolSetup).
+param([switch]$AtolSetup)
 $Base  = '__BASE__'
 $Token = '__TOKEN__'
+
+# Драйвер ККТ АТОЛ 10 часто 32-битный: его объект виден только из 32-битного PowerShell — перезапускаемся в нём
+if ([Environment]::Is64BitProcess -and -not $env:CAFE_AGENT_32 -and $PSCommandPath) {
+    $has64 = $true
+    try { $probe = New-Object -ComObject AddIn.Fptr10; [void][Runtime.InteropServices.Marshal]::ReleaseComObject($probe) } catch { $has64 = $false }
+    $ps32 = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not $has64 -and (Test-Path $ps32)) {
+        $env:CAFE_AGENT_32 = '1'
+        $args32 = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+        if ($AtolSetup) { $args32 += ' -AtolSetup' }
+        Start-Process -FilePath $ps32 -ArgumentList $args32
+        exit
+    }
+}
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Host.UI.RawUI.WindowTitle = 'Cafe: связь с кассовым ПК'
@@ -102,6 +118,104 @@ public static class CafeHttp {
 }
 '@
 
+# ---------- Касса через драйвер ККТ 10 (без АТОЛ Web Server) ----------
+# Программа сама выполняет задания кассы в том же формате JSON, что и АТОЛ Web Server, и хранит их итог
+# в atol-results.json рядом с собой — чтобы после перезапуска сервер узнал судьбу чека и не пробил его второй раз.
+$CafeDir = if ($PSCommandPath) { Split-Path $PSCommandPath } else { (Get-Location).Path }
+$AtolSettingsFile = Join-Path $CafeDir 'atol-settings.json'
+$AtolResultsFile = Join-Path $CafeDir 'atol-results.json'
+$script:Fptr = $null
+$script:AtolResults = New-Object System.Collections.Specialized.OrderedDictionary
+if (Test-Path $AtolResultsFile) {
+    try { (Get-Content $AtolResultsFile -Raw -Encoding UTF8 | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $script:AtolResults[$_.Name] = [string]$_.Value } } catch { }
+}
+
+function Get-Fptr {
+    if ($script:Fptr) { return $script:Fptr }
+    try { $f = New-Object -ComObject AddIn.Fptr10 }
+    catch { throw "Драйвер ККТ 10 не найден ($([IntPtr]::Size * 8)-битный PowerShell): $($_.Exception.Message)" }
+    if ($null -eq $f.LIBFPTR_PARAM_JSON_DATA) { throw 'В этой версии драйвера ККТ нет JSON-заданий — обновите драйвер ККТ 10' }
+    if (Test-Path $AtolSettingsFile) { [void]$f.setSettings((Get-Content $AtolSettingsFile -Raw -Encoding UTF8)) }
+    $script:Fptr = $f
+    return $f
+}
+
+function AtolItem([int]$code, [string]$desc, [string]$raw) {
+    $json = 'null'
+    if ($raw) { try { [void]($raw | ConvertFrom-Json); $json = $raw } catch { } }
+    return '{"status":"ready","errorCode":' + $code + ',"errorDescription":' + (ConvertTo-Json $desc) + ',"result":' + $json + '}'
+}
+
+function Invoke-AtolTask([string]$taskJson) {
+    $f = Get-Fptr
+    if ($f.open() -ne 0) { return (AtolItem ([int]$f.errorCode()) ("Нет связи с кассой: " + $f.errorDescription()) '') }
+    try {
+        [void]$f.setParam($f.LIBFPTR_PARAM_JSON_DATA, $taskJson)
+        [void]$f.processJson()
+        return (AtolItem ([int]$f.errorCode()) ([string]$f.errorDescription()) ([string]$f.getParamString($f.LIBFPTR_PARAM_JSON_DATA)))
+    } finally { [void]$f.close() }
+}
+
+function Save-AtolResults {
+    while ($script:AtolResults.Count -gt 300) { $script:AtolResults.RemoveAt(0) }
+    try { $script:AtolResults | ConvertTo-Json -Compress | Set-Content -Path $AtolResultsFile -Encoding UTF8 } catch { }
+}
+
+function AtolReply([int]$status, [string]$text) {
+    $x = New-Object CafeHttpResult
+    $x.Status = $status
+    $x.ContentType = 'application/json; charset=utf-8'
+    $x.Body = [Text.Encoding]::UTF8.GetBytes($text)
+    return $x
+}
+
+# Те же адреса, что у АТОЛ Web Server: POST /api/v2/requests и GET /api/v2/requests/{uuid}
+function Invoke-AtolDriver([string]$method, [string]$path, [byte[]]$body) {
+    if ($method -eq 'POST' -and $path -eq '/api/v2/requests') {
+        $req = [Text.Encoding]::UTF8.GetString($body) | ConvertFrom-Json
+        $uuid = [string]$req.uuid
+        if ($script:AtolResults.Contains($uuid)) { return (AtolReply 409 '{"error":{"description":"Задание уже выполнено"}}') }
+        $items = @()
+        foreach ($t in @($req.request)) { $items += (Invoke-AtolTask ($t | ConvertTo-Json -Depth 30 -Compress)) }
+        $script:AtolResults[$uuid] = '{"results":[' + ($items -join ',') + ']}'
+        Save-AtolResults
+        return (AtolReply 201 '{}')
+    }
+    if ($method -eq 'GET' -and $path -match '^/api/v2/requests/([^/?]+)') {
+        $u = [Uri]::UnescapeDataString($Matches[1])
+        if ($script:AtolResults.Contains($u)) { return (AtolReply 200 ([string]$script:AtolResults[$u])) }
+        return (AtolReply 404 '{"error":{"description":"Касса не знает такого задания"}}')
+    }
+    return (AtolReply 404 '{"error":{"description":"Неизвестный запрос к кассе"}}')
+}
+
+# Настройка подключения к кассе (окно драйвера): выберите ту же модель и порт, что у Interpos
+if ($AtolSetup) {
+    try {
+        $f = Get-Fptr
+        [void]$f.showProperties($f.LIBFPTR_GUI_PARENT_NATIVE, 0)
+        $settings = [string]$f.getSettings()
+        if ($settings) { Set-Content -Path $AtolSettingsFile -Value $settings -Encoding UTF8; Write-Host 'Настройки кассы сохранены.' }
+    } catch { Write-Host "Не удалось открыть настройки драйвера ККТ: $($_.Exception.Message)" }
+    Read-Host 'Нажмите Enter, чтобы закрыть'
+    exit
+}
+
+# Ярлык «Cafe — настройка кассы» на рабочем столе
+try {
+    $desk = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Cafe - настройка кассы.lnk'
+    if (-not (Test-Path $desk) -and $PSCommandPath) {
+        $ps = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
+        if (-not (Test-Path $ps)) { $ps = Join-Path $PSHOME 'powershell.exe' }
+        $sh = New-Object -ComObject WScript.Shell
+        $l = $sh.CreateShortcut($desk)
+        $l.TargetPath = $ps
+        $l.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -AtolSetup"
+        $l.WorkingDirectory = Split-Path $PSCommandPath
+        $l.Save()
+    }
+} catch { }
+
 # Автозагрузка: ярлык в папке «Автозагрузка» текущего пользователя
 try {
     $startup = [Environment]::GetFolderPath('Startup')
@@ -131,7 +245,13 @@ while ($true) {
                     $q = $j.payload | ConvertFrom-Json
                     $body = $null
                     if ($q.body) { $body = [Convert]::FromBase64String($q.body) }
-                    $resp = [CafeHttp]::Send($q.method, $q.url, $q.contentType, $body)
+                    $atolBase = [string]$r.atolDriverBase
+                    if ($atolBase -and $q.url.StartsWith($atolBase, [StringComparison]::OrdinalIgnoreCase)) {
+                        # Касса через драйвер ККТ 10 — без АТОЛ Web Server
+                        $resp = Invoke-AtolDriver $q.method $q.url.Substring($atolBase.Length) $body
+                    } else {
+                        $resp = [CafeHttp]::Send($q.method, $q.url, $q.contentType, $body)
+                    }
                     $res = @{ ok = $true; status = $resp.Status; contentType = $resp.ContentType; body = [Convert]::ToBase64String($resp.Body) }
                 } else {
                     $data = [Convert]::FromBase64String($j.payload)

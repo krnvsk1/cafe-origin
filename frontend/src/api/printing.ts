@@ -8,6 +8,8 @@ export interface PrintingState {
   mode: 'agent' | 'agent-lan' | 'network';
   /** Касса АТОЛ и УТМ ЕГАИС — через программу на кассовом ПК (сервер в интернете) */
   relayDevices: boolean;
+  /** Касса через драйвер ККТ 10 на кассовом ПК (без АТОЛ Web Server) */
+  atolViaDriver: boolean;
   host: string | null;
   port: number;
   printerName: string;
@@ -20,7 +22,7 @@ export interface PrintingState {
   recent: { id: number; kind: string; title: string; status: 'pending' | 'taken' | 'done' | 'error'; error: string | null; createdAt: string; doneAt: string | null }[];
 }
 
-export type PrintingInput = Pick<PrintingState, 'enabled' | 'mode' | 'relayDevices' | 'host' | 'port' | 'printerName' | 'width' | 'codeTable' | 'encoding' | 'footer'>;
+export type PrintingInput = Pick<PrintingState, 'enabled' | 'mode' | 'relayDevices' | 'atolViaDriver' | 'host' | 'port' | 'printerName' | 'width' | 'codeTable' | 'encoding' | 'footer'>;
 
 const KEY = ['printing'];
 

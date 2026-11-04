@@ -23,12 +23,15 @@ namespace Cafe.API.Controllers
         private readonly ApplicationDbContext _context;
         private readonly PrintSettingsProvider _settings;
         private readonly PrintService _print;
+        private readonly Cafe.API.Services.Fiscal.FiscalSettingsProvider _fiscal;
 
-        public PrintAgentController(ApplicationDbContext context, PrintSettingsProvider settings, PrintService print)
+        public PrintAgentController(ApplicationDbContext context, PrintSettingsProvider settings, PrintService print,
+            Cafe.API.Services.Fiscal.FiscalSettingsProvider fiscal)
         {
             _context = context;
             _settings = settings;
             _print = print;
+            _fiscal = fiscal;
         }
 
         private async Task<PrintSettings?> AuthAsync()
@@ -70,19 +73,25 @@ namespace Cafe.API.Controllers
                         j.TakenAt = DateTime.UtcNow;
                     }
                     await _context.SaveChangesAsync(ct);
-                    return Ok(AgentReply(s, jobs));
+                    return Ok(AgentReply(s, jobs, await AtolBaseAsync(s)));
                 }
                 if (DateTime.UtcNow >= deadline || ct.IsCancellationRequested) break;
                 // Запросы к кассе ждут ответа — забираем их почти сразу
                 try { await Task.Delay(250, ct); } catch (TaskCanceledException) { break; }
                 PrintSettingsProvider.AgentSeenAt = DateTime.UtcNow;
             }
-            return Ok(AgentReply(s, new List<PrintJob>()));
+            return Ok(AgentReply(s, new List<PrintJob>(), await AtolBaseAsync(s)));
         }
 
-        private static object AgentReply(PrintSettings s, List<PrintJob> jobs) => new
+        /// <summary>Адрес кассы из настроек — запросы на него программа выполняет через драйвер, если касса «через драйвер»</summary>
+        private async Task<string?> AtolBaseAsync(PrintSettings s) =>
+            s.RelayDevices && s.AtolViaDriver ? (await _fiscal.GetAsync()).Url.Trim().TrimEnd('/') : null;
+
+        private static object AgentReply(PrintSettings s, List<PrintJob> jobs, string? atolDriverBase) => new
         {
             printer = s.PrinterName,
+            // Касса через драйвер ККТ 10: запросы к этому адресу программа выполняет сама, без АТОЛ Web Server
+            atolDriverBase,
             // Принтер в сети кафе: программа печатает на его IP
             printerHost = s.Mode == "agent-lan" ? s.Host : null,
             printerPort = s.Port,
@@ -140,6 +149,7 @@ namespace Cafe.API.Controllers
             public bool Enabled { get; set; }
             public string Mode { get; set; } = "agent";
             public bool RelayDevices { get; set; }
+            public bool AtolViaDriver { get; set; }
             public string? Host { get; set; }
             public int Port { get; set; } = 9100;
             public string PrinterName { get; set; } = string.Empty;
@@ -156,7 +166,7 @@ namespace Cafe.API.Controllers
                 .Select(j => new { j.Id, j.Kind, j.Title, j.Status, j.Error, j.CreatedAt, j.DoneAt }).ToListAsync();
             return new
             {
-                s.Enabled, s.Mode, s.RelayDevices, s.Host, s.Port, s.PrinterName, s.Width, s.CodeTable, s.Encoding, s.Footer,
+                s.Enabled, s.Mode, s.RelayDevices, s.AtolViaDriver, s.Host, s.Port, s.PrinterName, s.Width, s.CodeTable, s.Encoding, s.Footer,
                 agentSeenAt = PrintSettingsProvider.AgentSeenAt,
                 agentHost = PrintSettingsProvider.AgentHost,
                 recent
@@ -185,6 +195,7 @@ namespace Cafe.API.Controllers
                 Enabled = r.Enabled,
                 Mode = r.Mode,
                 RelayDevices = r.RelayDevices,
+                AtolViaDriver = r.AtolViaDriver,
                 Host = string.IsNullOrWhiteSpace(r.Host) ? null : r.Host.Trim(),
                 Port = r.Port,
                 PrinterName = string.IsNullOrWhiteSpace(r.PrinterName) ? s.PrinterName : r.PrinterName.Trim(),
