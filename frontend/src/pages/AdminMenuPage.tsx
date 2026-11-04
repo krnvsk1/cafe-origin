@@ -7,9 +7,7 @@ import {
   Typography,
   Box,
   Button,
-  Paper,
   IconButton,
-  Chip,
   Switch,
   Dialog,
   DialogTitle,
@@ -26,34 +24,21 @@ import {
   Tab,
   Tabs,
   Grid2 as Grid,
-  Card,
-  CardContent,
-  Divider,
-  List,
-  ListItem,
-  Collapse,
-  alpha,
-  useTheme,
-  Tooltip,
   CircularProgress,
   InputAdornment,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import {
-  Edit as EditIcon,
-  Delete as DeleteIcon,
   Add as AddIcon,
-  Category as CategoryIcon,
   Fastfood as FastfoodIcon,
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  Link as LinkIcon,
-  FiberManualRecord as DotIcon,
   Search as SearchIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { useDishes, useDeleteDish, useUpdateDishAvailability, useUpdateDishOrder } from '../api/hooks';
+import MenuDishRow from '../components/MenuDishRow';
 import MenuSectionsBoard, { buildSections, toReorderItems, type MenuSection } from '../components/MenuSectionsBoard';
-import { KitchenStationSelect, KitchenStationsButton } from '../components/KitchenStationControls';
+import { KitchenStationsButton } from '../components/KitchenStationControls';
 import { useKitchenStations } from '../api/staff';
 import { 
   useAddonCategories, 
@@ -82,13 +67,12 @@ function TabPanel(props: TabPanelProps) {
       hidden={value !== index}
       {...other}
     >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ py: 2 }}>{children}</Box>}
     </div>
   );
 }
 
 const AdminMenuPage: React.FC = () => {
-  const theme = useTheme();
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
   const [expandedCategory, setExpandedCategory] = useState<number | null>(null);
@@ -122,7 +106,6 @@ const AdminMenuPage: React.FC = () => {
 
   // Хуки для данных
   const { data: dishes = [] } = useDishes();
-  const [expandedParent, setExpandedParent] = useState<number | null>(null);
 
   // Разделяем на родителей и дочерние
   const parents = useMemo(() => 
@@ -134,7 +117,6 @@ const AdminMenuPage: React.FC = () => {
 
   // Фильтры и поиск: по названию, разделу, наличию, кухне
   const [search, setSearch] = useState('');
-  const [section, setSection] = useState('all');
   const [stock, setStock] = useState<'all' | 'on' | 'off'>('all');
   const [station, setStation] = useState<'all' | number>('all');
   const q = search.trim().toLowerCase();
@@ -142,12 +124,10 @@ const AdminMenuPage: React.FC = () => {
   const [movedSections, setMovedSections] = useState<MenuSection[] | null>(null);
   React.useEffect(() => { setMovedSections(null); }, [dishes]);
   const allSections = useMemo(() => movedSections ?? buildSections(parents), [movedSections, parents]);
-  const sections = useMemo(() => allSections.map(s => s.name).filter(n => n !== ''), [allSections]);
   const shownParents = useMemo(() => parents.filter(p => {
     const kids = dishes.filter(s => s.parentId === p.id);
     const items = kids.length ? kids : [p];
     if (q && ![p, ...kids].some(x => x.name.toLowerCase().includes(q) || (x.description ?? '').toLowerCase().includes(q))) return false;
-    if (section !== 'all' && (section === '' ? !!p.category : p.category !== section)) return false;
     if (stock === 'on' && !items.some(x => x.isAvailable)) return false;
     if (stock === 'off' && items.every(x => x.isAvailable)) return false;
     if (station !== 'all') {
@@ -156,17 +136,22 @@ const AdminMenuPage: React.FC = () => {
       if (![p, ...kids].some(x => of(x) === station)) return false;
     }
     return true;
-  }), [parents, dishes, q, section, stock, station, stations]);
+  }), [parents, dishes, q, stock, station, stations]);
   const shownCategories = useMemo(() => !q ? categories : categories
     .map(c => (c.name.toLowerCase().includes(q) ? c : { ...c, addons: c.addons.filter(a => a.name.toLowerCase().includes(q)) }))
     .filter(c => c.name.toLowerCase().includes(q) || c.addons.length > 0), [categories, q]);
-  const filtered = q !== '' || section !== 'all' || stock !== 'all' || station !== 'all';
+  const filtered = q !== '' || stock !== 'all' || station !== 'all';
+  // Блюда, у которых ни один вариант не продаётся
+  const offCount = useMemo(() => parents.filter(p => {
+    const kids = dishes.filter(d => d.parentId === p.id);
+    return kids.length > 0 && kids.every(k => !k.isAvailable);
+  }).length, [parents, dishes]);
   const boardSections = useMemo(() => {
     if (!filtered) return allSections;
     const shown = new Set(shownParents.map(p => p.id));
     return allSections.map(s => ({ ...s, cards: s.cards.filter(c => shown.has(c.id)) })).filter(s => s.cards.length > 0);
   }, [filtered, allSections, shownParents]);
-  const resetFilters = () => { setSearch(''); setSection('all'); setStock('all'); setStation('all'); };
+  const resetFilters = () => { setSearch(''); setStock('all'); setStation('all'); };
   
   // Мутации
   const deleteProduct = useDeleteDish();
@@ -311,343 +296,64 @@ const AdminMenuPage: React.FC = () => {
     setExpandedCategory(expandedCategory === categoryId ? null : categoryId);
   };
 
-  const handleToggleParent = (parentId: number) => {
-    setExpandedParent(expandedParent === parentId ? null : parentId);
-  };
-
-  // Массовое переключение доступности всех детей родителя
-  const handleToggleAllChildren = (parentId: number, isAvailable: boolean) => {
-    dishes
-      .filter(s => s.parentId === parentId)
-      .forEach(child => {
-        updateAvailability.mutate({ id: child.id, isAvailable });
-      });
-  };
-
-  // Карточка товара в разделе: ручка переноса, варианты по раскрытию
-  const renderCard = (parent: Dish, dragHandle: React.ReactNode) => {
-              const children = dishes.filter(s => s.parentId === parent.id);
-              const isExpanded = expandedParent === parent.id;
-              const availableCount = children.filter(c => c.isAvailable).length;
-              const minPrice = children.length > 0
-                ? Math.min(...children.map(c => c.price))
-                : parent.price;
-              const maxPrice = children.length > 0
-                ? Math.max(...children.map(c => c.price))
-                : parent.price;
-
-              return (
-                  <Card
-                    variant="outlined"
-                    sx={{
-                      borderRadius: 3,
-                      border: '1px solid',
-                      borderColor: isExpanded
-                        ? alpha(theme.palette.primary.main, 0.5)
-                        : 'divider',
-                      transition: 'all 0.2s ease',
-                      '&:hover': {
-                        borderColor: alpha(theme.palette.primary.main, 0.3),
-                      }
-                    }}
-                  >
-                    {/* Шапка карточки родителя */}
-                    <CardContent sx={{ pb: '12px !important' }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}>
-                          {dragHandle}
-                          <IconButton
-                            size="small"
-                            onClick={() => handleToggleParent(parent.id)}
-                            sx={{
-                              bgcolor: alpha(theme.palette.primary.main, 0.08),
-                              '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.15) }
-                            }}
-                          >
-                            {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                          </IconButton>
-                          <Box sx={{ minWidth: 0, flex: 1 }}>
-                            <Typography variant="h6" fontWeight={700} noWrap>
-                              {parent.name}
-                            </Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                              <Chip
-                                label="Карточка"
-                                size="small"
-                                variant="filled"
-                                color="primary"
-                                sx={{ height: 22, fontSize: '0.7rem' }}
-                              />
-                              <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                                <Box
-                                  component="span"
-                                  sx={{
-                                    minWidth: 20,
-                                    height: 20,
-                                    px: 0.5,
-                                    borderRadius: 10,
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '0.7rem',
-                                    color: 'common.white',
-                                    bgcolor: availableCount === children.length ? 'success.main' : availableCount > 0 ? 'warning.main' : 'grey.500',
-                                  }}
-                                >
-                                  {children.length}
-                                </Box>
-                                {plural(children.length, ['позиция', 'позиции', 'позиций'])}
-                              </Typography>
-                              {parent.description && (
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                  noWrap
-                                  sx={{ maxWidth: 300 }}
-                                >
-                                  • {parent.description}
-                                </Typography>
-                              )}
-                            </Box>
-                          </Box>
-                        </Box>
-
-                        {/* Кухня, куда идут блюда карточки */}
-                        <KitchenStationSelect item={parent} onError={text => setSnackbar({ open: true, message: text, severity: 'error' })} />
-
-                        {/* Цена */}
-                        <Box sx={{ textAlign: 'center', mx: 2 }}>
-                          <Typography variant="h6" fontWeight={700} color="primary">
-                            {minPrice === maxPrice
-                              ? `${minPrice} ₽`
-                              : `от ${minPrice} ₽`
-                            }
-                          </Typography>
-                          {minPrice !== maxPrice && (
-                            <Typography variant="caption" color="text.secondary">
-                              до {maxPrice} ₽
-                            </Typography>
-                          )}
-                        </Box>
-
-                        {/* Группы добавок */}
-                        <Tooltip title="Привязать группу добавок к дочерним">
-                          <IconButton
-                            size="small"
-                            onClick={() => setLinkCategoryDialog({
-                              open: true,
-                              dishId: parent.id,
-                              dishName: parent.name
-                            })}
-                            color="primary"
-                            sx={{ mx: 0.5 }}
-                          >
-                            <LinkIcon />
-                          </IconButton>
-                        </Tooltip>
-
-                        {/* Доступность всех детей */}
-                        <Tooltip title={availableCount === children.length ? 'Все недоступны' : 'Все доступны'}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleToggleAllChildren(parent.id, availableCount !== children.length)}
-                            sx={{
-                              color: availableCount === children.length ? 'success.main' : 'text.disabled',
-                              mx: 0.5
-                            }}
-                          >
-                            <DotIcon sx={{ fontSize: 14 }} />
-                          </IconButton>
-                        </Tooltip>
-
-                        {/* Редактировать родителя */}
-                        <Tooltip title="Редактировать карточку">
-                          <IconButton
-                            size="small"
-                            onClick={() => navigate(`/admin/edit/${parent.id}`)}
-                            color="primary"
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-
-                        {/* Удалить родителя */}
-                        <Tooltip title="Удалить карточку со всеми позициями">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => {
-                              const childCount = children.length;
-                              if (window.confirm(
-                                `Удалить карточку "${parent.name}"?${childCount > 0 ? ` Внутри ${childCount} позиц${childCount === 1 ? 'ия' : childCount < 5 ? 'ии' : 'ий'} — все будут удалены.` : ''}`
-                              )) {
-                                deleteProduct.mutate(parent.id);
-                              }
-                            }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </CardContent>
-
-                    {/* Выпадающий список дочерних позиций */}
-                    <Collapse in={isExpanded} unmountOnExit>
-                      <Divider />
-                      <Box sx={{ px: 2, py: 1.5, bgcolor: alpha(theme.palette.action.hover, 0.3) }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                          <Typography variant="subtitle2" color="text.secondary" fontWeight={600}>
-                            Позиции в карточке
-                          </Typography>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<AddIcon />}
-                            onClick={() => navigate(`/admin/create?parentId=${parent.id}`)}
-                            sx={{ textTransform: 'none' }}
-                          >
-                            Добавить позицию
-                          </Button>
-                        </Box>
-
-                        {children.length === 0 ? (
-                          <Box sx={{ textAlign: 'center', py: 3 }}>
-                            <Typography variant="body2" color="text.secondary">
-                              Нет позиций. Добавьте первую позицию в эту карточку.
-                            </Typography>
-                          </Box>
-                        ) : (
-                          <List disablePadding>
-                            {children.map((child, idx) => (
-                              <React.Fragment key={child.id}>
-                                <ListItem
-                                  sx={{
-                                    bgcolor: 'background.paper',
-                                    borderRadius: 2,
-                                    mb: 0.5,
-                                    border: '1px solid',
-                                    borderColor: 'divider',
-                                    px: 2,
-                                    py: 1,
-                                  }}
-                                >
-                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 0 }}>
-                                    <Typography
-                                      variant="body2"
-                                      color="text.secondary"
-                                      sx={{ minWidth: 20, textAlign: 'center' }}
-                                    >
-                                      {idx + 1}.
-                                    </Typography>
-                                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                                      <Typography variant="subtitle2" fontWeight={600} noWrap>
-                                        {child.name}
-                                      </Typography>
-                                      {child.description && (
-                                        <Typography variant="caption" color="text.secondary" noWrap display="block">
-                                          {child.description}
-                                        </Typography>
-                                      )}
-                                    </Box>
-                                  </Box>
-
-                                  <Typography
-                                    variant="subtitle2"
-                                    fontWeight={700}
-                                    color="primary"
-                                    sx={{ mr: 1, whiteSpace: 'nowrap' }}
-                                  >
-                                    {child.price} ₽
-                                  </Typography>
-
-                                  <KitchenStationSelect item={child} parent={parent} onError={text => setSnackbar({ open: true, message: text, severity: 'error' })} />
-
-                                  <Switch
-                                    size="small"
-                            checked={child.isAvailable}
-                            onChange={(e) => updateAvailability.mutate({
-                              id: child.id,
-                              isAvailable: e.target.checked
-                            })}
-                          />
-
-                          <Tooltip title="Редактировать позицию">
-                            <IconButton
-                              size="small"
-                              onClick={() => navigate(`/admin/edit/${child.id}`)}
-                              color="primary"
-                            >
-                              <EditIcon sx={{ fontSize: 18 }} />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Удалить позицию">
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => {
-                                if (window.confirm(`Удалить позицию "${child.name}"?`)) {
-                                  deleteProduct.mutate(child.id);
-                                }
-                              }}
-                            >
-                              <DeleteIcon sx={{ fontSize: 18 }} />
-                            </IconButton>
-                          </Tooltip>
-                                </ListItem>
-                              </React.Fragment>
-                            ))}
-                          </List>
-                        )}
-                      </Box>
-                    </Collapse>
-                  </Card>
-              );
-  };
+  // Блюдо в разделе: ручка переноса, варианты по нажатию, действия в «⋯»
+  const renderCard = (parent: Dish, dragHandle: React.ReactNode) => (
+    <MenuDishRow
+      card={parent}
+      variants={dishes.filter(d => d.parentId === parent.id)}
+      dragHandle={dragHandle}
+      showKitchen={stations.length > 1}
+      onEdit={id => navigate(`/admin/edit/${id}`)}
+      onAddVariant={id => navigate(`/admin/create?parentId=${id}`)}
+      onLinkAddons={card => setLinkCategoryDialog({ open: true, dishId: card.id, dishName: card.name })}
+      onDelete={(dish, isCard) => {
+        const kids = isCard ? dishes.filter(d => d.parentId === dish.id).length : 0;
+        const text = isCard
+          ? `Удалить блюдо «${dish.name}»?${kids > 0 ? ` Вместе с ним удалятся ${kids} ${plural(kids, ['вариант', 'варианта', 'вариантов'])}.` : ''}`
+          : `Удалить вариант «${dish.name}»?`;
+        if (window.confirm(text)) deleteProduct.mutate(dish.id);
+      }}
+      onAvailability={(ids, isAvailable) => ids.forEach(id => updateAvailability.mutate({ id, isAvailable }))}
+      onError={text => showMessage(text, 'error')}
+    />
+  );
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Заголовок */}
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Typography variant="h4" component="h1" fontWeight={700}>
-          Управление меню
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+      {/* Заголовок: что в меню и главное действие вкладки */}
+      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography variant="h4" component="h1" fontWeight={800}>Меню</Typography>
+          <Typography color="text.secondary">
+            {parents.length} {plural(parents.length, ['блюдо', 'блюда', 'блюд'])}
+            {' · '}{allSections.length} {plural(allSections.length, ['раздел', 'раздела', 'разделов'])}
+            {offCount > 0 && <> · <Box component="span" sx={{ color: 'warning.main' }}>{offCount} не {offCount === 1 ? 'продаётся' : 'продаются'}</Box></>}
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <MenuImportButton />
           <KitchenStationsButton />
-          <Button
-            variant="contained"
-            startIcon={<FastfoodIcon />}
-            onClick={() => navigate('/admin/create')}
-          >
-            Добавить блюдо
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<CategoryIcon />}
-            onClick={() => setCategoryDialog({ open: true, mode: 'create' })}
-          >
-            Добавить группу добавок
-          </Button>
+          {tabValue === 0 ? (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/admin/create')}>Добавить блюдо</Button>
+          ) : (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCategoryDialog({ open: true, mode: 'create' })}>Добавить группу</Button>
+          )}
         </Box>
       </Box>
 
       {/* Табы */}
-      <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
+      <Box>
         <Tabs
           value={tabValue}
           onChange={(_, v) => setTabValue(v)}
-          sx={{
-            borderBottom: 1,
-            borderColor: 'divider',
-            bgcolor: alpha(theme.palette.primary.main, 0.02)
-          }}
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab label="Блюда" />
-          <Tab label="Добавки" />
+          <Tab label={`Блюда · ${parents.length}`} />
+          <Tab label={`Добавки · ${categories.length}`} />
         </Tabs>
 
         {/* Поиск и фильтры */}
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', px: { xs: 2, sm: 3 }, pt: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', pt: 2 }}>
           <TextField size="small" placeholder={tabValue === 0 ? 'Поиск по названию и описанию' : 'Поиск групп и добавок'} value={search}
             onChange={e => setSearch(e.target.value)} sx={{ flex: '1 1 240px' }}
             slotProps={{ input: {
@@ -656,16 +362,11 @@ const AdminMenuPage: React.FC = () => {
             } }} />
           {tabValue === 0 && (
             <>
-              <TextField select size="small" label="Раздел" value={section} onChange={e => setSection(e.target.value)} sx={{ minWidth: 160 }}>
-                <MenuItem value="all">Все разделы</MenuItem>
-                {sections.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-                <MenuItem value=""><em>Без раздела</em></MenuItem>
-              </TextField>
-              <TextField select size="small" label="Наличие" value={stock} onChange={e => setStock(e.target.value as 'all' | 'on' | 'off')} sx={{ minWidth: 150 }}>
-                <MenuItem value="all">Все</MenuItem>
-                <MenuItem value="on">В продаже</MenuItem>
-                <MenuItem value="off">Есть снятые с продажи</MenuItem>
-              </TextField>
+              <ToggleButtonGroup size="small" exclusive value={stock} onChange={(_, v) => v && setStock(v)} aria-label="Наличие">
+                <ToggleButton value="all" sx={{ px: 1.5 }}>Все</ToggleButton>
+                <ToggleButton value="on" sx={{ px: 1.5 }}>В продаже</ToggleButton>
+                <ToggleButton value="off" sx={{ px: 1.5 }}>Не продаются</ToggleButton>
+              </ToggleButtonGroup>
               {stations.length > 1 && (
                 <TextField select size="small" label="Кухня" value={station}
                   onChange={e => setStation(e.target.value === 'all' ? 'all' : Number(e.target.value))} sx={{ minWidth: 150 }}>
@@ -729,7 +430,7 @@ const AdminMenuPage: React.FC = () => {
             onDeleteAddon={handleDeleteAddon}
           />
         </TabPanel>
-      </Paper>
+      </Box>
 
       {/* Диалог для категории добавок */}
       <CategoryDialog

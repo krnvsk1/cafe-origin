@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Box, Paper, Typography, Chip, Tooltip, alpha, useTheme } from '@mui/material';
+import { Box, Button, Paper, Typography, Chip, Tooltip, alpha, useTheme } from '@mui/material';
 import {
   DragIndicator as DragIcon,
   ExpandMore as ExpandMoreIcon,
@@ -187,8 +187,18 @@ const MenuSectionsBoard: React.FC<Props> = ({ sections, onChange, renderCard, lo
     return n;
   });
 
+  const allOpen = sections.length > 0 && sections.every(s => open.has(s.name));
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, userSelect: drag ? 'none' : undefined }}>
+      {!locked && sections.length > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: -0.5 }}>
+          <Typography variant="body2" color="text.secondary">Порядок как на витрине — перетаскивайте за ⋮⋮</Typography>
+          <Button size="small" onClick={() => setOpen(allOpen ? new Set() : new Set(sections.map(s => s.name)))}>
+            {allOpen ? 'Свернуть все' : 'Развернуть все'}
+          </Button>
+        </Box>
+      )}
       {sections.map((section, si) => {
         const expanded = locked || open.has(section.name);
         const dragging = drag?.kind === 'section' && drag.from === si;
@@ -221,7 +231,7 @@ const MenuSectionsBoard: React.FC<Props> = ({ sections, onChange, renderCard, lo
               <Chip size="small" label={section.cards.length} />
             </Box>
             {expanded && (
-              <Box data-drop={`into:${si}`} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, p: 1.5, pt: 0.5 }}>
+              <Box data-drop={`into:${si}`} sx={{ display: 'flex', flexDirection: 'column' }}>
                 {section.cards.map((card, ci) => {
                   const cardDragging = drag?.kind === 'card' && drag.section === si && drag.from === ci;
                   const cardLine = target?.kind === 'card' && target.section === si && target.index === ci;
@@ -229,14 +239,14 @@ const MenuSectionsBoard: React.FC<Props> = ({ sections, onChange, renderCard, lo
                     <Box
                       key={card.id}
                       data-drop={`card:${si}:${ci}`}
-                      sx={{ opacity: cardDragging ? 0.45 : 1, borderRadius: 3, ...line(!!cardLine, !!(cardLine && target.after)) }}
+                      sx={{ opacity: cardDragging ? 0.45 : 1, borderTop: 1, borderColor: 'divider', ...line(!!cardLine, !!(cardLine && target.after)) }}
                     >
                       {renderCard(card, handle({ kind: 'card', section: si, from: ci }, 'Перетащите карточку — можно в другой раздел'))}
                     </Box>
                   );
                 })}
                 {section.cards.length === 0 && (
-                  <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>Пусто</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center', borderTop: 1, borderColor: 'divider' }}>Пусто</Typography>
                 )}
               </Box>
             )}
