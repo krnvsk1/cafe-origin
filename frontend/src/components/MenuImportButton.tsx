@@ -1,6 +1,6 @@
 import * as React from 'react';
 import {
-  Button, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Alert,
+  Button, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Alert,
   FormControlLabel, Checkbox, LinearProgress, Box, TextField,
 } from '@mui/material';
 import { CloudDownloadOutlined as ImportIcon } from '@mui/icons-material';
@@ -21,7 +21,8 @@ interface ImportResult {
 const URL_KEY = 'menu-import-url';
 
 /** Кнопка «Импорт меню с сайта» для администратора: адрес страницы меню вводится один раз и запоминается */
-const MenuImportButton: React.FC = () => {
+/** compact — только значок (узкий экран) */
+const MenuImportButton: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
   const isAdmin = useCan()(P.MenuImport);
   const queryClient = useQueryClient();
   const [open, setOpen] = React.useState(false);
@@ -45,9 +46,17 @@ const MenuImportButton: React.FC = () => {
 
   return (
     <>
-      <Button variant="outlined" startIcon={<ImportIcon />} onClick={() => { importMenu.reset(); setOpen(true); }}>
-        Импорт с сайта
-      </Button>
+      {compact ? (
+        <Tooltip title="Импорт с сайта">
+          <IconButton onClick={() => { importMenu.reset(); setOpen(true); }} aria-label="Импорт с сайта" sx={{ border: 1, borderColor: 'divider' }}>
+            <ImportIcon />
+          </IconButton>
+        </Tooltip>
+      ) : (
+        <Button variant="outlined" startIcon={<ImportIcon />} onClick={() => { importMenu.reset(); setOpen(true); }}>
+          Импорт с сайта
+        </Button>
+      )}
       <Dialog open={open} onClose={() => !importMenu.isPending && setOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Импорт меню с сайта</DialogTitle>
         <DialogContent>

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import {
-  TextField, MenuItem, Button, Dialog, DialogTitle, DialogContent, DialogActions, Alert, Box, Typography, IconButton,
+  TextField, MenuItem, Button, Dialog, DialogTitle, DialogContent, DialogActions, Alert, Box, Typography, IconButton, Tooltip,
 } from '@mui/material';
 import {
   SoupKitchen as KitchenIcon, ArrowUpward as UpIcon, ArrowDownward as DownIcon, DeleteOutline as DeleteIcon, Add as AddIcon,
@@ -49,7 +49,8 @@ export const KitchenStationSelect: React.FC<{ item: Dish; parent?: Dish | null; 
 };
 
 /** Кнопка «Кухни»: добавить, переименовать, расставить по порядку, убрать — только для администратора */
-export const KitchenStationsButton: React.FC = () => {
+/** compact — только значок (узкий экран) */
+export const KitchenStationsButton: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
   const isAdmin = useAuthStore(s => s.user?.roles?.includes('admin') ?? false);
   const { data: stations = [] } = useKitchenStations();
   const rename = useRenameStation();
@@ -126,7 +127,13 @@ export const KitchenStationsButton: React.FC = () => {
 
   return (
     <>
-      <Button variant="outlined" startIcon={<KitchenIcon />} onClick={start}>Кухни</Button>
+      {compact ? (
+        <Tooltip title="Кухни">
+          <IconButton onClick={start} aria-label="Кухни" sx={{ border: 1, borderColor: 'divider' }}><KitchenIcon /></IconButton>
+        </Tooltip>
+      ) : (
+        <Button variant="outlined" startIcon={<KitchenIcon />} onClick={start}>Кухни</Button>
+      )}
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Кухни</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>

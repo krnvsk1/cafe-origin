@@ -91,9 +91,14 @@ const MenuDishRow: React.FC<Props> = ({
             {allOff && items.length > 0 && <Chip size="small" label="не продаётся" sx={{ height: 20, fontSize: '0.7rem' }} />}
             {partly && <Chip size="small" color="warning" variant="outlined" label={`в продаже ${onSale} из ${items.length}`} sx={{ height: 20, fontSize: '0.7rem' }} />}
           </Box>
-          {subtitle && (
-            <Typography variant="body2" color={variants.length === 0 ? 'warning.main' : 'text.secondary'} noWrap>{subtitle}</Typography>
-          )}
+          <Typography variant="body2" color={variants.length === 0 ? 'warning.main' : 'text.secondary'} noWrap>
+            {variants.length > 0 && (
+              <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' }, fontWeight: 700, color: 'text.primary', mr: subtitle ? 0.75 : 0 }}>
+                {min === max ? priceOf(items[0], card) : `от ${rub(min)}`}
+              </Box>
+            )}
+            {subtitle}
+          </Typography>
         </Box>
 
         <Typography fontWeight={700} sx={{ whiteSpace: 'nowrap', display: { xs: 'none', sm: 'block' }, color: allOff ? 'text.secondary' : 'text.primary' }}>

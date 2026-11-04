@@ -28,6 +28,8 @@ import {
   InputAdornment,
   ToggleButton,
   ToggleButtonGroup,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -75,6 +77,8 @@ function TabPanel(props: TabPanelProps) {
 const AdminMenuPage: React.FC = () => {
   const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0);
+  const muiTheme = useTheme();
+  const narrow = useMediaQuery(muiTheme.breakpoints.down('sm'));
   const [expandedCategory, setExpandedCategory] = useState<number | null>(null);
   
   // Состояния для диалогов
@@ -319,20 +323,20 @@ const AdminMenuPage: React.FC = () => {
   );
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" disableGutters sx={{ py: { xs: 1, sm: 2 } }}>
       {/* Заголовок: что в меню и главное действие вкладки */}
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 2 }}>
+      <Box sx={{ mb: { xs: 2, sm: 3 }, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: { xs: 1.5, sm: 2 } }}>
         <Box>
-          <Typography variant="h4" component="h1" fontWeight={800}>Меню</Typography>
+          <Typography variant="h4" component="h1" fontWeight={800} sx={{ fontSize: { xs: '1.75rem', sm: undefined } }}>Меню</Typography>
           <Typography color="text.secondary">
             {parents.length} {plural(parents.length, ['блюдо', 'блюда', 'блюд'])}
             {' · '}{allSections.length} {plural(allSections.length, ['раздел', 'раздела', 'разделов'])}
             {offCount > 0 && <> · <Box component="span" sx={{ color: 'warning.main' }}>{offCount} не {offCount === 1 ? 'продаётся' : 'продаются'}</Box></>}
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <MenuImportButton />
-          <KitchenStationsButton />
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+          <MenuImportButton compact={narrow} />
+          <KitchenStationsButton compact={narrow} />
           {tabValue === 0 ? (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/admin/create')}>Добавить блюдо</Button>
           ) : (
