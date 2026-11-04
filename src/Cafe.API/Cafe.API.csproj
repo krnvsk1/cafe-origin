@@ -4,6 +4,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Локальные секреты разработчика (строка подключения к своей базе и т.п.): dotnet user-secrets -->
+    <UserSecretsId>6df4ddae-b3f7-45a7-8788-367f812b8e92</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
