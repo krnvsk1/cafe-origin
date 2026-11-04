@@ -312,6 +312,11 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
           )}
         </Box>
       )}
+      {!!shift.unfiscalized && (
+        <Alert severity="error" action={<Button color="inherit" size="small" href="/admin/shifts">Открыть</Button>}>
+          Непробитых кассовых чеков: {shift.unfiscalized} — пробейте их в «Сменах и чеках»
+        </Alert>
+      )}
       {err && <Alert severity="error" onClose={() => setErr('')}>{err}</Alert>}
       {kkt && <Alert severity={kkt.ok ? 'success' : 'warning'} onClose={() => setKkt(null)}>{kkt.message}</Alert>}
       {myChecks && <MyChecksDialog onClose={() => setMyChecks(false)} />}
@@ -322,6 +327,7 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
           <Typography color="text.secondary">
             {confirm === 'venue'
               ? (shift.totalOpenChecks ? `Открытых счетов: ${shift.totalOpenChecks}. Их нужно закрыть или отменить.` : 'Смены официантов закроются вместе со сменой заведения.')
+                + (shift.unfiscalized ? ` Внимание: непробитых кассовых чеков — ${shift.unfiscalized}. Пробейте их до Z-отчёта в «Сменах и чеках».` : '')
               : (mine?.openChecks ? `У вас открыто счетов: ${mine.openChecks}. Закройте их или попросите менеджера передать другому официанту.` : 'Новые счета открыть будет нельзя, пока не начнёте смену снова.')}
           </Typography>
         </DialogContent>
@@ -875,7 +881,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
             : (
               <Alert severity={done.fiscal.status === 'processing' ? 'info' : 'error'} sx={{ mt: 2, textAlign: 'left' }}
                 action={<Button color="inherit" size="small" onClick={retryFiscal} disabled={checkFiscal.isPending}>{done.fiscal.status === 'processing' ? 'Проверить' : 'Повторить'}</Button>}>
-                {done.fiscal.status === 'processing' ? 'Касса ещё печатает чек' : `Кассовый чек не пробит: ${done.fiscal.error ?? 'ошибка кассы'}`}
+                {done.fiscal.status === 'processing' ? (done.fiscal.error ?? 'Касса ещё печатает чек') : `Кассовый чек не пробит: ${done.fiscal.error ?? 'ошибка кассы'}`}
               </Alert>
             ))}
         </DialogContent>

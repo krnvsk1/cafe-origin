@@ -46,6 +46,10 @@ namespace Cafe.API.Controllers
             var names = await WaiterController.StaffNamesAsync(_context, waiters.Select(w => (int?)w.UserId).Append(venue?.OpenedByUserId));
             var openChecks = await _context.TableChecks.AsNoTracking().Where(c => c.Status == CheckStatuses.Open)
                 .GroupBy(c => c.WaiterId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key ?? 0, x => x.Count);
+            // Непробитые кассовые чеки — менеджер видит их до закрытия смены
+            int? unfiscalized = (canVenue || seesAll) && await _fiscal.EnabledAsync()
+                ? (await _fiscal.UnfinishedAsync(DateTime.UtcNow.AddDays(-UnfinishedDays))).Count
+                : null;
 
             return Ok(new
             {
@@ -64,8 +68,37 @@ namespace Cafe.API.Controllers
                 waiters = canVenue || seesAll
                     ? waiters.Select(w => new { w.Id, w.UserId, name = names.GetValueOrDefault(w.UserId), w.OpenedAt, openChecks = openChecks.GetValueOrDefault(w.UserId) })
                     : null,
-                totalOpenChecks = canVenue || seesAll ? openChecks.Values.Sum() : (int?)null
+                totalOpenChecks = canVenue || seesAll ? openChecks.Values.Sum() : (int?)null,
+                unfiscalized,
             });
+        }
+
+        private const int UnfinishedDays = 14;
+
+        // GET: api/shifts/fiscal/unfinished — кассовые чеки, которые не пробились (или касса не ответила) за 2 недели
+        [HttpGet("fiscal/unfinished")]
+        [HasPermission(Permissions.ChecksAll, Permissions.Pos)]
+        public async Task<IActionResult> Unfinished()
+        {
+            if (!await _fiscal.EnabledAsync()) return Ok(Array.Empty<object>());
+            var list = await _fiscal.UnfinishedAsync(DateTime.UtcNow.AddDays(-UnfinishedDays));
+            var checkIds = list.Where(r => r.CheckId != null).Select(r => r.CheckId!.Value).Distinct().ToList();
+            var tables = await _context.TableChecks.AsNoTracking().Include(c => c.Table).Where(c => checkIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => new { table = c.Table != null ? c.Table.Name : null, c.Label, c.ClosedAt });
+            return Ok(list.Select(r => new
+            {
+                r.Id,
+                r.OrderId,
+                r.CheckId,
+                r.Kind,
+                r.Status,
+                r.Error,
+                r.Total,
+                r.PaymentMethod,
+                r.CreatedAt,
+                table = r.CheckId != null ? tables.GetValueOrDefault(r.CheckId.Value)?.table : null,
+                label = r.CheckId != null ? tables.GetValueOrDefault(r.CheckId.Value)?.Label : null,
+            }));
         }
 
         // POST: api/shifts/venue/open — открыть смену заведения на день
@@ -211,6 +244,14 @@ namespace Cafe.API.Controllers
             var names = await WaiterController.StaffNamesAsync(_context,
                 waiters.Select(w => (int?)w.UserId).Concat(checks.Select(c => c.WaiterId)).Append(s.OpenedByUserId).Append(s.ClosedByUserId));
             var openTotals = await OpenTotalsAsync(checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList());
+            var ids = checks.Select(c => (int?)c.Id).ToList();
+            var receipts = await _context.FiscalReceipts.AsNoTracking().Where(r => ids.Contains(r.CheckId)).OrderBy(r => r.Id).ToListAsync();
+            object? FiscalOf(int checkId, string kind)
+            {
+                var mine = receipts.Where(r => r.CheckId == checkId && r.Kind == kind).ToList();
+                var r = mine.LastOrDefault(x => x.Status == FiscalStatuses.Done) ?? mine.LastOrDefault();
+                return r == null ? null : new { r.Status, r.Error, r.FiscalDocumentNumber };
+            }
             decimal Total(TableCheck c) => c.Status == CheckStatuses.Open ? openTotals.GetValueOrDefault(c.Id) : c.Status == CheckStatuses.Closed ? c.Total : 0;
 
             return Ok(new
@@ -248,6 +289,8 @@ namespace Cafe.API.Controllers
                     c.ClosedAt,
                     c.PaymentMethod,
                     total = Total(c),
+                    fiscal = FiscalOf(c.Id, FiscalKinds.Sell),
+                    fiscalReturn = FiscalOf(c.Id, FiscalKinds.Return),
                 })
             });
         }

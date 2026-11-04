@@ -43,7 +43,12 @@ namespace Cafe.API.Services.Fiscal
                 throw new FiscalException("Чек на кассе пробивается только при оплате наличными или картой; онлайн-оплату фискализирует ЮKassa");
             if (order.Total <= 0) throw new FiscalException("Сумма заказа — 0 ₽, чек не нужен");
 
-            var receipts = await _context.FiscalReceipts.Where(r => r.OrderId == orderId).OrderBy(r => r.Id).ToListAsync(ct);
+            // Заказ из счёта стола: чек (и возврат) — по всему счёту, иначе суммы не сойдутся с чеком продажи
+            if (order.CheckId != null || await _context.OrderItems.AnyAsync(i => i.OrderId == orderId && i.CheckId != null, ct)
+                || await _context.FiscalReceipts.AnyAsync(r => r.OrderId == orderId && r.CheckId != null, ct))
+                throw new FiscalException("Заказ из счёта стола — чек и возврат пробиваются по счёту в «Сменах и чеках»");
+
+            var receipts = await _context.FiscalReceipts.Where(r => r.OrderId == orderId && r.CheckId == null).OrderBy(r => r.Id).ToListAsync(ct);
             var lines = await ReceiptLines.LoadAsync(_context, order, ct);
             var contact = o.SendToCustomer ? Controllers.PosController.NormalizePhone(order.Phone) : null;
             return await RunReceiptAsync(o, order.Id, null, kind, receipts, lines, order.PaymentMethod, contact, order.DeliveryType, userId, ct);
@@ -99,6 +104,14 @@ namespace Cafe.API.Services.Fiscal
 
                 var cashier = await CashierNameAsync(userId, ct);
                 var task = FiscalTasks.Receipt(kind, o, lines, paymentMethod, cashier, contact, Vars(orderId, deliveryType, cashier, DateTime.UtcNow, (await _brand.GetAsync()).DisplayName));
+                // Возврат — зеркало чека продажи: те же позиции, суммы и способ оплаты, даже если счёт с тех пор меняли
+                var soldReceipt = receipts.LastOrDefault(r => r.Kind == FiscalKinds.Sell && r.Status == FiscalStatuses.Done);
+                if (kind == FiscalKinds.Return && soldReceipt != null && FiscalTasks.ReturnOf(soldReceipt.RequestJson, o, cashier) is { } mirror)
+                {
+                    task = mirror;
+                    paymentMethod = soldReceipt.PaymentMethod ?? paymentMethod;
+                    contact = soldReceipt.ClientContact;
+                }
 
                 var receipt = new FiscalReceipt
                 {
@@ -107,7 +120,7 @@ namespace Cafe.API.Services.Fiscal
                     Kind = kind,
                     Status = FiscalStatuses.Processing,
                     RequestUuid = Guid.NewGuid().ToString(),
-                    Total = lines.Sum(l => l.Amount),
+                    Total = kind == FiscalKinds.Return && soldReceipt != null ? soldReceipt.Total : lines.Sum(l => l.Amount),
                     PaymentMethod = paymentMethod,
                     ClientContact = contact,
                     RequestJson = task.ToJsonString(),
@@ -119,7 +132,11 @@ namespace Cafe.API.Services.Fiscal
 
                 AtolResult result;
                 try { result = await _atol.RunAsync(o, receipt.RequestUuid, task, ct); }
-                catch (FiscalException ex) { result = new AtolResult(false, false, ex.Message, null); }
+                // Касса отказала — чек точно не пробит
+                catch (FiscalRejectedException ex) { result = new AtolResult(false, false, ex.Message, null); }
+                // Связь оборвалась (касса далеко, через программу на кассовом ПК): задание могло дойти и чек мог пробиться.
+                // Оставляем «отправлен» — при повторе сначала спросим кассу об этом задании, второй чек не пробьём
+                catch (FiscalException ex) { result = new AtolResult(false, true, $"Нет ответа от кассы: {ex.Message}. Пробит ли чек — неизвестно: нажмите «Проверить», когда касса будет на связи", null); }
                 Apply(receipt, result);
                 await _context.SaveChangesAsync(ct);
 
@@ -131,6 +148,38 @@ namespace Cafe.API.Services.Fiscal
             }
             finally { DeviceLock.Release(); }
         }
+
+        /// <summary>Узнать у кассы судьбу отправленного чека (фоновая проверка). Ничего не пробивает</summary>
+        public async Task<bool> ReconcileAsync(FiscalReceipt receipt, CancellationToken ct)
+        {
+            var o = await _settings.GetAsync();
+            if (!o.Enabled || receipt.Status != FiscalStatuses.Processing) return false;
+            await DeviceLock.WaitAsync(ct);
+            try
+            {
+                var r = await _atol.ResultAsync(o, receipt.RequestUuid, ct);
+                if (r.Pending) return false;
+                Apply(receipt, r);
+                await _context.SaveChangesAsync(ct);
+                return true;
+            }
+            catch (FiscalException) { return false; }
+            finally { DeviceLock.Release(); }
+        }
+
+        /// <summary>Непробитые чеки: последняя попытка по заказу/счёту не удалась или ждёт ответа кассы</summary>
+        public async Task<List<FiscalReceipt>> UnfinishedAsync(DateTime sinceUtc, CancellationToken ct = default)
+        {
+            var list = await _context.FiscalReceipts.AsNoTracking().Where(r => r.CreatedAt >= sinceUtc).OrderBy(r => r.Id).ToListAsync(ct);
+            return Unfinished(list);
+        }
+
+        public static List<FiscalReceipt> Unfinished(IEnumerable<FiscalReceipt> receipts) => receipts
+            .GroupBy(r => (r.CheckId != null ? "c" + r.CheckId : "o" + r.OrderId, r.Kind))
+            .Where(g => g.All(r => r.Status != FiscalStatuses.Done))
+            .Select(g => g.OrderBy(r => r.Id).Last())
+            .OrderBy(r => r.CreatedAt)
+            .ToList();
 
         /// <summary>Подстановки для своего текста в чеке</summary>
         public static Dictionary<string, string> Vars(int orderId, string deliveryType, string cashier, DateTime utc, string brand = "")

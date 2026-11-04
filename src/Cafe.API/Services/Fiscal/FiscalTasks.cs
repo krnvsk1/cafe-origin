@@ -57,6 +57,22 @@ namespace Cafe.API.Services.Fiscal
             return task;
         }
 
+        /// <summary>
+        /// Возврат прихода по пробитому чеку продажи: те же позиции, оплаты и итог, другой тип и текущий кассир.
+        /// null — сохранённое задание не прочитать (тогда возврат собирают по позициям заново).
+        /// </summary>
+        public static JsonObject? ReturnOf(string? sellRequestJson, FiscalOptions o, string cashierName)
+        {
+            if (string.IsNullOrWhiteSpace(sellRequestJson)) return null;
+            JsonObject? task;
+            try { task = JsonNode.Parse(sellRequestJson) as JsonObject; }
+            catch (System.Text.Json.JsonException) { return null; }
+            if (task == null || task["type"]?.GetValue<string>() != "sell" || task["items"] is not JsonArray) return null;
+            task["type"] = "sellReturn";
+            task["operator"] = Operator(o, cashierName);
+            return task;
+        }
+
         /// <summary>Нефискальный документ — образец оформления (в ФН не записывается)</summary>
         public static JsonObject Sample(FiscalOptions o, ReceiptLayout layout, IReadOnlyList<ReceiptLine> lines, IReadOnlyDictionary<string, string> vars)
         {

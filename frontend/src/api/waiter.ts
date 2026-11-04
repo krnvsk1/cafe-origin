@@ -234,6 +234,8 @@ export interface ShiftCurrent {
   mine: { id: number; openedAt: string; openChecks: number } | null;
   waiters: { id: number; userId: number; name: string | null; openedAt: string; openChecks: number }[] | null;
   totalOpenChecks: number | null;
+  /** Непробитые кассовые чеки за 2 недели (видят менеджеры; null — касса выключена) */
+  unfiscalized?: number | null;
 }
 
 export const useShiftCurrent = () =>
@@ -280,8 +282,12 @@ export interface ShiftDetails {
     id: number; table: string | null; label: string | null; waiter: string | null; waiterId: number | null;
     status: 'open' | 'closed' | 'cancelled'; guests: number | null; openedAt: string; closedAt: string | null;
     paymentMethod: string | null; total: number;
+    fiscal: CheckFiscalState | null;
+    fiscalReturn: CheckFiscalState | null;
   }[];
 }
+
+export interface CheckFiscalState { status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber: number | null }
 
 export const useShifts = (from: string, to: string) =>
   useQuery<ShiftRow[]>({
@@ -313,6 +319,34 @@ export const useCheckFiscal = () =>
   useWaiterMutation<number, FiscalResult>(checkId => apiClient.post(`/api/waiter/checks/${checkId}/fiscal`).then(r => r.data));
 
 export interface FiscalResult { status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber?: number | null }
+
+/** Чек возврата по счёту стола (гость вернул деньги) — те же позиции и сумма, что в чеке продажи */
+export const useReturnCheckFiscal = () =>
+  useWaiterMutation<number, FiscalResult>(checkId => apiClient.post(`/api/waiter/checks/${checkId}/fiscal/return`).then(r => r.data));
+
+/** Кассовый чек, который не пробился или по которому касса не ответила */
+export interface UnfinishedReceipt {
+  id: number; orderId: number; checkId: number | null; kind: 'sell' | 'sellReturn'; status: 'processing' | 'error';
+  error: string | null; total: number; paymentMethod: string | null; createdAt: string; table: string | null; label: string | null;
+}
+
+export const useUnfinishedReceipts = (enabled: boolean) =>
+  useQuery<UnfinishedReceipt[]>({
+    queryKey: [KEY, 'fiscal-unfinished'],
+    queryFn: () => apiClient.get('/api/shifts/fiscal/unfinished').then(r => r.data),
+    enabled,
+    refetchInterval: 60_000,
+  });
+
+/** Повторить или проверить непробитый чек: по счёту стола — через официанта, по заказу кассы — через кассу */
+export const useRetryReceipt = () =>
+  useWaiterMutation<UnfinishedReceipt, FiscalResult>(r => {
+    if (r.checkId != null) {
+      const url = r.kind === 'sell' ? `/api/waiter/checks/${r.checkId}/fiscal` : `/api/waiter/checks/${r.checkId}/fiscal/return`;
+      return apiClient.post(url).then(x => x.data);
+    }
+    return apiClient.post(`/api/fiscal/orders/${r.orderId}/${r.kind === 'sell' ? 'sell' : 'return'}`).then(x => x.data);
+  });
 
 export interface PrintJobState { id: number; status: 'pending' | 'taken' | 'done' | 'error'; error: string | null; agentOnline: boolean }
 

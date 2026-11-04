@@ -588,6 +588,17 @@ namespace Cafe.API.Controllers
             catch (FiscalException ex) { return new { status = FiscalStatuses.Error, error = ex.Message }; }
         }
 
+        // POST: api/waiter/checks/{id}/fiscal/return — чек возврата по счёту (гость вернул деньги): зеркало чека продажи
+        [HttpPost("checks/{id:int}/fiscal/return")]
+        [HasPermission(Permissions.ChecksAll)]
+        public async Task<IActionResult> ReturnFiscal(int id)
+        {
+            if (!await _context.TableChecks.AnyAsync(x => x.Id == id)) return NotFound(new { message = "Счёт не найден" });
+            if (!await _fiscal.EnabledAsync()) return BadRequest(new { message = "Онлайн-касса выключена" });
+            try { return Ok(FiscalController.View(await _fiscal.PrintCheckAsync(id, FiscalKinds.Return, User.GetUserId(), HttpContext.RequestAborted))); }
+            catch (FiscalException ex) { return BadRequest(new { message = ex.Message }); }
+        }
+
         // POST: api/waiter/checks/{id}/fiscal — пробить (повторить) кассовый чек по закрытому счёту
         [HttpPost("checks/{id:int}/fiscal")]
         [HasPermission(Permissions.Waiter, Permissions.ChecksAll)]

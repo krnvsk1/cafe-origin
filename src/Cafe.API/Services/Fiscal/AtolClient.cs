@@ -69,6 +69,12 @@ namespace Cafe.API.Services.Fiscal
         public FiscalException(string message) : base(message) { }
     }
 
+    /// <summary>Касса ответила отказом на задание — чек точно не пробит (в отличие от обрыва связи, когда исход неизвестен)</summary>
+    public class FiscalRejectedException : FiscalException
+    {
+        public FiscalRejectedException(string message) : base(message) { }
+    }
+
     /// <summary>Итог задания на кассе: Pending — ещё выполняется (или ждёт в очереди)</summary>
     public record AtolResult(bool Ready, bool Pending, string? Error, JsonNode? Result);
 
@@ -95,7 +101,7 @@ namespace Cafe.API.Services.Fiscal
                 var text = await res.Content.ReadAsStringAsync(ct);
                 // 409 — задание с таким uuid уже есть: значит, оно уже отправлено, результат заберём по uuid
                 if ((int)res.StatusCode == 409) return;
-                throw new FiscalException($"Касса не приняла задание (HTTP {(int)res.StatusCode}): {ErrorText(text)}");
+                throw new FiscalRejectedException($"Касса не приняла задание (HTTP {(int)res.StatusCode}): {ErrorText(text)}");
             }
         }
 
