@@ -547,10 +547,12 @@ namespace Cafe.API.Controllers
                 var fo = await _fiscalSettings.GetAsync();
                 if (!fo.StaffChecks) return BadRequest(new { message = "Закрытие на сотрудника выключено — включите его в «Настройке интеграций» → «Онлайн-касса»" });
                 if (fo.StaffChecksManagersOnly && !await SeesAllAsync()) return StatusCode(403, new { message = "Закрыть счёт на сотрудника может только менеджер" });
+                // Не выбрали сотрудника — счёт на того, кто закрывает; причина по умолчанию — питание персонала
+                r.StaffUserId ??= User.GetUserId();
                 if (r.StaffUserId is not int staffId || !(await StaffAsync()).TryGetValue(staffId, out staffName))
                     return BadRequest(new { message = "Выберите сотрудника" });
                 staffReason = r.StaffReason?.Trim();
-                if (string.IsNullOrEmpty(staffReason)) return BadRequest(new { message = "Укажите причину" });
+                if (string.IsNullOrEmpty(staffReason)) staffReason = StaffReasons[0];
                 if (staffReason.Length > 60) staffReason = staffReason[..60];
             }
             var c = await _context.TableChecks.Include(x => x.Table).FirstOrDefaultAsync(x => x.Id == id);
@@ -649,7 +651,7 @@ namespace Cafe.API.Controllers
             var o = await _fiscalSettings.GetAsync();
             var allowed = o.StaffChecks && (!o.StaffChecksManagersOnly || await SeesAllAsync());
             var staff = allowed ? (await StaffAsync()).OrderBy(x => x.Value).Select(x => new { id = x.Key, name = x.Value }).ToList() : null;
-            return Ok(new { enabled = o.StaffChecks, allowed, managersOnly = o.StaffChecksManagersOnly, staff, reasons = StaffReasons });
+            return Ok(new { enabled = o.StaffChecks, allowed, managersOnly = o.StaffChecksManagersOnly, staff, reasons = StaffReasons, me = User.GetUserId() });
         }
 
         private async Task<object> FiscalAsync(int checkId)

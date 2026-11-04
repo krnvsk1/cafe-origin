@@ -612,6 +612,10 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const { data: staffInfo } = useStaffChecksInfo(closing);
   const [staffUserId, setStaffUserId] = React.useState<number | ''>('');
   const [staffReason, setStaffReason] = React.useState('');
+  // По умолчанию — на того, кто закрывает: можно ничего не выбирать
+  React.useEffect(() => {
+    if (closing && staffUserId === '' && staffInfo?.me && staffInfo.staff?.some(u => u.id === staffInfo.me)) setStaffUserId(staffInfo.me);
+  }, [closing, staffInfo, staffUserId]);
   const checkFiscal = useCheckFiscal();
   const retryFiscal = async () => {
     try {
@@ -654,7 +658,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
     try {
       const r = await close.mutateAsync({
         checkId: check.id, paymentMethod: method, cashReceived: method === 'cash' && received > 0 ? received : null,
-        ...(method === 'staff' ? { staffUserId: staffUserId === '' ? null : staffUserId, staffReason: staffReason.trim() } : {}),
+        ...(method === 'staff' ? { staffUserId: staffUserId === '' ? null : staffUserId, staffReason: staffReason.trim() || null } : {}),
       });
       setClosing(false);
       setDone(r);
@@ -882,7 +886,8 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
               <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
                 {staffInfo.reasons.map(r => <Chip key={r} label={r} color={staffReason === r ? 'primary' : 'default'} onClick={() => setStaffReason(r)} />)}
               </Box>
-              <TextField size="small" label="Причина" value={staffReason} onChange={e => setStaffReason(e.target.value)} slotProps={{ htmlInput: { maxLength: 60 } }} />
+              <TextField size="small" label="Причина (необязательно)" value={staffReason} onChange={e => setStaffReason(e.target.value)}
+                placeholder={staffInfo.reasons[0]} slotProps={{ htmlInput: { maxLength: 60 } }} />
               <Alert severity="info">
                 Без оплаты: деньги не принимаются, чек в АТОЛ не отправляется. Сумма записывается на сотрудника — к удержанию.
                 {check.printEnabled ? ' На принтер счетов выйдет счёт на сотрудника.' : ''}
@@ -900,7 +905,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button onClick={() => setClosing(false)} sx={{ color: 'text.secondary' }}>Назад</Button>
           <Button variant="contained" color="secondary" size="large" onClick={doClose}
-            disabled={close.isPending || (change !== null && change < 0) || (method === 'staff' && (staffUserId === '' || !staffReason.trim()))}>
+            disabled={close.isPending || (change !== null && change < 0)}>
             {method === 'staff' ? 'Закрыть на сотрудника' : 'Оплачено'}
           </Button>
         </DialogActions>

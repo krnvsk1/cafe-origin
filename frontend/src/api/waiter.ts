@@ -170,6 +170,8 @@ export interface StaffChecksInfo {
   managersOnly: boolean;
   staff: { id: number; name: string }[] | null;
   reasons: string[];
+  /** Кто закрывает — сотрудник по умолчанию */
+  me: number | null;
 }
 export const useStaffChecksInfo = (enabled: boolean) =>
   useQuery<StaffChecksInfo>({
