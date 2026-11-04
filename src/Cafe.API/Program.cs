@@ -58,7 +58,9 @@ builder.Services.AddHealthChecks()
     .AddCheck<EndpointsHealthCheck>("endpoints");
 builder.Services.AddSingleton<AlertSettingsProvider>();
 builder.Services.AddSingleton<StatusReport>();
-builder.Services.AddHostedService<AlertService>();
+builder.Services.AddHttpClient(nameof(AlertService), client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddSingleton<AlertService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<AlertService>());
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -439,6 +441,20 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
         {
             status = report.Status.ToString(),
             checks = report.Entries.ToDictionary(e => e.Key, e => new { status = e.Value.Status.ToString(), description = e.Value.Description })
+        });
+    }
+});
+// /health/full — все проверки (база, диск, фоновые задачи, ручки API): что-то не так — 503. Для внешнего мониторинга сайта
+app.MapHealthChecks("/health/full", new HealthCheckOptions
+{
+    ResultStatusCodes = { [HealthStatus.Healthy] = 200, [HealthStatus.Degraded] = 503, [HealthStatus.Unhealthy] = 503 },
+    ResponseWriter = async (ctx, report) =>
+    {
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsJsonAsync(new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.ToDictionary(e => e.Key, e => e.Value.Status.ToString())
         });
     }
 });

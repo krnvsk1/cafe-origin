@@ -418,17 +418,8 @@ namespace Cafe.API.Controllers
                 _telegram.WebAppKeyboard("Мои заказы", "/orders"));
         }
 
-        /// <summary>/status — сводка о сервере; отвечает только в чате тревог</summary>
-        private async Task HandleStatusAsync(long chatId)
-        {
-            var alerts = _services.GetRequiredService<Cafe.API.Monitoring.AlertSettingsProvider>();
-            if (await alerts.ChatIdAsync() != chatId)
-            {
-                await _telegram.SendMessageAsync(chatId, "Команда /status работает только в чате тревог (он задаётся в «Состоянии системы»).");
-                return;
-            }
-            var report = _services.GetRequiredService<Cafe.API.Monitoring.StatusReport>();
-            await _telegram.SendMessageAsync(chatId, await report.BuildHtmlAsync(SystemController.Version, SystemController.StartedAt));
-        }
+        /// <summary>/status — мониторинг перенесён во внешний сервис, здесь только подсказка</summary>
+        private async Task HandleStatusAsync(long chatId) =>
+            await _telegram.SendMessageAsync(chatId, "Состояние сервера — в «Состоянии системы» на сайте; тревоги приходят из внешнего мониторинга.");
     }
 }

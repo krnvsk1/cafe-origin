@@ -6,15 +6,22 @@ using Cafe.API.Models;
 
 namespace Cafe.API.Monitoring
 {
-    /// <summary>Куда слать тревоги: отдельный Telegram-чат (не чат заказов)</summary>
+    /// <summary>Куда слать тревоги: адрес пинга внешнего мониторинга</summary>
     public class AlertSettings
     {
+        /// <summary>Устарело: тревоги больше не уходят в Telegram (поле оставлено, чтобы читались старые настройки)</summary>
         public long? TelegramChatId { get; set; }
+
+        /// <summary>
+        /// Адрес пинга внешнего мониторинга (Healthchecks.io и похожие): всё в порядке — GET на адрес раз в минуту,
+        /// проблема — POST на адрес/fail с описанием. Перестали приходить пинги (сервер упал) — сервис сам поднимет тревогу.
+        /// </summary>
+        public string? PingUrl { get; set; }
     }
 
     /// <summary>
-    /// Чат тревог задаётся в «Состоянии системы» и хранится в app_settings (ключ monitoring_alerts);
-    /// пока не задан — берётся Monitoring:TelegramChatId из настроек сервера.
+    /// Адрес пинга задаётся в «Состоянии системы» и хранится в app_settings (ключ monitoring_alerts);
+    /// пока не задан — берётся Monitoring:PingUrl из настроек сервера.
     /// </summary>
     public class AlertSettingsProvider
     {
@@ -30,7 +37,7 @@ namespace Cafe.API.Monitoring
             _fallback = options.Value;
         }
 
-        public async Task<long?> ChatIdAsync() => (await GetAsync()).TelegramChatId ?? _fallback.TelegramChatId;
+        public async Task<string?> PingUrlAsync() => (await GetAsync()).PingUrl is { Length: > 0 } u ? u : _fallback.PingUrl;
 
         public async Task<AlertSettings> GetAsync()
         {

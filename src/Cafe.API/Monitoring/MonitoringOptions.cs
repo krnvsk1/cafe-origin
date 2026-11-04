@@ -4,12 +4,12 @@ namespace Cafe.API.Monitoring
     public class MonitoringOptions
     {
         /// <summary>
-        /// Telegram-чат для тревог по умолчанию (ошибки сервера, база недоступна, сбои синхронизаций).
-        /// Обычно задаётся в «Состоянии системы»; это значение — запасное. Пусто — тревоги не шлём
+        /// Адрес пинга внешнего мониторинга по умолчанию (Healthchecks.io и т.п.). Обычно задаётся в «Состоянии системы»;
+        /// это значение — запасное. Пусто — тревоги никуда не уходят
         /// </summary>
-        public long? TelegramChatId { get; set; }
+        public string? PingUrl { get; set; }
 
-        /// <summary>Одинаковую ошибку присылаем не чаще, чем раз в столько минут</summary>
+        /// <summary>Одинаковую ошибку отправляем не чаще, чем раз в столько минут</summary>
         public int AlertThrottleMinutes { get; set; } = 15;
 
         /// <summary>Токен для /metrics (заголовок Authorization: Bearer ...). Пусто — /metrics доступен только с этого же компьютера</summary>

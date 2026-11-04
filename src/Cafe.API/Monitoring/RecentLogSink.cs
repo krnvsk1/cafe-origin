@@ -9,7 +9,7 @@ namespace Cafe.API.Monitoring
 
     /// <summary>
     /// Последние предупреждения и ошибки — в памяти (для экрана «Состояние системы»),
-    /// ошибки ещё и в очередь тревог (Telegram).
+    /// ошибки ещё и в очередь тревог (внешний мониторинг).
     /// </summary>
     public class RecentLogSink : ILogEventSink
     {

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { TitleWithHint } from '../components/Hint';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Paper, Chip, Alert, CircularProgress, ToggleButtonGroup, ToggleButton, Collapse, ButtonBase, TextField, Button, Tabs, Tab,
@@ -30,52 +31,61 @@ const when = (iso: string | null) => (iso ? parseUtc(iso).toLocaleString('ru-RU'
 const uptime = (m: number) => (m < 60 ? `${m} мин` : m < 1440 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${Math.floor(m / 1440)} дн ${Math.floor((m % 1440) / 60)} ч`);
 const shortSource = (s: string | null) => (s ? s.split('.').pop() : '');
 
-interface AlertsInfo { telegramChatId: number | null; telegramEnabled: boolean; ordersChatId: number | null }
+interface AlertsInfo { pingUrl: string | null; healthUrl: string }
 
-/** Куда приходят тревоги: отдельный Telegram-чат, не чат заказов */
+/** Внешний мониторинг: сервер шлёт «пульс» в сервис мониторинга, тот присылает тревоги на почту, SMS и т.п. */
 const AlertsSettings: React.FC = () => {
   const qc = useQueryClient();
   const { data } = useQuery<AlertsInfo>({ queryKey: ['system-alerts'], queryFn: () => apiClient.get('/api/admin/system/alerts').then(r => r.data) });
-  const [chat, setChat] = React.useState('');
+  const [url, setUrl] = React.useState('');
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null);
-  React.useEffect(() => { if (data) setChat(data.telegramChatId?.toString() ?? ''); }, [data]);
+  React.useEffect(() => { if (data) setUrl(data.pingUrl ?? ''); }, [data]);
   const save = useMutation({
-    mutationFn: (id: number | null) => apiClient.put('/api/admin/system/alerts', { telegramChatId: id }).then(r => r.data),
+    mutationFn: (pingUrl: string | null) => apiClient.put('/api/admin/system/alerts', { pingUrl }).then(r => r.data),
     onSuccess: d => { qc.setQueryData(['system-alerts'], d); setMsg({ ok: true, text: 'Сохранено' }); },
     onError: e => setMsg({ ok: false, text: apiError(e) }),
   });
   const test = useMutation({
-    mutationFn: () => apiClient.post('/api/admin/system/alerts/test'),
-    onSuccess: () => setMsg({ ok: true, text: 'Проверочное сообщение отправлено — посмотрите в чате' }),
+    mutationFn: () => apiClient.post<{ message: string }>('/api/admin/system/alerts/test').then(r => r.data),
+    onSuccess: d => setMsg({ ok: true, text: d.message }),
     onError: e => setMsg({ ok: false, text: apiError(e) }),
   });
-  const trimmed = chat.trim();
-  const valid = trimmed === '' || /^-?\d+$/.test(trimmed);
-  const sameAsOrders = valid && trimmed !== '' && data?.ordersChatId != null && Number(trimmed) === data.ordersChatId;
-  const changed = trimmed !== (data?.telegramChatId?.toString() ?? '');
+  const trimmed = url.trim();
+  const valid = trimmed === '' || /^https:\/\/\S+$/.test(trimmed);
+  const changed = trimmed !== (data?.pingUrl ?? '');
 
   return (
     <Paper variant="outlined" sx={{ borderRadius: '16px', p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-      <Typography sx={{ fontWeight: 700 }}>Тревоги в Telegram</Typography>
-      <Typography variant="body2" color="text.secondary">
-        Сбои сервера, недоступная база, мало места, падающие синхронизации. Нужен отдельный чат — не тот, куда приходят заказы:
-        создайте группу, добавьте в неё бота, напишите в ней /id и вставьте сюда полученный номер.
+      <Typography sx={{ fontWeight: 700 }}>
+        <TitleWithHint hint={<Box>
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Раз в минуту сервер сообщает сервису мониторинга «жив, всё в порядке», а при проблеме — что именно не так
+            (база, место на диске, фоновые задачи, ошибки). Если сервер упал совсем, сообщения перестают приходить — и сервис
+            сам пришлёт тревогу на почту, SMS или в мессенджер.
+          </Typography>
+          <Typography variant="body2" component="ol" sx={{ pl: 2.5, m: 0 }}>
+            <li>Зарегистрируйтесь на healthchecks.io (бесплатно) и создайте проверку: Period — 5 минут, Grace — 5 минут.</li>
+            <li>Скопируйте Ping URL вида https://hc-ping.com/… сюда и сохраните.</li>
+            <li>В Integrations сервиса включите, куда слать тревоги: Email, SMS, звонок и т.д.</li>
+          </Typography>
+        </Box>}>Внешний мониторинг и тревоги</TitleWithHint>
       </Typography>
-      {data && !data.telegramEnabled && (
-        <Alert severity="warning">
-          Telegram-бот не подключён — тревоги отправлять некуда. На сервере впишите токен бота от @BotFather в файл .env
-          (TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME) и перезапустите API.
-        </Alert>
-      )}
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <TextField size="small" label="ID чата для тревог" placeholder="-1001234567890" value={chat}
-          onChange={e => { setChat(e.target.value); setMsg(null); }} sx={{ minWidth: 220 }}
-          error={!valid || sameAsOrders}
-          helperText={!valid ? 'Только цифры, у групп — с минусом' : sameAsOrders ? 'Это чат заказов — нужен другой' : 'Пусто — тревоги выключены'} />
-        <Button variant="contained" disabled={!valid || sameAsOrders || !changed || save.isPending}
-          onClick={() => save.mutate(trimmed === '' ? null : Number(trimmed))}>Сохранить</Button>
-        <Button disabled={!data?.telegramEnabled || !data?.telegramChatId || changed || test.isPending} onClick={() => test.mutate()}>Проверить</Button>
+        <TextField size="small" label="Адрес пинга (Ping URL)" placeholder="https://hc-ping.com/…" value={url}
+          onChange={e => { setUrl(e.target.value); setMsg(null); }} sx={{ flex: '1 1 320px' }}
+          error={!valid} helperText={!valid ? 'Адрес вида https://…' : undefined} />
+        <Button variant="contained" disabled={!valid || !changed || save.isPending}
+          onClick={() => save.mutate(trimmed === '' ? null : trimmed)}>Сохранить</Button>
+        <Button disabled={!data?.pingUrl || changed || test.isPending} onClick={() => test.mutate()}>Проверить</Button>
       </Box>
+      {data && !data.pingUrl && <Alert severity="warning">Мониторинг не подключён — о сбоях сервера никто не узнает</Alert>}
+      {data && (
+        <Typography variant="body2" color="text.secondary">
+          <TitleWithHint hint="Для сервисов, которые сами открывают сайт (UptimeRobot и т.п.): добавьте проверку этого адреса — «код ответа 200» или «есть слово Healthy». Если база, диск или фоновые задачи не в порядке, адрес ответит 503.">
+            Проверка сайта снаружи: <b>{data.healthUrl}</b>
+          </TitleWithHint>
+        </Typography>
+      )}
       {msg && <Alert severity={msg.ok ? 'success' : 'error'} onClose={() => setMsg(null)}>{msg.text}</Alert>}
     </Paper>
   );
@@ -183,7 +193,7 @@ const EndpointsView: React.FC = () => {
       </Paper>
       <Typography variant="body2" color="text.secondary">
         Считается с запуска сервера ({when(data.since)}); после перезапуска начинается заново. «Обычно» — половина запросов быстрее,
-        «95%» — почти все. Тревога в Telegram, если за {rule.windowMinutes} мин у ручки больше {rule.maxErrorRate}% ошибок сервера
+        «95%» — почти все. Тревога во внешний мониторинг, если за {rule.windowMinutes} мин у ручки больше {rule.maxErrorRate}% ошибок сервера
         (при {rule.minRequests}+ запросах). Номер запроса из последней ошибки ищется в журнале.
       </Typography>
     </Box>
