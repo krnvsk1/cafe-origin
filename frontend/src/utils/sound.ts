@@ -88,40 +88,53 @@ const scheduleMelody = (audio: AudioContext, notes: Note[]) => {
   });
 };
 
+// Safari ставит контекст в 'interrupted' (блокировка экрана, звонок, фон) — это тоже «не играет», не только 'suspended'
+const isRunning = (audio: AudioContext) => audio.state === 'running';
+
 /** Сыграть мелодию (выбранную на устройстве — getMelody) */
 export const playChime = (melody: MelodyId) => {
   try {
     const audio = getContext();
     if (!audio) return;
     const notes = MELODIES[melody].notes;
-    if (audio.state !== 'suspended') {
+    if (isRunning(audio)) {
       scheduleMelody(audio, notes);
       return;
     }
-    // Контекст на паузе (создан до касания или браузер его приостановил) — пробуем возобновить и только потом играем
+    // Контекст на паузе (создан до касания, экран блокировали) — пробуем возобновить и только потом играем
     const requestedAt = Date.now();
     audio.resume()
-      .then(() => { if (Date.now() - requestedAt < STALE_CHIME_MS) scheduleMelody(audio, notes); })
+      .then(() => { if (isRunning(audio) && Date.now() - requestedAt < STALE_CHIME_MS) scheduleMelody(audio, notes); })
       .catch(() => { /* звук заблокирован браузером — об этом говорит isAudioBlocked */ });
   } catch {
     // звук недоступен — не критично
   }
 };
 
-/** Браузеры разрешают звук только после действия пользователя — «разблокируем» по касанию */
+/**
+ * Браузеры разрешают звук только после действия пользователя — «разблокируем» по касанию.
+ * iPad/iPhone открывают звук только если в момент касания что-то реально проиграно — играем тишину.
+ */
 export const unlockAudio = () => {
   try {
     const audio = getContext();
-    if (audio?.state === 'suspended') void audio.resume().catch(() => { /* ещё не разрешено */ });
+    if (!audio || isRunning(audio)) return;
+    void audio.resume().catch(() => { /* ещё не разрешено */ });
+    const buf = audio.createBuffer(1, 1, 22050);
+    const src = audio.createBufferSource();
+    src.buffer = buf;
+    src.connect(audio.destination);
+    src.start(0);
   } catch {
     // ignore
   }
 };
 
-/** Звук заблокирован браузером: контекст на паузе до первого касания страницы */
+/** Звук не играет: контекст на паузе до касания или прерван системой (Safari — 'interrupted') */
 export const isAudioBlocked = (): boolean => {
   try {
-    return getContext()?.state === 'suspended';
+    const audio = getContext();
+    return !!audio && !isRunning(audio);
   } catch {
     return false;
   }
