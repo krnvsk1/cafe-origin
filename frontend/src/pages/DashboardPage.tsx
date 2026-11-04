@@ -400,14 +400,6 @@ const DashboardPage: React.FC = () => {
         >
           Просмотреть все заказы
         </Button>
-        <Button
-          variant="outlined"
-          component={Link}
-          to="/admin/create"
-          color="inherit"
-        >
-          Добавить товар
-        </Button>
       </Box>
     </Box>
   );

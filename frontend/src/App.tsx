@@ -7,7 +7,6 @@ import {
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
-  AddCircle as AddIcon,
   Menu as MenuIcon,
   Close as CloseIcon,
   Home as HomeIcon,
@@ -247,8 +246,7 @@ function App() {
     { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', perms: [P.Kitchen], group: 'Смена', hint: 'Новые заказы, приготовление, техкарты' },
     { text: 'Журналы ХАССП', icon: <HaccpIcon />, path: '/haccp', perms: [P.Haccp, P.HaccpManage], group: 'Смена', hint: 'Холодильники, осмотр смены, бракераж, уборка' },
     { text: 'Доставка', icon: <DeliveryIcon />, path: '/courier', perms: [P.Delivery, P.CouriersAssign], group: 'Смена', hint: 'Заказы курьеров и маршруты' },
-    { text: 'Товары', icon: <ProductsIcon />, path: '/admin/menu', perms: [P.Menu], group: 'Меню', hint: 'Карточки, варианты и добавки' },
-    { text: 'Добавить товар', icon: <AddIcon />, path: '/admin/create', perms: [P.Menu], group: 'Меню', hint: 'Новая позиция в меню' },
+    { text: 'Блюда', icon: <ProductsIcon />, path: '/admin/menu', perms: [P.Menu], group: 'Меню', hint: 'Разделы, карточки, варианты и добавки' },
     { text: 'Стоп-лист', icon: <BlockIcon />, path: '/admin/stoplist', perms: [P.StopList], group: 'Меню', hint: 'Что закончилось сегодня' },
     { text: 'Дашборд', icon: <DashboardIcon />, path: '/admin/dashboard', perms: [P.Dashboard], group: 'Продажи и маркетинг', hint: 'Сводка за день' },
     { text: 'Аналитика', icon: <InsightsIcon />, path: '/admin/analytics', perms: [P.Analytics], group: 'Продажи и маркетинг', hint: 'Выручка, заказы, популярные позиции' },

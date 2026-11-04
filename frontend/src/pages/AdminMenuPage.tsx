@@ -619,7 +619,7 @@ const AdminMenuPage: React.FC = () => {
             startIcon={<FastfoodIcon />}
             onClick={() => navigate('/admin/create')}
           >
-            Добавить товар
+            Добавить блюдо
           </Button>
           <Button
             variant="outlined"
@@ -642,7 +642,7 @@ const AdminMenuPage: React.FC = () => {
             bgcolor: alpha(theme.palette.primary.main, 0.02)
           }}
         >
-          <Tab label="Товары" />
+          <Tab label="Блюда" />
           <Tab label="Добавки" />
         </Tabs>
 
@@ -709,7 +709,7 @@ const AdminMenuPage: React.FC = () => {
             <Box sx={{ textAlign: 'center', py: 6 }}>
               <FastfoodIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
               <Typography color="text.secondary">
-                Нет товаров. Создайте первую карточку.
+                Нет блюд. Создайте первую карточку.
               </Typography>
             </Box>
           )}

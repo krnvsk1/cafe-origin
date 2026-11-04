@@ -459,7 +459,7 @@ const CreateMenuItemPage: React.FC = () => {
     try {
       await deleteDish.mutateAsync(numericId);
       setConfirmDelete(false);
-      showSnackbar('Товар удалён', 'success');
+      showSnackbar('Блюдо удалено', 'success');
       setSaved(true);
       setTimeout(() => navigate('/admin/menu'), 900);
     } catch (error: any) {
@@ -472,7 +472,7 @@ const CreateMenuItemPage: React.FC = () => {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', gap: 2 }}>
         <CircularProgress size={36} />
-        <Typography color="text.secondary">Загружаем товар…</Typography>
+        <Typography color="text.secondary">Загружаем блюдо…</Typography>
       </Box>
     );
   }
@@ -504,7 +504,7 @@ const CreateMenuItemPage: React.FC = () => {
 
   const previewItem: Dish = {
     id: 0,
-    name: formData.name.trim() || 'Название товара',
+    name: formData.name.trim() || 'Название блюда',
     price: formData.price || 0,
     description: formData.description || '',
     isSpicy: !!formData.isSpicy,
@@ -518,8 +518,8 @@ const CreateMenuItemPage: React.FC = () => {
   };
 
   const title = isEditMode
-    ? (kind === 'variant' ? 'Вариант товара' : 'Редактирование')
-    : (kind === 'variant' ? 'Новый вариант' : 'Новый товар');
+    ? (kind === 'variant' ? 'Вариант блюда' : 'Редактирование')
+    : (kind === 'variant' ? 'Новый вариант' : 'Новое блюдо');
 
   const submitLabel = saved
     ? 'Сохранено'
@@ -915,7 +915,7 @@ const CreateMenuItemPage: React.FC = () => {
                 disabled={isPending}
                 sx={{ color: tokens.chili, '&:hover': { bgcolor: alpha(tokens.chili, 0.08) } }}
               >
-                Удалить {kind === 'variant' ? 'вариант' : 'товар'}
+                Удалить {kind === 'variant' ? 'вариант' : 'блюдо'}
               </Button>
             </Box>
           )}

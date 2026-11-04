@@ -14,7 +14,6 @@ import {
 } from '@mui/material';
 import {
   Search as SearchIcon,
-  Add as AddIcon,
   Close as CloseIcon,
   Favorite as FavoriteIcon,
   AccessTimeRounded as TimeIcon,
@@ -310,17 +309,6 @@ const MenuPage: React.FC = () => {
                 />
               ))}
             </Box>
-            {isAdminRole && (
-              <Button
-                component={Link}
-                to="/admin/create"
-                startIcon={<AddIcon />}
-                variant="outlined"
-                sx={{ ml: 'auto', flexShrink: 0, display: { xs: 'none', md: 'inline-flex' }, bgcolor: 'background.paper' }}
-              >
-                Новая позиция
-              </Button>
-            )}
           </Box>
 
           {error && (
@@ -377,11 +365,11 @@ const MenuPage: React.FC = () => {
               </Typography>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
                 {cards.length === 0
-                  ? (isAdminRole ? 'Добавьте первую позицию — она сразу появится здесь.' : 'Загляните чуть позже.')
+                  ? (isAdminRole ? 'Добавьте первое блюдо в разделе «Блюда» — оно сразу появится здесь.' : 'Загляните чуть позже.')
                   : 'Попробуйте другое слово или сбросьте фильтр.'}
               </Typography>
               {cards.length === 0 && isAdminRole ? (
-                <Button component={Link} to="/admin/create" variant="contained" startIcon={<AddIcon />}>Добавить позицию</Button>
+                <Button component={Link} to="/admin/menu" variant="contained">Открыть «Блюда»</Button>
               ) : cards.length > 0 && (
                 <Button variant="outlined" onClick={() => { setSearchQuery(''); setOnlyFavorites(false); }}>Показать всё меню</Button>
               )}
