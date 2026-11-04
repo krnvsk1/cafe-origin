@@ -236,12 +236,12 @@ builder.Services.AddScoped<IOrderStatusService, OrderStatusService>();
 // Склад и техкарты
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 
-// Telegram: бот, уведомления, вход из мини-приложения (выключено, если не задан Telegram:BotToken)
+// Telegram: только вход на сайт и из мини-приложения (заказы и уведомления в Telegram не шлём — в кафе он без VPN не работает)
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
 builder.Services.AddHttpClient<TelegramApi>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddSingleton<TelegramAuth>();
 builder.Services.AddSingleton<TelegramLoginSessions>();
-builder.Services.AddHostedService<TelegramNotifier>();
+builder.Services.AddHostedService<TelegramStartup>();
 // Без публичного адреса (локально) команды бота забираем опросом
 builder.Services.AddHostedService<TelegramPollingService>();
 

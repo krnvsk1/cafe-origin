@@ -1,7 +1,7 @@
 #!/bin/sh
 # Записать настройки в /opt/cafe/.env (файл не в git — git pull его не трогает) и перезапустить API.
 #
-#   sh deploy/set-env.sh telegram              — спросит токен бота, имя, чат персонала (секрет вебхука создаст сам)
+#   sh deploy/set-env.sh telegram              — спросит токен и имя бота (секрет вебхука создаст сам)
 #   sh deploy/set-env.sh КЛЮЧ=значение [...]   — любые переменные, например EXTRA_DOMAINS="xn--... www.xn--..."
 #
 # Перед изменением делается копия .env.bak-ДАТА. Значения секретов на экран не выводятся.
@@ -36,17 +36,15 @@ cp "$ENV" "$ENV.bak-$(date +%Y%m%d-%H%M%S)"
 chmod 600 "$ENV" "$ENV".bak-* 2>/dev/null || true
 
 if [ "$1" = telegram ]; then
-	echo "Telegram: токен и имя бота — из @BotFather; чат персонала — напишите /id в чате после подключения или оставьте пустым"
+	echo "Telegram (для «Войти через Telegram»): токен и имя бота — из @BotFather"
 	ask token "Токен бота (123456:ABC…)" hide
 	ask username "Имя бота без @"
-	ask chat "ID чата персонала (можно пусто)"
 	[ -n "$token" ] || { echo "Токен пустой — ничего не меняю"; exit 1; }
 	set_var TELEGRAM_BOT_TOKEN "$token"
 	set_var TELEGRAM_BOT_USERNAME "${username#@}"
 	if ! grep -q '^TELEGRAM_WEBHOOK_SECRET=.\+' "$ENV"; then
 		set_var TELEGRAM_WEBHOOK_SECRET "$(openssl rand -hex 16)"
 	fi
-	[ -z "$chat" ] || set_var TELEGRAM_STAFF_CHAT_ID "$chat"
 else
 	for pair in "$@"; do
 		case "$pair" in *=*) set_var "${pair%%=*}" "${pair#*=}" ;; *) echo "Ожидается КЛЮЧ=значение: $pair"; exit 1 ;; esac

@@ -58,72 +58,6 @@ namespace Cafe.API.Controllers
         public class NotificationsRequest { public bool Enabled { get; set; } }
         public class LoginRequest { public string InitData { get; set; } = string.Empty; }
 
-        // ==================== Привязка аккаунта ====================
-
-        // GET: api/telegram/status
-        [HttpGet("status")]
-        [Authorize]
-        public async Task<IActionResult> Status()
-        {
-            var userId = User.GetUserId();
-            if (userId == null) return Unauthorized();
-
-            var user = await _context.Users.AsNoTracking()
-                .Where(u => u.Id == userId.Value)
-                .Select(u => new { u.TelegramUserId, u.TelegramNotifications })
-                .FirstOrDefaultAsync();
-
-            return Ok(new
-            {
-                Enabled = _options.Enabled && !string.IsNullOrWhiteSpace(_options.BotUsername),
-                _options.BotUsername,
-                Linked = user?.TelegramUserId != null,
-                Notifications = user?.TelegramNotifications ?? true
-            });
-        }
-
-        // POST: api/telegram/link — ссылка t.me/<bot>?start=<token> для привязки
-        [HttpPost("link")]
-        [Authorize]
-        public IActionResult CreateLink()
-        {
-            var userId = User.GetUserId();
-            if (userId == null) return Unauthorized();
-            if (!_options.Enabled || string.IsNullOrWhiteSpace(_options.BotUsername))
-                return BadRequest(new { Message = "Telegram-бот не настроен" });
-
-            var token = _auth.CreateLinkToken(userId.Value);
-            return Ok(new { Url = $"https://t.me/{_options.BotUsername}?start={token}" });
-        }
-
-        // DELETE: api/telegram/link — отвязать
-        [HttpDelete("link")]
-        [Authorize]
-        public async Task<IActionResult> Unlink()
-        {
-            var userId = User.GetUserId();
-            if (userId == null) return Unauthorized();
-
-            await _context.Users
-                .Where(u => u.Id == userId.Value)
-                .ExecuteUpdateAsync(s => s.SetProperty(u => u.TelegramUserId, (long?)null));
-            return Ok(new { Linked = false });
-        }
-
-        // PUT: api/telegram/notifications — включить/выключить уведомления
-        [HttpPut("notifications")]
-        [Authorize]
-        public async Task<IActionResult> SetNotifications([FromBody] NotificationsRequest request)
-        {
-            var userId = User.GetUserId();
-            if (userId == null) return Unauthorized();
-
-            await _context.Users
-                .Where(u => u.Id == userId.Value)
-                .ExecuteUpdateAsync(s => s.SetProperty(u => u.TelegramNotifications, request.Enabled));
-            return Ok(new { Notifications = request.Enabled });
-        }
-
         // ==================== Вход на сайте через Telegram ====================
 
         // GET: api/telegram/web-login — доступен ли вход через Telegram (бот подключён)
@@ -236,7 +170,7 @@ namespace Cafe.API.Controllers
 
         // ==================== Настройка бота ====================
 
-        // POST: api/telegram/setup — установить вебхук, кнопку меню и команды (один раз после деплоя)
+        // POST: api/telegram/setup — вебхук и бот «только для входа» (без команд и кнопки мини-приложения); при запуске сервер делает это сам
         [HttpPost("setup")]
         [HasPermission(Permissions.Settings)]
         public async Task<IActionResult> Setup()
@@ -244,34 +178,7 @@ namespace Cafe.API.Controllers
             if (!_options.Enabled) return BadRequest(new { Message = "Не задан Telegram:BotToken" });
             if (string.IsNullOrWhiteSpace(_options.PublicApiUrl)) return BadRequest(new { Message = "Не задан Telegram:PublicApiUrl" });
             if (string.IsNullOrWhiteSpace(_options.WebhookSecret)) return BadRequest(new { Message = "Не задан Telegram:WebhookSecret" });
-
-            var webhook = await _telegram.CallAsync("setWebhook", new
-            {
-                Url = _options.PublicApiUrl.TrimEnd('/') + "/api/telegram/webhook",
-                SecretToken = _options.WebhookSecret,
-                AllowedUpdates = new[] { "message" },
-                DropPendingUpdates = true
-            });
-
-            var commands = await _telegram.CallAsync("setMyCommands", new
-            {
-                Commands = new[]
-                {
-                    new { Command = "menu", Description = "Открыть меню и заказать" },
-                    new { Command = "orders", Description = "Мои последние заказы" },
-                    new { Command = "help", Description = "Помощь" }
-                }
-            });
-
-            var menuButton = true;
-            if (!string.IsNullOrWhiteSpace(_options.WebAppUrl))
-            {
-                menuButton = await _telegram.CallAsync("setChatMenuButton", new
-                {
-                    MenuButton = new { Type = "web_app", Text = "Меню", WebApp = new { Url = _options.WebAppUrl } }
-                });
-            }
-
+            var (webhook, commands, menuButton) = await TelegramSetup.RunAsync(_telegram, _options, HttpContext.RequestAborted);
             return Ok(new { Webhook = webhook, Commands = commands, MenuButton = menuButton });
         }
 
@@ -309,31 +216,11 @@ namespace Cafe.API.Controllers
                 var command = text.Split(' ', 2)[0].Split('@')[0].ToLowerInvariant();
                 var argument = text.Contains(' ') ? text.Split(' ', 2)[1].Trim() : string.Empty;
 
-                switch (command)
-                {
-                    case "/start":
-                        await HandleStartAsync(chatId, fromId, chatType, argument, fromUser);
-                        break;
-                    case "/menu":
-                        await _telegram.SendMessageAsync(chatId, "Выбирайте и заказывайте прямо в Telegram 👇",
-                            _telegram.WebAppKeyboard("🍽️ Открыть меню"));
-                        break;
-                    case "/orders":
-                        await HandleOrdersAsync(chatId, fromId);
-                        break;
-                    case "/status":
-                        await HandleStatusAsync(chatId);
-                        break;
-                    case "/id":
-                        // Удобно, чтобы узнать ID группы: для заказов (Telegram:StaffChatId) и отдельной — для тревог
-                        await _telegram.SendMessageAsync(chatId, $"ID этого чата: <code>{chatId}</code>");
-                        break;
-                    default:
-                        await _telegram.SendMessageAsync(chatId,
-                            $"Я бот «{await BrandNameAsync()}» 🍽️\n\n/menu — открыть меню\n/orders — мои заказы\n\nУведомления о заказах приходят сюда, если вы привязали Telegram в профиле на сайте.",
-                            _telegram.WebAppKeyboard("🍽️ Открыть меню"));
-                        break;
-                }
+                // Бот нужен только для входа на сайт: /start login_<код>; остальное — подсказка
+                if (command == "/start")
+                    await HandleStartAsync(chatId, fromId, chatType, argument, fromUser);
+                else if (chatType == "private")
+                    await _telegram.SendMessageAsync(chatId, $"Этот бот нужен только для входа на сайт «{await BrandNameAsync()}»: нажмите там «Войти через Telegram».");
             }
             catch (Exception ex)
             {
@@ -353,73 +240,13 @@ namespace Cafe.API.Controllers
                 var ok = _services.GetRequiredService<TelegramLoginSessions>()
                     .Approve(argument[TelegramLoginSessions.Prefix.Length..], from ?? new TelegramAuth.TelegramUser(fromId, null, null, null));
                 await _telegram.SendMessageAsync(chatId, ok
-                    ? $"✅ Вход подтверждён — вернитесь на сайт «{await BrandNameAsync()}». Сюда будут приходить статусы ваших заказов."
+                    ? $"✅ Вход подтверждён — вернитесь на сайт «{await BrandNameAsync()}»."
                     : "Ссылка для входа устарела. Нажмите «Войти через Telegram» на сайте ещё раз.");
                 return;
             }
 
-            if (!string.IsNullOrEmpty(argument) && chatType == "private")
-            {
-                var userId = _auth.ValidateLinkToken(argument);
-                if (userId == null)
-                {
-                    await _telegram.SendMessageAsync(chatId, "Ссылка устарела. Нажмите «Подключить Telegram» на сайте ещё раз.");
-                    return;
-                }
-
-                // Этот Telegram мог быть привязан к другому аккаунту — отвязываем
-                await _context.Users
-                    .Where(u => u.TelegramUserId == fromId && u.Id != userId.Value)
-                    .ExecuteUpdateAsync(s => s.SetProperty(u => u.TelegramUserId, (long?)null));
-
-                var updated = await _context.Users
-                    .Where(u => u.Id == userId.Value)
-                    .ExecuteUpdateAsync(s => s
-                        .SetProperty(u => u.TelegramUserId, (long?)fromId)
-                        .SetProperty(u => u.TelegramNotifications, true));
-
-                await _telegram.SendMessageAsync(chatId,
-                    updated > 0
-                        ? "✅ Telegram подключён! Сюда будут приходить статусы ваших заказов."
-                        : "Не удалось найти аккаунт. Попробуйте ещё раз с сайта.",
-                    _telegram.WebAppKeyboard("🍽️ Открыть меню"));
-                return;
-            }
-
-            await _telegram.SendMessageAsync(chatId,
-                $"Привет! Это «{await BrandNameAsync()}» 🍽️\nЗаказывайте прямо здесь — нажмите кнопку ниже.",
-                _telegram.WebAppKeyboard("🍽️ Открыть меню"));
+            if (chatType == "private")
+                await _telegram.SendMessageAsync(chatId, $"Этот бот нужен только для входа на сайт «{await BrandNameAsync()}»: нажмите там «Войти через Telegram».");
         }
-
-        private async Task HandleOrdersAsync(long chatId, long fromId)
-        {
-            var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.TelegramUserId == fromId);
-            if (user == null)
-            {
-                await _telegram.SendMessageAsync(chatId, "Telegram ещё не привязан к аккаунту. Откройте профиль на сайте → «Подключить Telegram».");
-                return;
-            }
-
-            var orders = await _context.Orders.AsNoTracking()
-                .Where(o => o.UserId == user.Id)
-                .OrderByDescending(o => o.CreatedAt)
-                .Take(3)
-                .Select(o => new { o.Id, o.Status, o.Total, o.CreatedAt })
-                .ToListAsync();
-
-            if (orders.Count == 0)
-            {
-                await _telegram.SendMessageAsync(chatId, "У вас пока нет заказов.", _telegram.WebAppKeyboard("🍽️ Открыть меню"));
-                return;
-            }
-
-            var lines = orders.Select(o => $"#{o.Id} — <b>{TelegramApi.Escape(o.Status)}</b> · {o.Total:0.##} ₽");
-            await _telegram.SendMessageAsync(chatId, "Ваши последние заказы:\n" + string.Join('\n', lines),
-                _telegram.WebAppKeyboard("Мои заказы", "/orders"));
-        }
-
-        /// <summary>/status — мониторинг перенесён во внешний сервис, здесь только подсказка</summary>
-        private async Task HandleStatusAsync(long chatId) =>
-            await _telegram.SendMessageAsync(chatId, "Состояние сервера — в «Состоянии системы» на сайте; тревоги приходят из внешнего мониторинга.");
     }
 }
