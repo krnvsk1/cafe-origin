@@ -11,6 +11,8 @@ import {
   MenuBookOutlined as RecipeIcon,
   Check as CheckIcon,
   ScaleOutlined as ScaleIcon,
+  ZoomIn as ZoomInIcon,
+  ZoomOut as ZoomOutIcon,
 } from '@mui/icons-material';
 import { useKitchenOrders, useSetOrderStatus, useKitchenStations, useSetStationStatus, useKitchenItem, useResolveVoid } from '../api/staff';
 import type { KitchenOrder, KitchenOrderItem } from '../api/staff';
@@ -27,6 +29,9 @@ import { useSetItemWeight } from '../api/waiter';
 import type { OrderStatus } from '../types';
 
 const SOUND_KEY = 'kitchen-sound';
+const ZOOM_KEY = 'kitchen-zoom';
+/** «Стол 4» из «4» или «Стол 4» */
+const tableLabel = (name: string) => (/^стол/i.test(name.trim()) ? name.trim() : `Стол ${name.trim()}`);
 // Какую кухню показывает этот экран (у каждого планшета своя)
 const STATION_KEY = 'kitchen-station';
 
@@ -185,12 +190,11 @@ const KitchenCard: React.FC<{
         },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: order.waiterName ? 0.25 : 1 }}>
         <Typography variant="h5" fontWeight={800}>#{order.id}</Typography>
         {order.tableName
-          ? <Chip size="small" color="secondary" label={`Стол ${order.tableName}`} sx={{ fontWeight: 800 }} />
+          ? <Chip size="small" color="secondary" label={tableLabel(order.tableName)} sx={{ fontWeight: 800 }} />
           : <Chip size="small" label={order.deliveryType} variant="outlined" />}
-        {order.waiterName && <Typography variant="body2" color="text.secondary" noWrap sx={{ minWidth: 0 }}>{order.waiterName}</Typography>}
         <Box sx={{ flex: 1 }} />
         {order.scheduledFor ? (
           <Chip size="small" color="warning" icon={<ScheduleIcon />} label={formatScheduled(order.scheduledFor)} />
@@ -200,6 +204,10 @@ const KitchenCard: React.FC<{
           </Typography>
         )}
       </Box>
+      {/* Официант — отдельной строкой, чтобы имя не обрезалось */}
+      {order.waiterName && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }} noWrap>Официант: <b>{order.waiterName}</b></Typography>
+      )}
 
       {stationId == null && multi
         ? order.stations.map(st => (
@@ -241,7 +249,8 @@ const KitchenCard: React.FC<{
 
       <Divider sx={{ my: 1 }} />
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }} noWrap>{order.customerName}</Typography>
+        {/* Стол уже вверху карточки — внизу имя гостя только у заказов не из зала */}
+        <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }} noWrap>{order.tableName ? '' : order.customerName}</Typography>
         {next && (
           <Button variant="contained" size="large" disabled={busy} onClick={() => advance(next.status)}>
             {next.label}
@@ -258,9 +267,18 @@ const KitchenCard: React.FC<{
 
 const KitchenPage: React.FC = () => {
   useWorkScreen();
-  // На телевизоре — во всю ширину и крупно; раскладка как на экране ~1600 px
+  // На телевизоре — во всю ширину; масштаб под экран и свой множитель (кнопки «A−/A+»), запоминается на устройстве
   useWidePage();
-  const scale = useScreenScale(1600);
+  const autoScale = useScreenScale(1920, 2);
+  const [zoomFactor, setZoomFactor] = React.useState(() => {
+    try { const v = Number(localStorage.getItem(ZOOM_KEY)); return v >= 0.5 && v <= 2 ? v : 1; } catch { return 1; }
+  });
+  const changeZoom = (delta: number) => setZoomFactor(prev => {
+    const next = Math.round(Math.min(2, Math.max(0.5, prev + delta)) * 10) / 10;
+    try { localStorage.setItem(ZOOM_KEY, String(next)); } catch { /* ignore */ }
+    return next;
+  });
+  const scale = autoScale * zoomFactor;
   const { data: orders, isLoading, error } = useKitchenOrders();
   const invalidate = useInvalidateOnOrderEvent();
   const now = useNow();
@@ -331,7 +349,7 @@ const KitchenPage: React.FC = () => {
   const current = visible.filter(o => !o.isLater);
 
   return (
-    <Box style={scale > 1 ? { zoom: scale } : undefined}>
+    <Box style={scale !== 1 ? { zoom: scale } : undefined}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
         <Typography variant="h4" fontWeight={700}>{station == null ? 'Кухня' : stations.find(s => s.id === station)?.name}</Typography>
         <Box sx={{ flex: 1, display: 'flex', gap: 1, flexWrap: 'wrap', ml: 1 }}>
@@ -361,6 +379,8 @@ const KitchenPage: React.FC = () => {
         <Tooltip title={soundOn ? 'Выключить звук новых заказов' : 'Включить звук новых заказов'}>
           <IconButton onClick={toggleSound}>{soundOn ? <VolumeUpIcon /> : <VolumeOffIcon />}</IconButton>
         </Tooltip>
+        <Tooltip title="Мельче"><span><IconButton onClick={() => changeZoom(-0.1)} disabled={zoomFactor <= 0.5} aria-label="Мельче"><ZoomOutIcon /></IconButton></span></Tooltip>
+        <Tooltip title="Крупнее"><span><IconButton onClick={() => changeZoom(0.1)} disabled={zoomFactor >= 2} aria-label="Крупнее"><ZoomInIcon /></IconButton></span></Tooltip>
         <FullscreenButton />
       </Box>
 
