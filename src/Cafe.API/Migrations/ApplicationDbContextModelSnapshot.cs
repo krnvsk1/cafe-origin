@@ -1379,6 +1379,14 @@ namespace Cafe.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("check_id");
 
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<int?>("ClosedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("closed_by");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("completed_at");
@@ -1473,6 +1481,15 @@ namespace Cafe.API.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("source");
+
+                    b.Property<string>("StaffReason")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("staff_reason");
+
+                    b.Property<int?>("StaffUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("staff_user_id");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -2581,6 +2598,14 @@ namespace Cafe.API.Migrations
                         .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("CancelRequestedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("cancel_requested_at");
+
+                    b.Property<int?>("CancelRequestedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("cancel_requested_by");
 
                     b.Property<DateTime?>("ClosedAt")
                         .HasColumnType("timestamp without time zone")

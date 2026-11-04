@@ -130,6 +130,12 @@ namespace Cafe.API.Controllers
                             && c.ClosedAt >= rangeStart && c.ClosedAt < rangeEnd)
                 .Select(c => new { c.ClosedAt, c.Total, c.StaffUserId })
                 .ToListAsync();
+            // и заказы с сайта, закрытые на сотрудника
+            staffChecks.AddRange(await _context.Orders.AsNoTracking()
+                .Where(o => o.PaymentMethod == Cafe.API.Models.CheckPayments.Staff && o.CheckId == null && o.Status != OrderStatuses.Cancelled
+                            && o.ClosedAt >= rangeStart && o.ClosedAt < rangeEnd)
+                .Select(o => new { o.ClosedAt, o.Total, o.StaffUserId })
+                .ToListAsync());
             var staffNow = staffChecks.Where(c => c.ClosedAt >= periodStart).ToList();
             var staffBefore = staffChecks.Where(c => c.ClosedAt < periodStart).ToList();
             var staffNames = await WaiterController.StaffNamesAsync(_context, staffNow.Select(c => c.StaffUserId));

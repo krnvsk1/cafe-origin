@@ -437,3 +437,63 @@ export const useMyChecks = (enabled: boolean) =>
     queryFn: () => apiClient.get('/api/waiter/my-checks').then(r => r.data),
     enabled,
   });
+
+// ==================== Отмена всего счёта и заказы с сайта ====================
+
+export interface CancelAllResult { cancelled: boolean; done: number; pending: number; returned?: FiscalResult | null }
+
+/** Менеджер отменяет весь открытый счёт: блюда по правилам отмены (кухня подтверждает начатые) */
+export const useCancelCheckAll = () =>
+  useWaiterMutation<{ checkId: number; reason: string }, CancelAllResult>(({ checkId, reason }) =>
+    apiClient.post(`/api/waiter/checks/${checkId}/cancel-all`, { reason }).then(r => r.data));
+
+export interface SiteOrder {
+  id: number;
+  createdAt: string;
+  customerName: string;
+  phone: string;
+  deliveryType: string;
+  address: string;
+  status: OrderStatus;
+  paymentMethod: string;
+  paymentStatus: string;
+  total: number;
+  closedAt: string | null;
+  closedBy: string | null;
+  staffName: string | null;
+  staffReason: string | null;
+  pendingVoids: number;
+  canClose: boolean;
+  fiscal: { kind: 'sell' | 'return'; status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber: number | null; sold: boolean } | null;
+}
+
+export const useSiteOrders = (enabled: boolean) =>
+  useQuery<SiteOrder[]>({
+    queryKey: [KEY, 'site-orders'],
+    queryFn: () => apiClient.get('/api/site-orders').then(r => r.data),
+    enabled,
+    refetchInterval: 30_000,
+  });
+
+export interface SiteCloseResult { fiscal: FiscalResult | null; fiscalSkipped?: 'staff' | 'disabled' | 'yookassa' | null; staff?: string | null }
+
+export const useCloseSiteOrder = () =>
+  useWaiterMutation<{ id: number; paymentMethod: string; staffUserId?: number | null; staffReason?: string | null }, SiteCloseResult>(({ id, ...body }) =>
+    apiClient.post(`/api/site-orders/${id}/close`, body).then(r => r.data));
+
+export const useSiteOrderFiscal = () =>
+  useWaiterMutation<number, FiscalResult>(id => apiClient.post(`/api/site-orders/${id}/fiscal`).then(r => r.data));
+
+export const useCancelSiteOrder = () =>
+  useWaiterMutation<{ id: number; reason: string }, CancelAllResult>(({ id, reason }) =>
+    apiClient.post(`/api/site-orders/${id}/cancel`, { reason }).then(r => r.data));
+
+/** Что ушло в АТОЛ — одной строкой для уведомления */
+export const atolText = (fiscal: FiscalResult | null | undefined, skipped?: string | null, staff?: string | null) =>
+  fiscal
+    ? fiscal.status === 'done' ? `Чек отправлен в АТОЛ и пробит${fiscal.fiscalDocumentNumber ? ` (ФД ${fiscal.fiscalDocumentNumber})` : ''}`
+      : fiscal.status === 'processing' ? 'Чек отправлен в АТОЛ, касса ещё печатает'
+      : `Чек в АТОЛ не пробит: ${fiscal.error ?? 'ошибка кассы'}`
+    : skipped === 'staff' ? `В АТОЛ не отправлялся — на сотрудника${staff ? `: ${staff}` : ''}`
+    : skipped === 'yookassa' ? 'Оплачен онлайн — чек отправила ЮKassa'
+    : 'В АТОЛ не отправлялся — онлайн-касса выключена';

@@ -32,14 +32,17 @@ namespace Cafe.API.Services.Fiscal
         /// Чек прихода или возврата по заказу. Ошибка кассы не бросается — она записывается в чек,
         /// чтобы заказ не терялся, а кассир мог нажать «Повторить».
         /// </summary>
-        public async Task<FiscalReceipt> PrintAsync(int orderId, string kind, int? userId, CancellationToken ct = default)
+        /// <param name="onlineViaAtol">Онлайн-оплата, а ЮKassa чеки не отправляет — пробиваем на кассе как безналичную</param>
+        public async Task<FiscalReceipt> PrintAsync(int orderId, string kind, int? userId, CancellationToken ct = default, bool onlineViaAtol = false)
         {
             var o = await _settings.GetAsync();
             if (!o.Enabled) throw new FiscalException("Онлайн-касса выключена — включите её в «Настройке интеграций»");
 
             var order = await _context.Orders.FirstOrDefaultAsync(x => x.Id == orderId, ct)
                         ?? throw new FiscalException("Заказ не найден");
-            if (order.PaymentMethod is not ("cash" or "card"))
+            if (order.PaymentMethod == CheckPayments.Staff) throw new FiscalException("Заказ закрыт на сотрудника без оплаты — кассовый чек не нужен");
+            var payment = order.PaymentMethod == "online" && onlineViaAtol && order.PaymentStatus is "paid" or "refunded" ? "card" : order.PaymentMethod;
+            if (payment is not ("cash" or "card"))
                 throw new FiscalException("Чек на кассе пробивается только при оплате наличными или картой; онлайн-оплату фискализирует ЮKassa");
             if (order.Total <= 0) throw new FiscalException("Сумма заказа — 0 ₽, чек не нужен");
 
@@ -51,7 +54,7 @@ namespace Cafe.API.Services.Fiscal
             var receipts = await _context.FiscalReceipts.Where(r => r.OrderId == orderId && r.CheckId == null).OrderBy(r => r.Id).ToListAsync(ct);
             var lines = await ReceiptLines.LoadAsync(_context, order, ct);
             var contact = o.SendToCustomer ? Controllers.PosController.NormalizePhone(order.Phone) : null;
-            return await RunReceiptAsync(o, order.Id, null, kind, receipts, lines, order.PaymentMethod, contact, order.DeliveryType, userId, ct);
+            return await RunReceiptAsync(o, order.Id, null, kind, receipts, lines, payment, contact, order.DeliveryType, userId, ct);
         }
 
         /// <summary>

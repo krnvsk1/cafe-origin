@@ -649,18 +649,20 @@ namespace Cafe.API.Controllers
         }
 
         /// <summary>Сотрудники (все, у кого есть роль кроме «гость»): id → имя</summary>
-        private async Task<Dictionary<int, string>> StaffAsync()
+        private Task<Dictionary<int, string>> StaffAsync() => StaffListAsync(_context);
+
+        public static async Task<Dictionary<int, string>> StaffListAsync(ApplicationDbContext context)
         {
-            var ids = await (from ur in _context.UserRoles
-                             join role in _context.Roles on ur.RoleId equals role.Id
+            var ids = await (from ur in context.UserRoles
+                             join role in context.Roles on ur.RoleId equals role.Id
                              where role.Name != AppRoles.User
                              select (int?)ur.UserId).Distinct().ToListAsync();
-            return await NamesAsync(ids);
+            return await StaffNamesAsync(context, ids);
         }
 
         // GET: api/waiter/staff-checks — можно ли закрыть счёт на сотрудника, список сотрудников и причин
         [HttpGet("staff-checks")]
-        [HasPermission(Permissions.Waiter)]
+        [HasPermission(Permissions.Waiter, Permissions.ChecksAll)]
         public async Task<IActionResult> StaffChecks()
         {
             var o = await _fiscalSettings.GetAsync();
@@ -787,6 +789,37 @@ namespace Cafe.API.Controllers
             if (await DenyAsync(c) is { } deny) return deny;
             if (!await _fiscal.EnabledAsync()) return BadRequest(new { message = "Онлайн-касса выключена" });
             return Ok(await FiscalAsync(id));
+        }
+
+        public class CancelAllRequest
+        {
+            public string Reason { get; set; } = string.Empty;
+        }
+
+        // POST: api/waiter/checks/{id}/cancel-all — менеджер отменяет весь открытый счёт: каждое блюдо по правилам отмены
+        // (не приняли — сразу; приняли или готовят — ждём кухню; готово или отдано — со списанием). Счёт отменится, когда уберут всё
+        [HttpPost("checks/{id:int}/cancel-all")]
+        [HasPermission(Permissions.ChecksAll)]
+        public async Task<IActionResult> CancelAll(int id, [FromBody] CancelAllRequest r)
+        {
+            var reason = r.Reason?.Trim() ?? "";
+            if (reason.Length == 0) return BadRequest(new { message = "Укажите причину" });
+            var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Отменить можно открытый счёт; у закрытого — «Сменить оплату» или возврат" });
+
+            c.CancelRequestedAt = DateTime.UtcNow;
+            c.CancelRequestedBy = User.GetUserId();
+            await _context.SaveChangesAsync();
+
+            var itemIds = (await LinesAsync(new List<int> { id }))
+                .Where(l => l.Order.Status != OrderStatuses.Cancelled && l.Item.Quantity > 0).Select(l => l.Item.Id).ToList();
+            int done, pending;
+            try { (done, pending) = await _voids.CancelAllAsync(itemIds, reason, User.GetUserId()); }
+            catch (VoidService.VoidException ex) { return BadRequest(new { message = ex.Message }); }
+            var cancelled = await _voids.CancelCheckIfEmptyAsync(id);
+            _logger.LogInformation("🗑 Счёт #{CheckId} отменён целиком ({Reason}): убрано {Done}, ждёт кухню {Pending}", id, reason, done, pending);
+            return Ok(new { cancelled, done, pending });
         }
 
         // POST: api/waiter/checks/{id}/cancel — отменить пустой чек (стол освобождается)

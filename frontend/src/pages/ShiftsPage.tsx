@@ -1,12 +1,14 @@
 import * as React from 'react';
 import {
   Box, Typography, TextField, Alert, CircularProgress, Chip, Paper, Collapse, ButtonBase, Button,
+  Dialog, DialogTitle, DialogContent, DialogActions, ToggleButtonGroup, ToggleButton, MenuItem, Snackbar,
 } from '@mui/material';
 import { ExpandMore as ExpandIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import {
   useShiftCurrent, useShifts, useShiftDetails, parseUtc, useUnfinishedReceipts, useRetryReceipt, useReturnCheckFiscal, payLabel,
-  type ShiftRow, type ShiftDetails, type UnfinishedReceipt,
+  useCancelCheckAll, useSiteOrders, useCloseSiteOrder, useSiteOrderFiscal, useCancelSiteOrder, useStaffChecksInfo, atolText,
+  type ShiftRow, type ShiftDetails, type UnfinishedReceipt, type SiteOrder, type CancelAllResult,
 } from '../api/waiter';
 import { apiError } from '../api/inventory';
 import { todayMsk } from '../api/haccp';
@@ -72,11 +74,191 @@ const UnfinishedReceipts: React.FC = () => {
 };
 
 /** Подробности смены: официанты и все чеки */
+const CANCEL_REASONS = ['Гость передумал', 'Ошибка заказа', 'Долго ждали', 'Нет в наличии', 'Гость не пришёл'];
+
+const cancelText = (r: CancelAllResult, what: string) =>
+  (r.returned ? 'Чек возврата пробит. ' : '') +
+  (r.cancelled ? `${what} отменён` : r.pending > 0
+    ? `Убрано ${r.done}, ждёт кухню ${r.pending} — ${what.toLowerCase()} отменится, когда кухня подтвердит`
+    : `Убрано ${r.done}`);
+
+/** Отменить всё: причина; блюда убираются по правилам отмены (начатые — с подтверждением кухни, готовые — со списанием) */
+const CancelAllDialog: React.FC<{
+  title: string; warning?: string; onClose: () => void;
+  onSubmit: (reason: string) => Promise<CancelAllResult>; onDone: (r: CancelAllResult) => void;
+}> = ({ title, warning, onClose, onSubmit, onDone }) => {
+  const [reason, setReason] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState('');
+  const submit = async () => {
+    setBusy(true); setErr('');
+    try { onDone(await onSubmit(reason.trim())); }
+    catch (e) { setErr(apiError(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Dialog open onClose={() => !busy && onClose()} maxWidth="xs" fullWidth>
+      <DialogTitle>{title}</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        <Typography variant="body2" color="text.secondary">
+          Не принятые кухней блюда убираются сразу, принятые и готовящиеся — после подтверждения кухни, готовые или отданные — со списанием продуктов.
+        </Typography>
+        {warning && <Alert severity="warning">{warning}</Alert>}
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+          {CANCEL_REASONS.map(r => <Chip key={r} label={r} color={reason === r ? 'primary' : 'default'} onClick={() => setReason(r)} />)}
+        </Box>
+        <TextField size="small" label="Причина" value={reason} onChange={e => setReason(e.target.value)} slotProps={{ htmlInput: { maxLength: 300 } }} />
+        {err && <Alert severity="error">{err}</Alert>}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button onClick={onClose} disabled={busy} sx={{ color: 'text.secondary' }}>Назад</Button>
+        <Button variant="contained" color="error" onClick={submit} disabled={busy || !reason.trim()}
+          startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}>Отменить всё</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+const SITE_STATUS_COLOR: Record<string, 'default' | 'success' | 'warning' | 'info'> = {
+  'Новый': 'info', 'Принят': 'info', 'Готовится': 'warning', 'Готов': 'success', 'В пути': 'warning', 'Доставлен': 'success', 'Выполнен': 'success', 'Отменён': 'default',
+};
+
+/** Закрыть заказ с сайта: способ оплаты → чек в АТОЛ, или на сотрудника без чека */
+const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone: (text: string) => void }> = ({ order, onClose, onDone }) => {
+  const close = useCloseSiteOrder();
+  const online = order.paymentMethod === 'online';
+  const [method, setMethod] = React.useState<string>(online ? 'online' : order.paymentMethod === 'card' ? 'card' : 'cash');
+  const { data: staffInfo } = useStaffChecksInfo(!online);
+  const [staffId, setStaffId] = React.useState<number | ''>('');
+  const [reason, setReason] = React.useState('');
+  const [err, setErr] = React.useState('');
+  React.useEffect(() => {
+    if (staffId === '' && staffInfo?.me && staffInfo.staff?.some(u => u.id === staffInfo.me)) setStaffId(staffInfo.me);
+  }, [staffInfo, staffId]);
+  const submit = async () => {
+    setErr('');
+    try {
+      const r = await close.mutateAsync({ id: order.id, paymentMethod: method,
+        ...(method === 'staff' ? { staffUserId: staffId === '' ? null : staffId, staffReason: reason.trim() || null } : {}) });
+      onDone(`Заказ #${order.id} закрыт · ${payLabel(method === 'online' ? 'онлайн' : method)}. ${atolText(r.fiscal, r.fiscalSkipped, r.staff)}`);
+    } catch (e) { setErr(apiError(e)); }
+  };
+  return (
+    <Dialog open onClose={() => !close.isPending && onClose()} maxWidth="xs" fullWidth>
+      <DialogTitle>Закрыть заказ #{order.id} · {money(order.total)}</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Typography variant="body2" color="text.secondary">{order.deliveryType} · {order.customerName}{order.phone ? ` · ${order.phone}` : ''}</Typography>
+        {online ? (
+          <Alert severity="info">Оплачен онлайн — способ оплаты не меняется.</Alert>
+        ) : (
+          <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
+            <ToggleButton value="cash">Наличные</ToggleButton>
+            <ToggleButton value="card">Карта</ToggleButton>
+            {staffInfo?.allowed && <ToggleButton value="staff">На сотрудника</ToggleButton>}
+          </ToggleButtonGroup>
+        )}
+        {method === 'staff' && staffInfo?.allowed && (
+          <>
+            <TextField select label="Сотрудник" value={staffId} onChange={e => setStaffId(Number(e.target.value))}>
+              {(staffInfo.staff ?? []).map(u => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
+            </TextField>
+            <TextField size="small" label="Причина (необязательно)" value={reason} onChange={e => setReason(e.target.value)}
+              placeholder={staffInfo.reasons[0]} slotProps={{ htmlInput: { maxLength: 60 } }} />
+            <Alert severity="info">Без оплаты: чек в АТОЛ не отправляется, сумма — к удержанию с сотрудника, в выручку не входит.</Alert>
+          </>
+        )}
+        {err && <Alert severity="error">{err}</Alert>}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button onClick={onClose} disabled={close.isPending} sx={{ color: 'text.secondary' }}>Назад</Button>
+        <Button variant="contained" color="secondary" onClick={submit} disabled={close.isPending}
+          startIcon={close.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}>
+          {method === 'staff' ? 'Закрыть на сотрудника' : 'Закрыть'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+/** Заказы с сайта (доставка и самовывоз): закрывает менеджер — оплата и чек в АТОЛ; отмена всего заказа */
+const SiteOrdersPanel: React.FC = () => {
+  const { data, isLoading, error } = useSiteOrders(true);
+  const cancel = useCancelSiteOrder();
+  const fiscal = useSiteOrderFiscal();
+  const [closing, setClosing] = React.useState<SiteOrder | null>(null);
+  const [cancelling, setCancelling] = React.useState<SiteOrder | null>(null);
+  const [toast, setToast] = React.useState('');
+  const [showDone, setShowDone] = React.useState(false);
+  if (isLoading) return null;
+  if (error) return <Alert severity="error">{apiError(error, 'Не удалось загрузить заказы с сайта')}</Alert>;
+  const all = data ?? [];
+  const waiting = all.filter(o => !o.closedAt && o.status !== 'Отменён');
+  const done = all.filter(o => o.closedAt || o.status === 'Отменён');
+  if (all.length === 0) return null;
+  const rows = showDone ? [...waiting, ...done] : waiting;
+  const retry = async (o: SiteOrder) => {
+    try { const f = await fiscal.mutateAsync(o.id); setToast(`Заказ #${o.id}: ${atolText(f)}`); }
+    catch (e) { setToast(apiError(e)); }
+  };
+  return (
+    <Paper variant="outlined" sx={{ borderRadius: '16px', p: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+        <Typography sx={{ fontWeight: 800, flex: 1 }}>Заказы с сайта · ждут закрытия: {waiting.length}</Typography>
+        {done.length > 0 && <Button size="small" onClick={() => setShowDone(v => !v)}>{showDone ? 'Скрыть закрытые' : `Закрытые сегодня (${done.length})`}</Button>}
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        Доставку и самовывоз закрывает менеджер или администратор: способ оплаты, чек уходит в АТОЛ.
+      </Typography>
+      {rows.length === 0 && <Typography color="text.secondary">Все заказы закрыты</Typography>}
+      {rows.map(o => {
+        const isCancelled = o.status === 'Отменён';
+        const fiscalBad = !!o.closedAt && !isCancelled && o.paymentMethod !== 'staff' && o.fiscal && o.fiscal.status !== 'done';
+        return (
+          <Box key={o.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', py: 0.75, borderTop: 1, borderColor: 'divider', flexWrap: 'wrap', opacity: isCancelled ? 0.6 : 1 }}>
+            <Box sx={{ flex: 1, minWidth: 220 }}>
+              <Typography sx={{ fontWeight: 700 }}>
+                #{o.id} · {o.deliveryType} · {money(o.total)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {time(o.createdAt)} · {o.customerName}
+                {o.paymentMethod === 'online' ? ' · оплачен онлайн' : o.closedAt ? ` · ${payLabel(o.paymentMethod)}` : ''}
+                {o.staffName ? ` (${o.staffName})` : ''}
+                {o.closedAt ? ` · закрыл ${o.closedBy ?? '—'} в ${time(o.closedAt)}` : ''}
+                {o.closedAt && o.paymentMethod !== 'staff' && o.fiscal?.status === 'done' && o.fiscal.kind === 'sell' ? ` · чек ФД ${o.fiscal.fiscalDocumentNumber ?? '—'}` : ''}
+              </Typography>
+              {o.pendingVoids > 0 && <Typography variant="body2" color="warning.main">Отмена ждёт подтверждения кухни: {o.pendingVoids}</Typography>}
+              {fiscalBad && <Typography variant="body2" color="error.main">Чек не пробит: {o.fiscal?.error ?? 'касса не ответила'}</Typography>}
+            </Box>
+            <Chip size="small" color={SITE_STATUS_COLOR[o.status] ?? 'default'} label={o.status} />
+            {fiscalBad && <Button size="small" variant="outlined" onClick={() => retry(o)} disabled={fiscal.isPending}>{o.fiscal?.status === 'processing' ? 'Проверить' : 'Пробить'}</Button>}
+            {o.canClose && <Button size="small" variant="contained" color="secondary" onClick={() => setClosing(o)}>Закрыть</Button>}
+            {!isCancelled && o.pendingVoids === 0 && <Button size="small" color="error" onClick={() => setCancelling(o)}>Отменить</Button>}
+          </Box>
+        );
+      })}
+      {closing && <CloseSiteDialog order={closing} onClose={() => setClosing(null)} onDone={t => { setClosing(null); setToast(t); }} />}
+      {cancelling && (
+        <CancelAllDialog title={`Отменить заказ #${cancelling.id}`}
+          warning={[
+            cancelling.closedAt && cancelling.fiscal?.sold ? `Чек уже пробит — сначала уйдёт чек возврата на ${money(cancelling.total)}.` : '',
+            cancelling.paymentMethod === 'online' ? 'Онлайн-оплата вернётся гостю через ЮKassa, когда заказ отменится.' : '',
+          ].filter(Boolean).join(' ') || undefined}
+          onClose={() => setCancelling(null)}
+          onSubmit={reason => cancel.mutateAsync({ id: cancelling.id, reason })}
+          onDone={r => { setToast(`Заказ #${cancelling.id}: ${cancelText(r, 'Заказ')}`); setCancelling(null); }} />
+      )}
+      <Snackbar open={!!toast} autoHideDuration={7000} onClose={() => setToast('')} message={toast} anchorOrigin={{ vertical: 'top', horizontal: 'center' }} />
+    </Paper>
+  );
+};
+
 const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
   const navigate = useNavigate();
   const { data, isLoading, error } = useShiftDetails(id);
   const giveBack = useReturnCheckFiscal();
   const [note, setNote] = React.useState<{ id: number; ok: boolean; text: string } | null>(null);
+  const cancelCheck = useCancelCheckAll();
+  const [cancelling, setCancelling] = React.useState<number | null>(null);
   const doReturn = async (checkId: number, total: number) => {
     if (!window.confirm(`Пробить чек возврата на ${money(total)}? Деньги гостю возвращаете вы — касса только пробивает чек.`)) return;
     setNote(null);
@@ -89,6 +271,12 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
   if (error || !data) return <Alert severity="error">{apiError(error, 'Не удалось загрузить смену')}</Alert>;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 1 }}>
+      {cancelling != null && (
+        <CancelAllDialog title="Отменить весь счёт"
+          onClose={() => setCancelling(null)}
+          onSubmit={reason => cancelCheck.mutateAsync({ checkId: cancelling, reason })}
+          onDone={r => { setCancelling(null); setNote({ id: cancelling, ok: true, text: cancelText(r, 'Счёт') }); }} />
+      )}
       {data.waiters.length > 0 && (
         <Box>
           <Typography variant="overline" color="text.secondary">Официанты</Typography>
@@ -145,6 +333,9 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                   Возврат
                 </Button>
               )}
+              {c.status === 'open' && (
+                <Button size="small" color="error" onClick={() => setCancelling(c.id)} sx={{ mr: 0.5 }}>Отменить</Button>
+              )}
             </Box>
           );
         })}
@@ -199,6 +390,7 @@ const ShiftsPage: React.FC = () => {
 
       {current && <ShiftBar shift={current} hideMine />}
       {(seesAll || can(P.Pos)) && current?.unfiscalized != null && <UnfinishedReceipts />}
+      {seesAll && <SiteOrdersPanel />}
       {current?.venue && current.waiters && (
         <Paper variant="outlined" sx={{ borderRadius: '16px', p: 2 }}>
           <Typography sx={{ fontWeight: 700, mb: 0.5 }}>

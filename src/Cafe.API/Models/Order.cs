@@ -125,6 +125,21 @@ namespace Cafe.API.Models
         [Column("check_id")]
         public int? CheckId { get; set; }
 
+        /// <summary>Заказ с сайта закрыт менеджером: выбран способ оплаты, пробит чек (или на сотрудника)</summary>
+        [Column("closed_at")]
+        public DateTime? ClosedAt { get; set; }
+
+        [Column("closed_by")]
+        public int? ClosedBy { get; set; }
+
+        /// <summary>Закрыт на сотрудника (без оплаты и без чека): кто и почему</summary>
+        [Column("staff_user_id")]
+        public int? StaffUserId { get; set; }
+
+        [MaxLength(60)]
+        [Column("staff_reason")]
+        public string? StaffReason { get; set; }
+
         // Когда продукты списаны со склада по техкартам (null — не списаны или возвращены)
         [Column("stock_deducted_at")]
         [JsonIgnore]

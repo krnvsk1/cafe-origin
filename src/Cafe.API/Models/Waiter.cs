@@ -104,6 +104,13 @@ namespace Cafe.API.Models
         [Column("payment_changed_at")]
         public DateTime? PaymentChangedAt { get; set; }
 
+        /// <summary>Менеджер отменил весь счёт: часть блюд ждёт решения кухни — счёт отменится, когда кухня ответит</summary>
+        [Column("cancel_requested_at")]
+        public DateTime? CancelRequestedAt { get; set; }
+
+        [Column("cancel_requested_by")]
+        public int? CancelRequestedBy { get; set; }
+
         [Column("total", TypeName = "numeric(12,2)")]
         public decimal Total { get; set; }
 
