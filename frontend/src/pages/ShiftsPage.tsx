@@ -132,6 +132,7 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                     {c.paymentMethod === 'staff'
                       ? ` · на сотрудника: ${c.staffName ?? '—'}${c.staffReason ? ` (${c.staffReason})` : ''} · в АТОЛ не отправлялся`
                       : c.paymentMethod ? ` · ${payLabel(c.paymentMethod)}` : ''}
+                    {c.paymentWas && <Box component="span" sx={{ color: 'warning.main' }}> · исправлено с «{payLabel(c.paymentWas)}»{c.paymentChangedBy ? `, ${c.paymentChangedBy}` : ''}{c.paymentChangedAt ? ` ${time(c.paymentChangedAt)}` : ''}</Box>}
                     {ft && <Box component="span" sx={{ color: sold || returned ? 'text.secondary' : 'error.main' }}> · кассовый чек: {ft}</Box>}
                   </Typography>
                   {note?.id === c.id && <Typography variant="body2" color={note.ok ? 'success.main' : 'error.main'}>{note.text}</Typography>}

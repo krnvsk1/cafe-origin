@@ -93,6 +93,17 @@ namespace Cafe.API.Models
         [Column("staff_reason")]
         public string? StaffReason { get; set; }
 
+        /// <summary>Способ оплаты меняли после закрытия: какой был, кто и когда поменял</summary>
+        [MaxLength(20)]
+        [Column("payment_was")]
+        public string? PaymentWas { get; set; }
+
+        [Column("payment_changed_by")]
+        public int? PaymentChangedBy { get; set; }
+
+        [Column("payment_changed_at")]
+        public DateTime? PaymentChangedAt { get; set; }
+
         [Column("total", TypeName = "numeric(12,2)")]
         public decimal Total { get; set; }
 

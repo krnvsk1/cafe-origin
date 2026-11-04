@@ -88,6 +88,12 @@ export interface TableCheck {
   /** Счёт закрыт на сотрудника (без оплаты и без чека) */
   staffName?: string | null;
   staffReason?: string | null;
+  /** Оплату меняли после закрытия: какая была, кто и когда */
+  paymentWas?: string | null;
+  paymentChangedBy?: string | null;
+  paymentChangedAt?: string | null;
+  /** Менеджер может исправить оплаченный счёт на сотрудника (смена открыта) */
+  canFixToStaff?: boolean;
   total: number;
   notServed: number;
   /** Принтер счетов включён в настройках */
@@ -165,16 +171,17 @@ export const useCloseCheck = () =>
 
 /** Сменить способ оплаты закрытого счёта: если чек уже в АТОЛ — возврат и новый чек */
 export interface ChangePaymentResult {
-  paymentMethod: 'cash' | 'card';
+  paymentMethod: CheckPayment;
   /** Чек возврата прежней оплаты (если чек был пробит) */
   returned: FiscalResult | null;
   /** Новый чек продажи */
   fiscal: FiscalResult | null;
-  fiscalSkipped?: 'disabled' | null;
+  fiscalSkipped?: 'disabled' | 'staff' | null;
+  staff?: string | null;
 }
 export const useChangePayment = () =>
-  useWaiterMutation<{ checkId: number; paymentMethod: 'cash' | 'card' }, ChangePaymentResult>(({ checkId, paymentMethod }) =>
-    apiClient.post(`/api/waiter/checks/${checkId}/payment`, { paymentMethod }).then(r => r.data));
+  useWaiterMutation<{ checkId: number; paymentMethod: CheckPayment; staffUserId?: number | null; staffReason?: string | null }, ChangePaymentResult>(({ checkId, ...body }) =>
+    apiClient.post(`/api/waiter/checks/${checkId}/payment`, body).then(r => r.data));
 
 /** Закрытие на сотрудника: включено ли, можно ли мне, кого выбрать */
 export interface StaffChecksInfo {
@@ -338,6 +345,7 @@ export interface ShiftDetails {
     status: 'open' | 'closed' | 'cancelled'; guests: number | null; openedAt: string; closedAt: string | null;
     paymentMethod: string | null; total: number;
     staffName?: string | null; staffReason?: string | null;
+    paymentWas?: string | null; paymentChangedBy?: string | null; paymentChangedAt?: string | null;
     fiscal: CheckFiscalState | null;
     fiscalReturn: CheckFiscalState | null;
   }[];

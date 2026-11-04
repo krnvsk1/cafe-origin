@@ -627,16 +627,24 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const [err, setErr] = React.useState('');
   // Сменить способ оплаты закрытого счёта
   const changePayment = useChangePayment();
-  const [repay, setRepay] = React.useState<'cash' | 'card' | null>(null);
+  const [repay, setRepay] = React.useState<CheckPayment | null>(null);
   const [repayErr, setRepayErr] = React.useState('');
+  const { data: repayStaff } = useStaffChecksInfo(!!repay && !!check?.canFixToStaff);
+  const [fixStaffId, setFixStaffId] = React.useState<number | ''>('');
+  const [fixReason, setFixReason] = React.useState('');
   const doRepay = async () => {
     if (!repay || !check) return;
     setRepayErr('');
     try {
-      const r = await changePayment.mutateAsync({ checkId: check.id, paymentMethod: repay });
+      const r = await changePayment.mutateAsync({
+        checkId: check.id, paymentMethod: repay,
+        ...(repay === 'staff' ? { staffUserId: fixStaffId === '' ? null : fixStaffId, staffReason: fixReason.trim() || null } : {}),
+      });
       setRepay(null);
       const ret = r.returned ? `Возврат пробит${r.returned.fiscalDocumentNumber ? ` (ФД ${r.returned.fiscalDocumentNumber})` : ''}. ` : '';
-      const sell = r.fiscal
+      const sell = r.fiscalSkipped === 'staff'
+        ? `Новый чек в АТОЛ не отправлялся — счёт на сотрудника${r.staff ? `: ${r.staff}` : ''}`
+        : r.fiscal
         ? (r.fiscal.status === 'done' ? `Новый чек отправлен в АТОЛ и пробит${r.fiscal.fiscalDocumentNumber ? ` (ФД ${r.fiscal.fiscalDocumentNumber})` : ''}`
           : r.fiscal.status === 'processing' ? 'Новый чек отправлен в АТОЛ, касса ещё печатает' : `Новый чек не пробит: ${r.fiscal.error ?? 'ошибка кассы'} — нажмите «Пробить»`)
         : 'В АТОЛ не отправлялось — онлайн-касса выключена';
@@ -745,10 +753,15 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
 
       {!isOpen && <Alert severity={check.status === 'closed' ? 'success' : 'info'}
         action={check.status === 'closed'
-          ? <Button color="inherit" size="small" onClick={() => { setRepayErr(''); setRepay(check.paymentMethod === 'cash' ? 'card' : 'cash'); }}>Сменить оплату</Button>
+          ? <Button color="inherit" size="small" onClick={() => { setRepayErr(''); setFixStaffId(''); setFixReason(''); setRepay(check.paymentMethod === 'cash' ? 'card' : 'cash'); }}>Сменить оплату</Button>
           : undefined}>{check.status === 'closed'
         ? `Счёт закрыт · ${check.paymentMethod === 'staff' ? `на сотрудника: ${check.staffName ?? '—'}${check.staffReason ? ` (${check.staffReason})` : ''} · в АТОЛ не отправлялся` : payLabel(check.paymentMethod)}`
-        : 'Счёт отменён'}</Alert>}
+        : 'Счёт отменён'}
+        {check.paymentWas && check.paymentChangedAt && (
+          <Typography variant="body2" sx={{ mt: 0.5 }}>
+            Исправлено: {payLabel(check.paymentWas)} → {payLabel(check.paymentMethod)} · {check.paymentChangedBy ?? '—'}, {parseUtc(check.paymentChangedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </Typography>
+        )}</Alert>}
       {check.status === 'closed' && check.fiscalEnabled && check.paymentMethod !== 'staff' && (check.fiscal?.status === 'done'
         ? <Typography variant="body2" color="text.secondary">Кассовый чек пробит{check.fiscal.fiscalDocumentNumber ? ` · ФД ${check.fiscal.fiscalDocumentNumber}` : ''}</Typography>
         : (
@@ -939,9 +952,21 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           <ToggleButtonGroup exclusive fullWidth value={repay} onChange={(_, v) => v && setRepay(v)}>
             <ToggleButton value="card" disabled={check.paymentMethod === 'card'}>Карта</ToggleButton>
             <ToggleButton value="cash" disabled={check.paymentMethod === 'cash'}>Наличные</ToggleButton>
+            {check.canFixToStaff && <ToggleButton value="staff">На сотрудника</ToggleButton>}
           </ToggleButtonGroup>
-          <Alert severity="info">
-            {!check.fiscalEnabled
+          {repay === 'staff' && (
+            <>
+              <TextField select label="Сотрудник" value={fixStaffId} onChange={e => setFixStaffId(Number(e.target.value))}>
+                {(repayStaff?.staff ?? []).map(u => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
+              </TextField>
+              <TextField size="small" label="Причина (необязательно)" value={fixReason} onChange={e => setFixReason(e.target.value)}
+                placeholder={repayStaff?.reasons[0]} slotProps={{ htmlInput: { maxLength: 60 } }} />
+            </>
+          )}
+          <Alert severity={repay === 'staff' ? 'warning' : 'info'}>
+            {repay === 'staff'
+              ? `Исправление ошибки: счёт будет записан на сотрудника, в выручку и наличные не войдёт.${check.fiscalEnabled && check.fiscal?.status === 'done' ? ` В АТОЛ уйдёт чек возврата на ${money(check.total)}, новый чек не пробивается.` : ''} В истории останется, кто и когда исправил. Только пока смена открыта.`
+              : !check.fiscalEnabled
               ? 'Онлайн-касса выключена — в АТОЛ ничего не отправится, изменится только способ оплаты.'
               : check.fiscal?.status === 'done'
                 ? `Чек уже в АТОЛ: сначала будет пробит чек возврата на ${money(check.total)} (${payLabel(check.paymentMethod)}), затем новый чек — ${payLabel(repay)}. Если возврат не пробьётся, оплата не изменится.`
@@ -951,7 +976,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button onClick={() => setRepay(null)} disabled={changePayment.isPending} sx={{ color: 'text.secondary' }}>Отмена</Button>
-          <Button variant="contained" color="secondary" onClick={doRepay} disabled={changePayment.isPending}
+          <Button variant="contained" color="secondary" onClick={doRepay} disabled={changePayment.isPending || (repay === 'staff' && fixStaffId === '')}
             startIcon={changePayment.isPending ? <CircularProgress size={18} color="inherit" /> : undefined}>
             Сменить
           </Button>

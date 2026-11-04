@@ -122,8 +122,10 @@ namespace Cafe.API.Controllers
 
         public class ChangePaymentRequest
         {
-            /// <summary>cash или card</summary>
+            /// <summary>cash, card или staff (исправление ошибки — только менеджер и пока смена открыта)</summary>
             public string PaymentMethod { get; set; } = "cash";
+            public int? StaffUserId { get; set; }
+            public string? StaffReason { get; set; }
         }
 
         /// <summary>Причины по умолчанию для закрытия на сотрудника</summary>
@@ -360,6 +362,13 @@ namespace Cafe.API.Controllers
                 c.PaymentMethod,
                 staffName = c.StaffUserId == null ? null : (await NamesAsync(new[] { c.StaffUserId })).GetValueOrDefault(c.StaffUserId.Value),
                 c.StaffReason,
+                c.PaymentWas,
+                paymentChangedBy = c.PaymentChangedBy == null ? null : (await NamesAsync(new[] { c.PaymentChangedBy })).GetValueOrDefault(c.PaymentChangedBy.Value),
+                c.PaymentChangedAt,
+                // Менеджер может исправить оплаченный счёт на сотрудника, пока смена открыта
+                canFixToStaff = c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff
+                    && (await _fiscalSettings.GetAsync()).StaffChecks && await SeesAllAsync()
+                    && c.VenueShiftId != null && await _context.VenueShifts.AnyAsync(v => v.Id == c.VenueShiftId && v.ClosedAt == null),
                 total = c.Status == CheckStatuses.Closed ? c.Total : active.Sum(l => LineTotal(l.Item)),
                 // Счёт для гостя: можно ли печатать и печатали ли его с текущей суммой
                 printEnabled = (await _print.SettingsAsync()).Enabled,
@@ -680,13 +689,28 @@ namespace Cafe.API.Controllers
         public async Task<IActionResult> ChangePayment(int id, [FromBody] ChangePaymentRequest r)
         {
             var method = r.PaymentMethod?.Trim().ToLowerInvariant();
-            if (method is not (CheckPayments.Cash or CheckPayments.Card))
-                return BadRequest(new { message = "Сменить можно на наличные или карту" });
+            if (method is not (CheckPayments.Cash or CheckPayments.Card or CheckPayments.Staff))
+                return BadRequest(new { message = "Выберите способ оплаты" });
             var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Счёт не найден" });
             if (await DenyAsync(c) is { } deny) return deny;
             if (c.Status != CheckStatuses.Closed) return BadRequest(new { message = "Способ оплаты меняют у закрытого счёта" });
             if (c.PaymentMethod == method) return BadRequest(new { message = "Этот способ оплаты уже выбран" });
+
+            // Оплаченный счёт → на сотрудника: только исправление ошибки менеджером, пока смена не закрыта
+            string? staffName = null, staffReason = null;
+            if (method == CheckPayments.Staff)
+            {
+                if (!(await _fiscalSettings.GetAsync()).StaffChecks) return BadRequest(new { message = "Закрытие на сотрудника выключено в «Настройке интеграций»" });
+                if (!await SeesAllAsync()) return StatusCode(403, new { message = "Перевести счёт на сотрудника может только менеджер" });
+                var shiftOpen = c.VenueShiftId != null && await _context.VenueShifts.AnyAsync(v => v.Id == c.VenueShiftId && v.ClosedAt == null);
+                if (!shiftOpen) return BadRequest(new { message = "Смена уже закрыта — исправить счёт на сотрудника нельзя" });
+                if (r.StaffUserId is not int staffId || !(await StaffAsync()).TryGetValue(staffId, out staffName))
+                    return BadRequest(new { message = "Выберите сотрудника" });
+                staffReason = r.StaffReason?.Trim();
+                if (string.IsNullOrEmpty(staffReason)) staffReason = StaffReasons[0];
+                if (staffReason.Length > 60) staffReason = staffReason[..60];
+            }
 
             var fiscalOn = await _fiscal.EnabledAsync();
             var receipts = await _context.FiscalReceipts.AsNoTracking().Where(x => x.CheckId == id).OrderBy(x => x.Id).ToListAsync();
@@ -716,8 +740,11 @@ namespace Cafe.API.Controllers
             // 2. Новый способ оплаты на счёте и в его заказах
             var was = c.PaymentMethod;
             c.PaymentMethod = method;
-            c.StaffUserId = null;
-            c.StaffReason = null;
+            c.StaffUserId = method == CheckPayments.Staff ? r.StaffUserId : null;
+            c.StaffReason = method == CheckPayments.Staff ? staffReason : null;
+            c.PaymentWas = was;
+            c.PaymentChangedBy = User.GetUserId();
+            c.PaymentChangedAt = DateTime.UtcNow;
             var orders = await _context.Orders.Include(o => o.OrderItems)
                 .Where(o => o.CheckId == id || o.OrderItems.Any(i => i.CheckId == id)).ToListAsync();
             var related = orders.SelectMany(o => o.OrderItems.Select(i => i.CheckId ?? o.CheckId)).Where(x => x != null).Select(x => x!.Value).Distinct().ToList();
@@ -729,9 +756,12 @@ namespace Cafe.API.Controllers
                 if (o.PaymentStatus == "paid") o.PaymentMethod = methods.Count == 1 ? methods[0] ?? method : "mixed";
             }
             await _context.SaveChangesAsync();
-            _logger.LogInformation("💳 Счёт #{CheckId}: оплата {Was} → {Now}{Ret}", id, was, method, returned != null ? " (чек возврата пробит)" : "");
+            _logger.LogInformation("💳 Счёт #{CheckId}: оплата {Was} → {Now}{Staff}{Ret}, поменял {User}", id, was, method,
+                staffName == null ? "" : $" ({staffName}, {staffReason})", returned != null ? " (чек возврата пробит)" : "", User.GetUserId());
 
-            // 3. Новый чек в АТОЛ
+            // 3. Новый чек в АТОЛ — кроме счёта на сотрудника (без оплаты чек не нужен)
+            if (method == CheckPayments.Staff)
+                return Ok(new { id, paymentMethod = method, returned, fiscal = (object?)null, fiscalSkipped = "staff", staff = staffName });
             object? fiscal = fiscalOn ? await FiscalAsync(id) : null;
             return Ok(new { id, paymentMethod = method, returned, fiscal, fiscalSkipped = fiscalOn ? null : "disabled" });
         }

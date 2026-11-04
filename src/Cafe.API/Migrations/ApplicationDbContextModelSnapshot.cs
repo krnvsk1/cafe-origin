@@ -2604,10 +2604,23 @@ namespace Cafe.API.Migrations
                         .HasColumnType("timestamp without time zone")
                         .HasColumnName("opened_at");
 
+                    b.Property<DateTime?>("PaymentChangedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("payment_changed_at");
+
+                    b.Property<int?>("PaymentChangedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("payment_changed_by");
+
                     b.Property<string>("PaymentMethod")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("payment_method");
+
+                    b.Property<string>("PaymentWas")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("payment_was");
 
                     b.Property<DateTime?>("PrintedAt")
                         .HasColumnType("timestamp without time zone")

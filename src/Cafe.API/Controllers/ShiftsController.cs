@@ -243,7 +243,7 @@ namespace Cafe.API.Controllers
             var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table).Where(c => c.VenueShiftId == id).OrderBy(c => c.OpenedAt).ToListAsync();
             var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == id).OrderBy(w => w.OpenedAt).ToListAsync();
             var names = await WaiterController.StaffNamesAsync(_context,
-                waiters.Select(w => (int?)w.UserId).Concat(checks.Select(c => c.WaiterId)).Concat(checks.Select(c => c.StaffUserId))
+                waiters.Select(w => (int?)w.UserId).Concat(checks.Select(c => c.WaiterId)).Concat(checks.Select(c => c.StaffUserId)).Concat(checks.Select(c => c.PaymentChangedBy))
                     .Append(s.OpenedByUserId).Append(s.ClosedByUserId));
             var staffChecks = checks.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff).ToList();
             var openTotals = await OpenTotalsAsync(checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList());
@@ -305,6 +305,9 @@ namespace Cafe.API.Controllers
                     c.PaymentMethod,
                     staffName = c.StaffUserId == null ? null : names.GetValueOrDefault(c.StaffUserId.Value),
                     c.StaffReason,
+                    c.PaymentWas,
+                    paymentChangedBy = c.PaymentChangedBy == null ? null : names.GetValueOrDefault(c.PaymentChangedBy.Value),
+                    c.PaymentChangedAt,
                     total = Total(c),
                     fiscal = FiscalOf(c.Id, FiscalKinds.Sell),
                     fiscalReturn = FiscalOf(c.Id, FiscalKinds.Return),
