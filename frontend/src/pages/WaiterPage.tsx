@@ -19,7 +19,7 @@ import {
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
   useServeItem, useMyChecks, useSetItemWeight, usePrintCheck, fetchPrintJob, useCheckFiscal,
   useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
-  useStaffChecksInfo, payLabel, type CheckPayment, type CloseCheckResult,
+  useStaffChecksInfo, payLabel, useChangePayment, type CheckPayment, type CloseCheckResult,
   type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
 import { apiError } from '../api/inventory';
@@ -625,6 +625,24 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
     } catch (e) { setToast(apiError(e)); }
   };
   const [err, setErr] = React.useState('');
+  // Сменить способ оплаты закрытого счёта
+  const changePayment = useChangePayment();
+  const [repay, setRepay] = React.useState<'cash' | 'card' | null>(null);
+  const [repayErr, setRepayErr] = React.useState('');
+  const doRepay = async () => {
+    if (!repay || !check) return;
+    setRepayErr('');
+    try {
+      const r = await changePayment.mutateAsync({ checkId: check.id, paymentMethod: repay });
+      setRepay(null);
+      const ret = r.returned ? `Возврат пробит${r.returned.fiscalDocumentNumber ? ` (ФД ${r.returned.fiscalDocumentNumber})` : ''}. ` : '';
+      const sell = r.fiscal
+        ? (r.fiscal.status === 'done' ? `Новый чек отправлен в АТОЛ и пробит${r.fiscal.fiscalDocumentNumber ? ` (ФД ${r.fiscal.fiscalDocumentNumber})` : ''}`
+          : r.fiscal.status === 'processing' ? 'Новый чек отправлен в АТОЛ, касса ещё печатает' : `Новый чек не пробит: ${r.fiscal.error ?? 'ошибка кассы'} — нажмите «Пробить»`)
+        : 'В АТОЛ не отправлялось — онлайн-касса выключена';
+      setToast(`Оплата: ${payLabel(r.paymentMethod)}. ${ret}${sell}`);
+    } catch (e) { setRepayErr(apiError(e)); }
+  };
 
   if (isLoading) return <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }}><CircularProgress /></Box>;
   if (error || !check) return <Alert severity="error">{apiError(error, 'Счёт не найден')}</Alert>;
@@ -725,7 +743,10 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         )}
       </Menu>
 
-      {!isOpen && <Alert severity={check.status === 'closed' ? 'success' : 'info'}>{check.status === 'closed'
+      {!isOpen && <Alert severity={check.status === 'closed' ? 'success' : 'info'}
+        action={check.status === 'closed'
+          ? <Button color="inherit" size="small" onClick={() => { setRepayErr(''); setRepay(check.paymentMethod === 'cash' ? 'card' : 'cash'); }}>Сменить оплату</Button>
+          : undefined}>{check.status === 'closed'
         ? `Счёт закрыт · ${check.paymentMethod === 'staff' ? `на сотрудника: ${check.staffName ?? '—'}${check.staffReason ? ` (${check.staffReason})` : ''} · в АТОЛ не отправлялся` : payLabel(check.paymentMethod)}`
         : 'Счёт отменён'}</Alert>}
       {check.status === 'closed' && check.fiscalEnabled && check.paymentMethod !== 'staff' && (check.fiscal?.status === 'done'
@@ -864,7 +885,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         setVoiding(null);
         setToast(needsKitchen ? 'Блюдо уже готовят — кухня подтвердит отмену' : 'Блюдо убрано из счёта');
       }} />}
-      <Snackbar open={!!toast} autoHideDuration={3000} onClose={() => setToast('')} message={toast} anchorOrigin={{ vertical: 'top', horizontal: 'center' }} />
+      <Snackbar open={!!toast} autoHideDuration={toast.length > 60 ? 7000 : 3000} onClose={() => setToast('')} message={toast} anchorOrigin={{ vertical: 'top', horizontal: 'center' }} />
 
       <Dialog open={closing} onClose={() => setClosing(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Оплата · стол {check.table.name}</DialogTitle>
@@ -907,6 +928,32 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           <Button variant="contained" color="secondary" size="large" onClick={doClose}
             disabled={close.isPending || (change !== null && change < 0)}>
             {method === 'staff' ? 'Закрыть на сотрудника' : 'Оплачено'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!repay} onClose={() => !changePayment.isPending && setRepay(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Сменить оплату · {money(check.total)}</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Typography variant="body2" color="text.secondary">Сейчас: {payLabel(check.paymentMethod)}</Typography>
+          <ToggleButtonGroup exclusive fullWidth value={repay} onChange={(_, v) => v && setRepay(v)}>
+            <ToggleButton value="card" disabled={check.paymentMethod === 'card'}>Карта</ToggleButton>
+            <ToggleButton value="cash" disabled={check.paymentMethod === 'cash'}>Наличные</ToggleButton>
+          </ToggleButtonGroup>
+          <Alert severity="info">
+            {!check.fiscalEnabled
+              ? 'Онлайн-касса выключена — в АТОЛ ничего не отправится, изменится только способ оплаты.'
+              : check.fiscal?.status === 'done'
+                ? `Чек уже в АТОЛ: сначала будет пробит чек возврата на ${money(check.total)} (${payLabel(check.paymentMethod)}), затем новый чек — ${payLabel(repay)}. Если возврат не пробьётся, оплата не изменится.`
+                : `В АТОЛ уйдёт чек — ${payLabel(repay)}.`}
+          </Alert>
+          {repayErr && <Alert severity="error">{repayErr}</Alert>}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button onClick={() => setRepay(null)} disabled={changePayment.isPending} sx={{ color: 'text.secondary' }}>Отмена</Button>
+          <Button variant="contained" color="secondary" onClick={doRepay} disabled={changePayment.isPending}
+            startIcon={changePayment.isPending ? <CircularProgress size={18} color="inherit" /> : undefined}>
+            Сменить
           </Button>
         </DialogActions>
       </Dialog>

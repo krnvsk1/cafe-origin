@@ -249,9 +249,13 @@ namespace Cafe.API.Controllers
             var openTotals = await OpenTotalsAsync(checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList());
             var ids = checks.Select(c => (int?)c.Id).ToList();
             var receipts = await _context.FiscalReceipts.AsNoTracking().Where(r => ids.Contains(r.CheckId)).OrderBy(r => r.Id).ToListAsync();
+            // Продажа и возврат могут чередоваться (сменили оплату): показываем то, что после последнего пробитого чека другого вида
             object? FiscalOf(int checkId, string kind)
             {
-                var mine = receipts.Where(r => r.CheckId == checkId && r.Kind == kind).ToList();
+                var all = receipts.Where(r => r.CheckId == checkId).ToList();
+                var other = kind == FiscalKinds.Sell ? FiscalKinds.Return : FiscalKinds.Sell;
+                var lastOther = all.LastOrDefault(x => x.Kind == other && x.Status == FiscalStatuses.Done)?.Id ?? 0;
+                var mine = all.Where(r => r.Kind == kind && r.Id > lastOther).ToList();
                 var r = mine.LastOrDefault(x => x.Status == FiscalStatuses.Done) ?? mine.LastOrDefault();
                 return r == null ? null : new { r.Status, r.Error, r.FiscalDocumentNumber };
             }

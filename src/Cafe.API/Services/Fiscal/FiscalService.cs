@@ -84,11 +84,11 @@ namespace Cafe.API.Services.Fiscal
         private async Task<FiscalReceipt> RunReceiptAsync(FiscalOptions o, int orderId, int? checkId, string kind, List<FiscalReceipt> receipts,
             List<ReceiptLine> lines, string paymentMethod, string? contact, string deliveryType, int? userId, CancellationToken ct)
         {
-            var sold = receipts.Any(r => r.Kind == FiscalKinds.Sell && r.Status == FiscalStatuses.Done);
-            var returned = receipts.Any(r => r.Kind == FiscalKinds.Return && r.Status == FiscalStatuses.Done);
+            // Продажа и возврат могут чередоваться (сменили способ оплаты: возврат → новый чек) — смотрим, что сейчас «в силе»
+            var sold = IsSold(receipts);
+            var everSold = receipts.Any(r => r.Kind == FiscalKinds.Sell && r.Status == FiscalStatuses.Done);
             if (kind == FiscalKinds.Sell && sold) throw new FiscalException(checkId != null ? "Чек по этому счёту уже пробит" : "Чек по этому заказу уже пробит");
-            if (kind == FiscalKinds.Return && !sold) throw new FiscalException("Чек прихода не пробит — возвращать нечего");
-            if (kind == FiscalKinds.Return && returned) throw new FiscalException("Чек возврата уже пробит");
+            if (kind == FiscalKinds.Return && !sold) throw new FiscalException(everSold ? "Чек возврата уже пробит" : "Чек прихода не пробит — возвращать нечего");
 
             await DeviceLock.WaitAsync(ct);
             try
@@ -175,9 +175,17 @@ namespace Cafe.API.Services.Fiscal
             return Unfinished(list);
         }
 
+        /// <summary>Чек продажи сейчас в силе: пробитых продаж больше, чем пробитых возвратов</summary>
+        public static bool IsSold(IEnumerable<FiscalReceipt> receipts)
+        {
+            var done = receipts.Where(r => r.Status == FiscalStatuses.Done).ToList();
+            return done.Count(r => r.Kind == FiscalKinds.Sell) > done.Count(r => r.Kind == FiscalKinds.Return);
+        }
+
+        /// <summary>Незавершённые: последний чек этого вида по счёту/заказу не пробит (продажа и возврат могут чередоваться)</summary>
         public static List<FiscalReceipt> Unfinished(IEnumerable<FiscalReceipt> receipts) => receipts
             .GroupBy(r => (r.CheckId != null ? "c" + r.CheckId : "o" + r.OrderId, r.Kind))
-            .Where(g => g.All(r => r.Status != FiscalStatuses.Done))
+            .Where(g => g.OrderBy(r => r.Id).Last().Status != FiscalStatuses.Done)
             .Select(g => g.OrderBy(r => r.Id).Last())
             .OrderBy(r => r.CreatedAt)
             .ToList();

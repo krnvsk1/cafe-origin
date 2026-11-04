@@ -123,6 +123,35 @@ namespace Cafe.Tests
         }
 
         [Fact]
+        public async Task ChangePayment_ReturnThenNewSell_IsAllowed_ButNotTwoSellsInARow()
+        {
+            var (sp, atol) = Setup();
+            atol.Result = Done;
+            await SeedOrderAsync(sp, checkId: 11);
+            using var scope = sp.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.TableChecks.Add(new TableCheck { Id = 11, TableId = 1, Status = CheckStatuses.Closed, PaymentMethod = CheckPayments.Cash, Total = 300 });
+            await db.SaveChangesAsync();
+            var fiscal = scope.ServiceProvider.GetRequiredService<FiscalService>();
+
+            Assert.Equal(FiscalStatuses.Done, (await fiscal.PrintCheckAsync(11, FiscalKinds.Sell, null)).Status);
+            await Assert.ThrowsAsync<FiscalException>(() => fiscal.PrintCheckAsync(11, FiscalKinds.Sell, null));   // второй чек подряд — нельзя
+            Assert.Equal(FiscalStatuses.Done, (await fiscal.PrintCheckAsync(11, FiscalKinds.Return, null)).Status);
+            await Assert.ThrowsAsync<FiscalException>(() => fiscal.PrintCheckAsync(11, FiscalKinds.Return, null)); // второй возврат — нельзя
+
+            // Сменили оплату на карту — новый чек продажи
+            var check = await db.TableChecks.SingleAsync(c => c.Id == 11);
+            check.PaymentMethod = CheckPayments.Card;
+            await db.SaveChangesAsync();
+            var again = await fiscal.PrintCheckAsync(11, FiscalKinds.Sell, null);
+            Assert.Equal(FiscalStatuses.Done, again.Status);
+            Assert.Equal("card", again.PaymentMethod);
+            Assert.Equal(3, atol.Posts);
+            Assert.True(FiscalService.IsSold(await db.FiscalReceipts.ToListAsync()));
+            Assert.Empty(FiscalService.Unfinished(await db.FiscalReceipts.ToListAsync()));
+        }
+
+        [Fact]
         public async Task OrderFromTableCheck_IsNotFiscalizedSeparately()
         {
             var (sp, _) = Setup();

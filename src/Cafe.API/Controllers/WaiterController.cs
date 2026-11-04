@@ -120,6 +120,12 @@ namespace Cafe.API.Controllers
             public string? StaffReason { get; set; }
         }
 
+        public class ChangePaymentRequest
+        {
+            /// <summary>cash или card</summary>
+            public string PaymentMethod { get; set; } = "cash";
+        }
+
         /// <summary>Причины по умолчанию для закрытия на сотрудника</summary>
         public static readonly string[] StaffReasons = { "Питание персонала", "Себе домой", "Угощение от заведения" };
 
@@ -665,6 +671,69 @@ namespace Cafe.API.Controllers
         {
             var n = name.Trim();
             return n.StartsWith("стол", StringComparison.OrdinalIgnoreCase) ? n : $"Стол {n}";
+        }
+
+        // POST: api/waiter/checks/{id}/payment — сменить способ оплаты закрытого счёта.
+        // Если чек уже пробит в АТОЛ: сначала чек возврата (зеркало прежнего), затем новый чек с новым способом оплаты
+        [HttpPost("checks/{id:int}/payment")]
+        [HasPermission(Permissions.Waiter, Permissions.ChecksAll)]
+        public async Task<IActionResult> ChangePayment(int id, [FromBody] ChangePaymentRequest r)
+        {
+            var method = r.PaymentMethod?.Trim().ToLowerInvariant();
+            if (method is not (CheckPayments.Cash or CheckPayments.Card))
+                return BadRequest(new { message = "Сменить можно на наличные или карту" });
+            var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (await DenyAsync(c) is { } deny) return deny;
+            if (c.Status != CheckStatuses.Closed) return BadRequest(new { message = "Способ оплаты меняют у закрытого счёта" });
+            if (c.PaymentMethod == method) return BadRequest(new { message = "Этот способ оплаты уже выбран" });
+
+            var fiscalOn = await _fiscal.EnabledAsync();
+            var receipts = await _context.FiscalReceipts.AsNoTracking().Where(x => x.CheckId == id).OrderBy(x => x.Id).ToListAsync();
+            var last = receipts.LastOrDefault();
+            if (last?.Status == FiscalStatuses.Processing)
+                return BadRequest(new { message = "Касса ещё не ответила по прошлому чеку этого счёта — сначала нажмите «Проверить»" });
+
+            // 1. Чек уже в АТОЛ — пробиваем возврат. Не пробился — оплату не меняем
+            object? returned = null;
+            if (FiscalService.IsSold(receipts))
+            {
+                if (!fiscalOn) return BadRequest(new { message = "Чек уже пробит, а онлайн-касса выключена — без неё не пробить возврат" });
+                FiscalReceipt ret;
+                try { ret = await _fiscal.PrintCheckAsync(id, FiscalKinds.Return, User.GetUserId(), HttpContext.RequestAborted); }
+                catch (FiscalException ex) { return BadRequest(new { message = $"Возврат не пробит: {ex.Message}. Способ оплаты не изменён" }); }
+                if (ret.Status != FiscalStatuses.Done)
+                    return BadRequest(new
+                    {
+                        message = ret.Status == FiscalStatuses.Processing
+                            ? "Касса не ответила на чек возврата. Способ оплаты не изменён — проверьте чек в «Сменах и счетах» и повторите"
+                            : $"Чек возврата не пробит: {ret.Error ?? "ошибка кассы"}. Способ оплаты не изменён",
+                        returned = FiscalController.View(ret)
+                    });
+                returned = FiscalController.View(ret);
+            }
+
+            // 2. Новый способ оплаты на счёте и в его заказах
+            var was = c.PaymentMethod;
+            c.PaymentMethod = method;
+            c.StaffUserId = null;
+            c.StaffReason = null;
+            var orders = await _context.Orders.Include(o => o.OrderItems)
+                .Where(o => o.CheckId == id || o.OrderItems.Any(i => i.CheckId == id)).ToListAsync();
+            var related = orders.SelectMany(o => o.OrderItems.Select(i => i.CheckId ?? o.CheckId)).Where(x => x != null).Select(x => x!.Value).Distinct().ToList();
+            var relatedChecks = await _context.TableChecks.AsNoTracking().Where(x => related.Contains(x.Id)).ToDictionaryAsync(x => x.Id);
+            foreach (var o in orders)
+            {
+                var methods = o.OrderItems.Select(i => i.CheckId ?? o.CheckId).Where(x => x != null).Select(x => x!.Value).Distinct()
+                    .Select(cid => cid == id ? method : relatedChecks.GetValueOrDefault(cid)?.PaymentMethod).Distinct().ToList();
+                if (o.PaymentStatus == "paid") o.PaymentMethod = methods.Count == 1 ? methods[0] ?? method : "mixed";
+            }
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("💳 Счёт #{CheckId}: оплата {Was} → {Now}{Ret}", id, was, method, returned != null ? " (чек возврата пробит)" : "");
+
+            // 3. Новый чек в АТОЛ
+            object? fiscal = fiscalOn ? await FiscalAsync(id) : null;
+            return Ok(new { id, paymentMethod = method, returned, fiscal, fiscalSkipped = fiscalOn ? null : "disabled" });
         }
 
         // POST: api/waiter/checks/{id}/fiscal/return — чек возврата по счёту (гость вернул деньги): зеркало чека продажи

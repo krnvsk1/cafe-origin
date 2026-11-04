@@ -163,6 +163,19 @@ export const useCloseCheck = () =>
   useWaiterMutation<{ checkId: number; paymentMethod: CheckPayment; cashReceived: number | null; staffUserId?: number | null; staffReason?: string | null }, CloseCheckResult>(
     ({ checkId, ...body }) => apiClient.post(`/api/waiter/checks/${checkId}/close`, body).then(r => r.data));
 
+/** Сменить способ оплаты закрытого счёта: если чек уже в АТОЛ — возврат и новый чек */
+export interface ChangePaymentResult {
+  paymentMethod: 'cash' | 'card';
+  /** Чек возврата прежней оплаты (если чек был пробит) */
+  returned: FiscalResult | null;
+  /** Новый чек продажи */
+  fiscal: FiscalResult | null;
+  fiscalSkipped?: 'disabled' | null;
+}
+export const useChangePayment = () =>
+  useWaiterMutation<{ checkId: number; paymentMethod: 'cash' | 'card' }, ChangePaymentResult>(({ checkId, paymentMethod }) =>
+    apiClient.post(`/api/waiter/checks/${checkId}/payment`, { paymentMethod }).then(r => r.data));
+
 /** Закрытие на сотрудника: включено ли, можно ли мне, кого выбрать */
 export interface StaffChecksInfo {
   enabled: boolean;

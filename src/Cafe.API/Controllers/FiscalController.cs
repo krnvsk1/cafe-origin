@@ -52,7 +52,7 @@ namespace Cafe.API.Controllers
             }
             var since = DateTime.UtcNow.AddDays(-2);
             var failed = await _context.FiscalReceipts.CountAsync(r => r.CreatedAt >= since && r.Status != FiscalStatuses.Done
-                && !_context.FiscalReceipts.Any(x => x.OrderId == r.OrderId && x.Kind == r.Kind && x.Status == FiscalStatuses.Done));
+                && !_context.FiscalReceipts.Any(x => x.OrderId == r.OrderId && x.Kind == r.Kind && x.Status == FiscalStatuses.Done && x.Id > r.Id));
             return Ok(new
             {
                 o.Enabled, o.Url, o.TaxationType, o.Vat, o.PaymentObject, o.CashierInn, o.SendToCustomer,
