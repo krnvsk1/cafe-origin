@@ -10,9 +10,11 @@ namespace Cafe.API.Services.Fiscal
         public static readonly string[] PaymentObjects = { "commodity", "service" };
 
         /// <summary>Чек прихода (sell) или возврата прихода (sellReturn)</summary>
+        /// <param name="payments">Оплаты чека (например зачёт аванса prepaid + наличные); по умолчанию — вся сумма способом paymentMethod</param>
         public static JsonObject Receipt(
             string kind, FiscalOptions o, IReadOnlyList<ReceiptLine> lines, string paymentMethod,
-            string cashierName, string? clientContact, IReadOnlyDictionary<string, string>? vars = null)
+            string cashierName, string? clientContact, IReadOnlyDictionary<string, string>? vars = null,
+            IReadOnlyList<(string Type, decimal Sum)>? payments = null)
         {
             var items = new JsonArray();
             foreach (var l in lines)
@@ -24,8 +26,8 @@ namespace Cafe.API.Services.Fiscal
                     ["price"] = l.Price,
                     ["quantity"] = l.Quantity,
                     ["amount"] = l.Amount,
-                    ["paymentMethod"] = "fullPayment",
-                    ["paymentObject"] = l.IsService ? "service" : o.PaymentObject,
+                    ["paymentMethod"] = l.PaymentMethod ?? "fullPayment",
+                    ["paymentObject"] = l.PaymentObject ?? (l.IsService ? "service" : o.PaymentObject),
                     ["tax"] = new JsonObject { ["type"] = o.Vat },
                 });
             }
@@ -37,11 +39,13 @@ namespace Cafe.API.Services.Fiscal
                 ["taxationType"] = o.TaxationType,
                 ["operator"] = Operator(o, cashierName),
                 ["items"] = items,
-                ["payments"] = new JsonArray(new JsonObject
-                {
-                    ["type"] = paymentMethod == "cash" ? "cash" : "electronically",
-                    ["sum"] = total,
-                }),
+                ["payments"] = payments is { Count: > 0 }
+                    ? new JsonArray(payments.Where(p => p.Sum > 0).Select(p => (JsonNode)new JsonObject { ["type"] = p.Type, ["sum"] = p.Sum }).ToArray())
+                    : new JsonArray(new JsonObject
+                    {
+                        ["type"] = paymentMethod == "cash" ? "cash" : "electronically",
+                        ["sum"] = total,
+                    }),
                 ["total"] = total,
             };
             if (!string.IsNullOrWhiteSpace(clientContact))

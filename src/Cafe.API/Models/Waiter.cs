@@ -104,6 +104,17 @@ namespace Cafe.API.Models
         [Column("payment_changed_at")]
         public DateTime? PaymentChangedAt { get; set; }
 
+        /// <summary>Скидка на счёт: percent или amount, значение и кто дал</summary>
+        [MaxLength(20)]
+        [Column("discount_type")]
+        public string? DiscountType { get; set; }
+
+        [Column("discount_value", TypeName = "numeric(12,2)")]
+        public decimal? DiscountValue { get; set; }
+
+        [Column("discount_by")]
+        public int? DiscountBy { get; set; }
+
         /// <summary>Менеджер отменил весь счёт: часть блюд ждёт решения кухни — счёт отменится, когда кухня ответит</summary>
         [Column("cancel_requested_at")]
         public DateTime? CancelRequestedAt { get; set; }

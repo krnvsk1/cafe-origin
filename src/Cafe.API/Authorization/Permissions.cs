@@ -22,6 +22,8 @@ namespace Cafe.API.Authorization
         public const string ChecksAll = "checks.all";
         public const string ShiftApprove = "shift.approve";
         public const string ShiftSelf = "shift.self";
+        public const string Banquets = "banquets";
+        public const string Discounts = "discounts";
         public const string Delivery = "delivery";
         public const string CouriersAssign = "couriers.assign";
 
@@ -64,6 +66,8 @@ namespace Cafe.API.Authorization
             new(Shift, "Заказы", "Смена заведения", "Открывать и закрывать смену заведения на день — без неё официанты не начинают работу"),
             new(ShiftApprove, "Заказы", "Подтверждение смен официантов", "Подтверждать или отклонять открытие смены официанта — пока смена не подтверждена, официант не может открывать счета"),
             new(ShiftSelf, "Заказы", "Смена официанта без подтверждения", "Открывать свою смену официанта сразу, без подтверждения менеджера или администратора"),
+            new(Banquets, "Заказы", "Банкеты", "Раздел «Банкеты»: заказы на дату, отправка блюд на кухню к назначенному времени, обслуживание, предоплаты и расчёт"),
+            new(Discounts, "Заказы", "Скидки", "Давать скидку процентом или суммой на счёт официанта, заказ на кассе, заказ с сайта и банкет"),
             new(ChecksAll, "Заказы", "Все чеки и смены", "Видеть чеки всех официантов и все смены, открывать чужие счета и передавать их другому официанту"),
             new(TablesManage, "Заказы", "Зал и столы", "Расставлять столы и перегородки на схеме зала, добавлять и переименовывать столы"),
             new(Kitchen, "Заказы", "Кухня", "Экран кухни: принимать заказы и отмечать готовность"),

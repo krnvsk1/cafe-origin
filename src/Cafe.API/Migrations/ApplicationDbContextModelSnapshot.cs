@@ -284,6 +284,208 @@ namespace Cafe.API.Migrations
                     b.ToTable("users", (string)null);
                 });
 
+            modelBuilder.Entity("Cafe.API.Models.Banquet", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<int?>("ClosedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("closed_by");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("customer_name");
+
+                    b.Property<int?>("DiscountBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_by");
+
+                    b.Property<string>("DiscountType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("discount_type");
+
+                    b.Property<decimal?>("DiscountValue")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("discount_value");
+
+                    b.Property<DateTime>("EventAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("event_at");
+
+                    b.Property<int?>("Guests")
+                        .HasColumnType("integer")
+                        .HasColumnName("guests");
+
+                    b.Property<DateTime?>("KitchenAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("kitchen_at");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("phone");
+
+                    b.Property<string>("ServiceType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("service_type");
+
+                    b.Property<decimal?>("ServiceValue")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("service_value");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int?>("TableId")
+                        .HasColumnType("integer")
+                        .HasColumnName("table_id");
+
+                    b.Property<decimal>("Total")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("banquets");
+                });
+
+            modelBuilder.Entity("Cafe.API.Models.BanquetItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Addons")
+                        .HasColumnType("text")
+                        .HasColumnName("addons");
+
+                    b.Property<int>("BanquetId")
+                        .HasColumnType("integer")
+                        .HasColumnName("banquet_id");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("comment");
+
+                    b.Property<int>("DishId")
+                        .HasColumnType("integer")
+                        .HasColumnName("dish_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<int?>("OrderId")
+                        .HasColumnType("integer")
+                        .HasColumnName("order_id");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("price");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<int?>("Weight")
+                        .HasColumnType("integer")
+                        .HasColumnName("weight");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("banquet_items");
+                });
+
+            modelBuilder.Entity("Cafe.API.Models.BanquetPayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<int>("BanquetId")
+                        .HasColumnType("integer")
+                        .HasColumnName("banquet_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("method");
+
+                    b.Property<DateTime?>("RefundedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("refunded_at");
+
+                    b.Property<string>("StaffReason")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("staff_reason");
+
+                    b.Property<int?>("StaffUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("staff_user_id");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("banquet_payments");
+                });
+
             modelBuilder.Entity("Cafe.API.Models.ChzDocument", b =>
                 {
                     b.Property<int>("Id")
@@ -836,6 +1038,14 @@ namespace Cafe.API.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("BanquetId")
+                        .HasColumnType("integer")
+                        .HasColumnName("banquet_id");
+
+                    b.Property<int?>("BanquetPaymentId")
+                        .HasColumnType("integer")
+                        .HasColumnName("banquet_payment_id");
+
                     b.Property<int?>("CheckId")
                         .HasColumnType("integer")
                         .HasColumnName("check_id");
@@ -887,7 +1097,7 @@ namespace Cafe.API.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("kind");
 
-                    b.Property<int>("OrderId")
+                    b.Property<int?>("OrderId")
                         .HasColumnType("integer")
                         .HasColumnName("order_id");
 
@@ -1371,6 +1581,10 @@ namespace Cafe.API.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("address");
 
+                    b.Property<int?>("BanquetId")
+                        .HasColumnType("integer")
+                        .HasColumnName("banquet_id");
+
                     b.Property<int?>("CashierId")
                         .HasColumnType("integer")
                         .HasColumnName("cashier_id");
@@ -1432,6 +1646,14 @@ namespace Cafe.API.Migrations
                     b.Property<double?>("Longitude")
                         .HasColumnType("double precision")
                         .HasColumnName("longitude");
+
+                    b.Property<decimal>("ManualDiscount")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("manual_discount");
+
+                    b.Property<int?>("ManualDiscountBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("manual_discount_by");
 
                     b.Property<string>("Notes")
                         .HasColumnType("text")
@@ -2616,6 +2838,19 @@ namespace Cafe.API.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("comment");
 
+                    b.Property<int?>("DiscountBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("discount_by");
+
+                    b.Property<string>("DiscountType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("discount_type");
+
+                    b.Property<decimal?>("DiscountValue")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("discount_value");
+
                     b.Property<int?>("Guests")
                         .HasColumnType("integer")
                         .HasColumnName("guests");
@@ -3262,8 +3497,7 @@ namespace Cafe.API.Migrations
                     b.HasOne("Cafe.API.Models.Order", null)
                         .WithMany()
                         .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Cafe.API.Models.HaccpEntry", b =>

@@ -84,8 +84,24 @@ namespace Cafe.API.Services.Fiscal
             return await RunReceiptAsync(o, orders[0].Id, checkId, kind, receipts, lines, check.PaymentMethod, null, SalesChannels.DineIn, userId, ct);
         }
 
-        private async Task<FiscalReceipt> RunReceiptAsync(FiscalOptions o, int orderId, int? checkId, string kind, List<FiscalReceipt> receipts,
-            List<ReceiptLine> lines, string paymentMethod, string? contact, string deliveryType, int? userId, CancellationToken ct)
+        /// <summary>
+        /// Чек банкета: предоплата (аванс) или расчёт при закрытии (с зачётом аванса). Каждый платёж — свой чек,
+        /// продажа и возврат по платежу — как у счёта (paymentId объединяет попытки одного платежа).
+        /// </summary>
+        public async Task<FiscalReceipt> PrintBanquetAsync(int banquetId, int paymentId, string kind, List<ReceiptLine> lines, string paymentMethod,
+            IReadOnlyList<(string Type, decimal Sum)>? payments, string? contact, int? userId, CancellationToken ct = default)
+        {
+            var o = await _settings.GetAsync();
+            if (!o.Enabled) throw new FiscalException("Онлайн-касса выключена — включите её в «Настройке интеграций»");
+            var receipts = await _context.FiscalReceipts.Where(r => r.BanquetPaymentId == paymentId).OrderBy(r => r.Id).ToListAsync(ct);
+            if (kind == FiscalKinds.Sell && lines.Sum(l => l.Amount) <= 0) throw new FiscalException("Сумма чека — 0 ₽");
+            var phone = o.SendToCustomer ? Controllers.PosController.NormalizePhone(contact) : null;
+            return await RunReceiptAsync(o, null, null, kind, receipts, lines, paymentMethod, phone, SalesChannels.DineIn, userId, ct, banquetId, paymentId, payments);
+        }
+
+        private async Task<FiscalReceipt> RunReceiptAsync(FiscalOptions o, int? orderId, int? checkId, string kind, List<FiscalReceipt> receipts,
+            List<ReceiptLine> lines, string paymentMethod, string? contact, string deliveryType, int? userId, CancellationToken ct,
+            int? banquetId = null, int? banquetPaymentId = null, IReadOnlyList<(string Type, decimal Sum)>? payments = null)
         {
             // Продажа и возврат могут чередоваться (сменили способ оплаты: возврат → новый чек) — смотрим, что сейчас «в силе»
             var sold = IsSold(receipts);
@@ -107,7 +123,8 @@ namespace Cafe.API.Services.Fiscal
                 }
 
                 var cashier = await CashierNameAsync(userId, ct);
-                var task = FiscalTasks.Receipt(kind, o, lines, paymentMethod, cashier, contact, Vars(orderId, deliveryType, cashier, DateTime.UtcNow, (await _brand.GetAsync()).DisplayName));
+                var task = FiscalTasks.Receipt(kind, o, lines, paymentMethod, cashier, contact,
+                    Vars(orderId ?? banquetId ?? 0, deliveryType, cashier, DateTime.UtcNow, (await _brand.GetAsync()).DisplayName), payments);
                 // Возврат — зеркало чека продажи: те же позиции, суммы и способ оплаты, даже если счёт с тех пор меняли
                 var soldReceipt = receipts.LastOrDefault(r => r.Kind == FiscalKinds.Sell && r.Status == FiscalStatuses.Done);
                 if (kind == FiscalKinds.Return && soldReceipt != null && FiscalTasks.ReturnOf(soldReceipt.RequestJson, o, cashier) is { } mirror)
@@ -121,6 +138,8 @@ namespace Cafe.API.Services.Fiscal
                 {
                     OrderId = orderId,
                     CheckId = checkId,
+                    BanquetId = banquetId,
+                    BanquetPaymentId = banquetPaymentId,
                     Kind = kind,
                     Status = FiscalStatuses.Processing,
                     RequestUuid = Guid.NewGuid().ToString(),
@@ -187,7 +206,7 @@ namespace Cafe.API.Services.Fiscal
 
         /// <summary>Незавершённые: последний чек этого вида по счёту/заказу не пробит (продажа и возврат могут чередоваться)</summary>
         public static List<FiscalReceipt> Unfinished(IEnumerable<FiscalReceipt> receipts) => receipts
-            .GroupBy(r => (r.CheckId != null ? "c" + r.CheckId : "o" + r.OrderId, r.Kind))
+            .GroupBy(r => (r.BanquetPaymentId != null ? "p" + r.BanquetPaymentId : r.CheckId != null ? "c" + r.CheckId : "o" + r.OrderId, r.Kind))
             .Where(g => g.OrderBy(r => r.Id).Last().Status != FiscalStatuses.Done)
             .Select(g => g.OrderBy(r => r.Id).Last())
             .OrderBy(r => r.CreatedAt)

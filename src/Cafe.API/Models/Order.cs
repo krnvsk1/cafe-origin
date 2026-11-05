@@ -125,6 +125,17 @@ namespace Cafe.API.Models
         [Column("check_id")]
         public int? CheckId { get; set; }
 
+        /// <summary>Заказ кухни банкета (блюда банкета, отправленные на кухню)</summary>
+        [Column("banquet_id")]
+        public int? BanquetId { get; set; }
+
+        /// <summary>Скидка, которую дал сотрудник (входит в DiscountAmount): кто дал</summary>
+        [Column("manual_discount", TypeName = "numeric(12,2)")]
+        public decimal ManualDiscount { get; set; }
+
+        [Column("manual_discount_by")]
+        public int? ManualDiscountBy { get; set; }
+
         /// <summary>Заказ с сайта закрыт менеджером: выбран способ оплаты, пробит чек (или на сотрудника)</summary>
         [Column("closed_at")]
         public DateTime? ClosedAt { get; set; }

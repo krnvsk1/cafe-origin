@@ -292,6 +292,8 @@ builder.Services.AddHostedService<Cafe.API.Services.Fiscal.FiscalReconcileWorker
 
 // Отмена блюд из чека официантом (с подтверждением кухни)
 builder.Services.AddScoped<Cafe.API.Services.VoidService>();
+builder.Services.AddScoped<Cafe.API.Services.BanquetService>();
+builder.Services.AddHostedService<Cafe.API.Services.BanquetKitchenWorker>();
 builder.Services.AddScoped<Cafe.API.Services.ShiftService>();
 builder.Services.AddSingleton<Cafe.API.Services.WebPushService>();
 builder.Services.AddScoped<Cafe.API.Services.WaiterReadyNotifier>();

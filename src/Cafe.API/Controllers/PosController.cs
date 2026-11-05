@@ -67,6 +67,9 @@ namespace Cafe.API.Controllers
             public string? Comment { get; set; }
             /// <summary>Сразу отправить на кухню (статус «Готовится»)</summary>
             public bool SendToKitchen { get; set; } = true;
+            /// <summary>Скидка (право «Скидки»): percent или amount</summary>
+            public string? DiscountType { get; set; }
+            public decimal? DiscountValue { get; set; }
         }
 
         // POST: api/pos/orders — принять заказ на кассе
@@ -110,6 +113,18 @@ namespace Cafe.API.Controllers
 
             foreach (var orderItem in built!) order.OrderItems.Add(orderItem);
 
+            // Скидка от кассира (право «Скидки») — распределится по позициям чека
+            if (request.DiscountValue is > 0 && !string.IsNullOrEmpty(request.DiscountType))
+            {
+                if (!User.HasPermission(Permissions.Discounts)) return StatusCode(403, new { message = "Нет права давать скидки" });
+                if (WaiterController.ValidateDiscount(new WaiterController.DiscountRequest { Type = request.DiscountType, Value = request.DiscountValue }) is { } derr)
+                    return BadRequest(new { message = derr });
+                var d = DiscountTypes.Of(request.DiscountType, request.DiscountValue, total);
+                order.ManualDiscount = d;
+                order.ManualDiscountBy = cashierId;
+                order.DiscountAmount += d;
+                total -= d;
+            }
             order.Total = total;
             if (payment == "cash" && request.CashReceived.HasValue && request.CashReceived.Value < total)
                 return BadRequest(new { message = $"Получено меньше суммы чека ({total:0.##} ₽)" });

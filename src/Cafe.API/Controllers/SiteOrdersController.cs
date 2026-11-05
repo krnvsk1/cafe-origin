@@ -49,6 +49,9 @@ namespace Cafe.API.Controllers
             public string PaymentMethod { get; set; } = "cash";
             public int? StaffUserId { get; set; }
             public string? StaffReason { get; set; }
+            /// <summary>Скидка при закрытии (право «Скидки»): percent или amount</summary>
+            public string? DiscountType { get; set; }
+            public decimal? DiscountValue { get; set; }
         }
 
         public class CancelRequest
@@ -74,7 +77,7 @@ namespace Cafe.API.Controllers
                 .Take(200)
                 .ToListAsync();
             var ids = orders.Select(o => o.Id).ToList();
-            var receipts = await _context.FiscalReceipts.AsNoTracking().Where(r => ids.Contains(r.OrderId) && r.CheckId == null).OrderBy(r => r.Id).ToListAsync();
+            var receipts = await _context.FiscalReceipts.AsNoTracking().Where(r => r.OrderId != null && ids.Contains(r.OrderId.Value) && r.CheckId == null).OrderBy(r => r.Id).ToListAsync();
             var pending = await _context.OrderItemVoids.AsNoTracking().Where(v => ids.Contains(v.OrderId) && v.Status == VoidStatuses.Pending)
                 .GroupBy(v => v.OrderId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
             var names = await WaiterController.StaffNamesAsync(_context, orders.Select(o => o.ClosedBy).Concat(orders.Select(o => o.StaffUserId)));
@@ -148,6 +151,21 @@ namespace Cafe.API.Controllers
                 order.PaidAt = now;
             }
             else return BadRequest(new { message = "Выберите способ оплаты" });
+
+            // Скидка при закрытии (не для оплаченных онлайн — сумма уже списана)
+            if (r.DiscountValue is > 0 && !string.IsNullOrEmpty(r.DiscountType))
+            {
+                if (order.PaymentMethod == "online") return BadRequest(new { message = "Заказ оплачен онлайн — скидку уже не дать" });
+                if (!User.HasPermission(Permissions.Discounts)) return StatusCode(403, new { message = "Нет права давать скидки" });
+                if (WaiterController.ValidateDiscount(new WaiterController.DiscountRequest { Type = r.DiscountType, Value = r.DiscountValue }) is { } derr)
+                    return BadRequest(new { message = derr });
+                var goods = order.Total - order.DeliveryPrice;
+                var d = DiscountTypes.Of(r.DiscountType, r.DiscountValue, Math.Max(0, goods));
+                order.ManualDiscount += d;
+                order.ManualDiscountBy = User.GetUserId();
+                order.DiscountAmount += d;
+                order.Total -= d;
+            }
 
             order.ClosedAt = now;
             order.ClosedBy = User.GetUserId();

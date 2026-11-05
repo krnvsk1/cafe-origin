@@ -106,6 +106,8 @@ namespace Cafe.API.Controllers
                 r.Id,
                 r.OrderId,
                 r.CheckId,
+                r.BanquetId,
+                r.BanquetPaymentId,
                 r.Kind,
                 r.Status,
                 r.Error,
@@ -331,7 +333,7 @@ namespace Cafe.API.Controllers
                 var r = mine.LastOrDefault(x => x.Status == FiscalStatuses.Done) ?? mine.LastOrDefault();
                 return r == null ? null : new { r.Status, r.Error, r.FiscalDocumentNumber };
             }
-            decimal Total(TableCheck c) => c.Status == CheckStatuses.Open ? openTotals.GetValueOrDefault(c.Id) : c.Status == CheckStatuses.Closed ? c.Total : 0;
+            decimal Total(TableCheck c) => c.Status == CheckStatuses.Open ? WaiterController.Net(c, openTotals.GetValueOrDefault(c.Id)) : c.Status == CheckStatuses.Closed ? c.Total : 0;
 
             return Ok(new
             {

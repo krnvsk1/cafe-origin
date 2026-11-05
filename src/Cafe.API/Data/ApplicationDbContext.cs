@@ -63,6 +63,9 @@ namespace Cafe.API.Data
         public DbSet<KitchenStation> KitchenStations { get; set; } = null!;
         public DbSet<DiningTable> DiningTables { get; set; } = null!;
         public DbSet<TableCheck> TableChecks { get; set; } = null!;
+        public DbSet<Banquet> Banquets { get; set; } = null!;
+        public DbSet<BanquetItem> BanquetItems { get; set; } = null!;
+        public DbSet<BanquetPayment> BanquetPayments { get; set; } = null!;
         public DbSet<OrderItemVoid> OrderItemVoids { get; set; } = null!;
         public DbSet<WebPushSubscription> PushSubscriptions { get; set; } = null!;
         public DbSet<PrintJob> PrintJobs { get; set; } = null!;

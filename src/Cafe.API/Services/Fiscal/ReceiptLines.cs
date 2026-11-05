@@ -5,7 +5,10 @@ using Cafe.API.Models;
 namespace Cafe.API.Services.Fiscal
 {
     /// <summary>Строка чека: Amount = Price × Quantity с точностью до копейки</summary>
-    public record ReceiptLine(string Name, decimal Price, decimal Quantity, decimal Amount, bool IsService);
+    /// <param name="PaymentMethod">Признак способа расчёта (по умолчанию fullPayment; аванс — advance)</param>
+    /// <param name="PaymentObject">Признак предмета расчёта (по умолчанию из настроек; аванс — payment)</param>
+    public record ReceiptLine(string Name, decimal Price, decimal Quantity, decimal Amount, bool IsService,
+        string? PaymentMethod = null, string? PaymentObject = null);
 
     /// <summary>
     /// Позиции чека по заказу (и для кассы АТОЛ, и для чеков ЮKassa).
@@ -85,5 +88,35 @@ namespace Cafe.API.Services.Fiscal
         }
 
         private static decimal Round(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
+
+        /// <summary>
+        /// Позиции с произвольной ценой (банкет): суммы пропорционально приводятся к target (скидка, часть на сотрудника);
+        /// копейки — на последнюю строку, строки с неделимой суммой делятся, как в Build.
+        /// </summary>
+        public static List<ReceiptLine> Scale(IReadOnlyList<(string Name, decimal Unit, int Qty, bool IsService)> raw, decimal target)
+        {
+            var full = raw.Sum(r => r.Unit * r.Qty);
+            target = Round(Math.Max(0, Math.Min(target, full)));
+            var lines = new List<ReceiptLine>();
+            decimal acc = 0;
+            for (var k = 0; k < raw.Count; k++)
+            {
+                var (name0, unit0, qty, svc) = raw[k];
+                if (qty <= 0) continue;
+                var name = name0.Length <= MaxName ? name0 : name0[..(MaxName - 1)] + "…";
+                var amount = k == raw.Count - 1 ? target - acc : full > 0 ? Round(unit0 * qty * target / full) : 0;
+                amount = Math.Max(0, amount);
+                acc += amount;
+                var unit = Math.Floor(amount / qty * 100) / 100;
+                if (unit * qty == amount || qty == 1) lines.Add(new ReceiptLine(name, qty == 1 ? amount : unit, qty, amount, svc));
+                else
+                {
+                    lines.Add(new ReceiptLine(name, unit, qty - 1, unit * (qty - 1), svc));
+                    var last = amount - unit * (qty - 1);
+                    lines.Add(new ReceiptLine(name, last, 1, last, svc));
+                }
+            }
+            return lines.Where(l => l.Amount > 0 || target == 0).ToList();
+        }
     }
 }

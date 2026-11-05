@@ -32,7 +32,15 @@ namespace Cafe.API.Models
 
         /// <summary>Заказ чека; у чека официанта — первая подача счёта (позиции чека — все блюда счёта)</summary>
         [Column("order_id")]
-        public int OrderId { get; set; }
+        public int? OrderId { get; set; }
+
+        /// <summary>Банкет: чек предоплаты (аванс) или расчёта при закрытии</summary>
+        [Column("banquet_id")]
+        public int? BanquetId { get; set; }
+
+        /// <summary>Платёж банкета, по которому пробит чек</summary>
+        [Column("banquet_payment_id")]
+        public int? BanquetPaymentId { get; set; }
 
         /// <summary>Счёт стола, если чек пробит при закрытии счёта официантом</summary>
         [Column("check_id")]

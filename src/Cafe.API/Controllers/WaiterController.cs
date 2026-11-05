@@ -197,7 +197,7 @@ namespace Cafe.API.Controllers
                         c.Guests,
                         waiter = waiterNames.GetValueOrDefault(c.WaiterId ?? 0),
                         isMine = c.WaiterId == me,
-                        total = mine.Sum(l => LineTotal(l.Item)),
+                        total = Net(c, mine.Sum(l => LineTotal(l.Item))),
                         // Есть готовые, но не отданные блюда — пора нести
                         ready = mine.Count(l => l.Order.Status == OrderStatuses.Ready),
                         cooking = mine.Select(l => l.Order).Distinct().Count(o => o.Status is OrderStatuses.New or OrderStatuses.Accepted or OrderStatuses.Preparing)
@@ -369,7 +369,13 @@ namespace Cafe.API.Controllers
                 canFixToStaff = c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff
                     && (await _fiscalSettings.GetAsync()).StaffChecks && await SeesAllAsync()
                     && c.VenueShiftId != null && await _context.VenueShifts.AnyAsync(v => v.Id == c.VenueShiftId && v.ClosedAt == null),
-                total = c.Status == CheckStatuses.Closed ? c.Total : active.Sum(l => LineTotal(l.Item)),
+                total = c.Status == CheckStatuses.Closed ? c.Total : Net(c, active.Sum(l => LineTotal(l.Item))),
+                // Скидка на счёт: сумма блюд, скидка, можно ли давать
+                subtotal = active.Sum(l => LineTotal(l.Item)),
+                c.DiscountType,
+                c.DiscountValue,
+                discount = DiscountOf(c, active.Sum(l => LineTotal(l.Item))),
+                canDiscount = c.Status == CheckStatuses.Open && await _shifts.HasAsync(User, Permissions.Discounts),
                 // Счёт для гостя: можно ли печатать и печатали ли его с текущей суммой
                 printEnabled = (await _print.SettingsAsync()).Enabled,
                 // Кассовый чек по закрытому счёту (последний чек прихода)
@@ -412,6 +418,50 @@ namespace Cafe.API.Controllers
             });
         }
 
+        /// <summary>Скидка на счёт от суммы блюд (для закрытого — 0: Total уже со скидкой)</summary>
+        public static decimal DiscountOf(TableCheck c, decimal full) => DiscountTypes.Of(c.DiscountType, c.DiscountValue, full);
+
+        /// <summary>Сумма счёта со скидкой</summary>
+        public static decimal Net(TableCheck c, decimal full) => full - DiscountOf(c, full);
+
+        public static string DiscountLabel(string? type, decimal? value) =>
+            type == DiscountTypes.Percent ? $"Скидка {value:0.##}%" : "Скидка";
+
+        public class DiscountRequest
+        {
+            /// <summary>percent или amount; пусто или 0 — убрать скидку</summary>
+            public string? Type { get; set; }
+            public decimal? Value { get; set; }
+        }
+
+        /// <summary>Проверить скидку: тип и границы</summary>
+        public static string? ValidateDiscount(DiscountRequest r)
+        {
+            if (r.Value is null or 0 || string.IsNullOrEmpty(r.Type)) return null;
+            if (r.Type is not (DiscountTypes.Percent or DiscountTypes.Amount)) return "Скидка — процентом или суммой";
+            if (r.Value < 0) return "Скидка не может быть отрицательной";
+            if (r.Type == DiscountTypes.Percent && r.Value > 100) return "Скидка — не больше 100%";
+            return null;
+        }
+
+        // PUT: api/waiter/checks/{id}/discount — скидка на открытый счёт (право «Скидки»)
+        [HttpPut("checks/{id:int}/discount")]
+        [HasPermission(Permissions.Discounts)]
+        public async Task<IActionResult> SetDiscount(int id, [FromBody] DiscountRequest r)
+        {
+            if (ValidateDiscount(r) is { } err) return BadRequest(new { message = err });
+            var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (c.Status != CheckStatuses.Open) return BadRequest(new { message = "Скидку дают до закрытия счёта" });
+            var off = r.Value is null or 0 || string.IsNullOrEmpty(r.Type);
+            c.DiscountType = off ? null : r.Type;
+            c.DiscountValue = off ? null : Math.Round(r.Value!.Value, 2);
+            c.DiscountBy = off ? null : User.GetUserId();
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("🏷 Счёт #{CheckId}: скидка {Type} {Value} ({User})", id, c.DiscountType ?? "нет", c.DiscountValue, User.GetUserId());
+            return Ok(new { c.Id, c.DiscountType, c.DiscountValue });
+        }
+
         /// <summary>Строки счёта для печати: блюда (с весом и добавками) из неотменённых подач</summary>
         private static List<PrecheckLine> PrecheckLines(IEnumerable<CheckLine> lines) => lines
             .Where(l => l.Order.Status != OrderStatuses.Cancelled && l.Item.Quantity > 0)
@@ -441,12 +491,15 @@ namespace Cafe.API.Controllers
             if (lines.Count == 0) return BadRequest(new { message = "В счёте нет блюд" });
             var waiter = (await NamesAsync(new[] { c.WaiterId })).GetValueOrDefault(c.WaiterId ?? 0);
             var label = string.IsNullOrWhiteSpace(c.Label) ? $"счёт №{c.Id}" : c.Label!;
+            var full = lines.Sum(l => l.Amount);
+            var disc = DiscountOf(c, full);
             var data = new PrecheckData((await _brand.GetAsync()).DisplayName, c.Table!.Name, label, waiter, c.Guests,
-                c.OpenedAt, DateTime.UtcNow, lines, settings.Footer);
+                c.OpenedAt, DateTime.UtcNow, lines, settings.Footer,
+                Adjustments: disc > 0 ? new[] { new PrecheckAdjustment(DiscountLabel(c.DiscountType, c.DiscountValue), -disc) } : null);
             var job = await _print.EnqueueAsync("precheck", c.Id, $"Счёт: стол {c.Table.Name}", PrintService.Precheck(settings, data), User.GetUserId());
 
             c.PrintedAt = DateTime.UtcNow;
-            c.PrintedTotal = lines.Sum(l => l.Amount);
+            c.PrintedTotal = full - disc;
             await _context.SaveChangesAsync();
             _logger.LogInformation("🖨 Счёт #{CheckId} (стол {Table}) отправлен на печать: {Total} ₽", c.Id, c.Table.Name, c.PrintedTotal);
             return Ok(new { jobId = job.Id });
@@ -577,7 +630,7 @@ namespace Cafe.API.Controllers
 
             var lines = (await LinesAsync(new List<int> { id })).Where(l => l.Order.Status != OrderStatuses.Cancelled).ToList();
             if (lines.Count == 0) return BadRequest(new { message = "В счёте нет блюд — его можно просто отменить" });
-            var total = lines.Sum(l => LineTotal(l.Item));
+            var total = Net(c, lines.Sum(l => LineTotal(l.Item)));
             if (method == "cash" && r.CashReceived.HasValue && r.CashReceived.Value < total)
                 return BadRequest(new { message = $"Получено меньше суммы счёта ({total:0.##} ₽)" });
 
@@ -996,7 +1049,7 @@ namespace Cafe.API.Controllers
             var lines = await LinesAsync(openIds);
             decimal Total(TableCheck c) => c.Status switch
             {
-                CheckStatuses.Open => lines.Where(l => l.CheckId == c.Id && l.Order.Status != OrderStatuses.Cancelled).Sum(l => LineTotal(l.Item)),
+                CheckStatuses.Open => Net(c, lines.Where(l => l.CheckId == c.Id && l.Order.Status != OrderStatuses.Cancelled).Sum(l => LineTotal(l.Item))),
                 CheckStatuses.Closed => c.Total,
                 _ => 0
             };

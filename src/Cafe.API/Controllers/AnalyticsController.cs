@@ -53,6 +53,8 @@ namespace Cafe.API.Controllers
                 .Where(o => o.PaymentMethod != "online" || o.PaymentStatus == "paid" || o.PaymentStatus == "refunded")
                 // Закрытые на сотрудника — не выручка (без оплаты, к удержанию с сотрудника)
                 .Where(o => o.PaymentMethod != "staff")
+                // Заказы кухни банкета — выручка считается по самим банкетам (с обслуживанием, скидкой и предоплатами)
+                .Where(o => o.Source != "banquet")
                 .Include(o => o.OrderItems)
                 .ToListAsync();
 
@@ -67,8 +69,20 @@ namespace Cafe.API.Controllers
             decimal Revenue(IEnumerable<Cafe.API.Models.Order> list) => list.Sum(o => o.Total);
             DateTime Local(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc.ToUniversalTime(), DateTimeKind.Utc), tz);
 
-            var revenue = Revenue(valid);
-            var prevRevenue = Revenue(prevValid);
+            // Банкеты: деньги (предоплаты и расчёт наличными/картой) по закрытым банкетам — в день закрытия
+            var banquets = await _context.Banquets.AsNoTracking()
+                .Where(b => b.Status == Cafe.API.Models.BanquetStatuses.Closed && b.ClosedAt >= rangeStart && b.ClosedAt < rangeEnd)
+                .Select(b => new { b.Id, b.ClosedAt, b.Total }).ToListAsync();
+            var banquetIds = banquets.Select(b => b.Id).ToList();
+            var banquetPays = await _context.BanquetPayments.AsNoTracking()
+                .Where(p => banquetIds.Contains(p.BanquetId) && p.RefundedAt == null).ToListAsync();
+            decimal BanquetMoney(int id) => banquetPays.Where(p => p.BanquetId == id && (p.Method == "cash" || p.Method == "card")).Sum(p => p.Amount);
+            var banquetNow = banquets.Where(b => b.ClosedAt >= periodStart).ToList();
+            var banquetRevenue = banquetNow.Sum(b => BanquetMoney(b.Id));
+            var banquetPrevRevenue = banquets.Where(b => b.ClosedAt < periodStart).Sum(b => BanquetMoney(b.Id));
+
+            var revenue = Revenue(valid) + banquetRevenue;
+            var prevRevenue = Revenue(prevValid) + banquetPrevRevenue;
 
             // Клиенты: по пользователю, для гостей — по телефону
             string CustomerKey(Cafe.API.Models.Order o) => o.UserId?.ToString() ?? $"tel:{o.Phone}";
@@ -86,7 +100,8 @@ namespace Cafe.API.Controllers
             {
                 var date = fromDate.AddDays(i);
                 var dayOrders = valid.Where(o => DateOnly.FromDateTime(Local(o.CreatedAt)) == date).ToList();
-                return new { Date = date.ToString("yyyy-MM-dd"), Revenue = Revenue(dayOrders), Orders = dayOrders.Count };
+                var dayBanquets = banquetNow.Where(b => b.ClosedAt != null && DateOnly.FromDateTime(Local(b.ClosedAt.Value)) == date).Sum(b => BanquetMoney(b.Id));
+                return new { Date = date.ToString("yyyy-MM-dd"), Revenue = Revenue(dayOrders) + dayBanquets, Orders = dayOrders.Count };
             }).ToList();
 
             var byHour = Enumerable.Range(0, 24).Select(h => new
@@ -110,8 +125,9 @@ namespace Cafe.API.Controllers
 
             var paymentMethods = valid.GroupBy(o => o.PaymentMethod)
                 .Select(g => new { Method = g.Key, Orders = g.Count(), Revenue = g.Sum(o => o.Total) })
-                .OrderByDescending(x => x.Orders)
                 .ToList();
+            if (banquetNow.Count > 0) paymentMethods.Add(new { Method = "banquet", Orders = banquetNow.Count, Revenue = banquetRevenue });
+            paymentMethods = paymentMethods.OrderByDescending(x => x.Orders).ToList();
 
             var points = await _context.UserPointsTransactions.AsNoTracking()
                 .Where(t => t.CreatedAt >= periodStart && t.CreatedAt < rangeEnd)
@@ -130,6 +146,11 @@ namespace Cafe.API.Controllers
                             && c.ClosedAt >= rangeStart && c.ClosedAt < rangeEnd)
                 .Select(c => new { c.ClosedAt, c.Total, c.StaffUserId })
                 .ToListAsync();
+            // и остаток банкетов, закрытый на сотрудника
+            staffChecks.AddRange(await _context.BanquetPayments.AsNoTracking()
+                .Where(p => p.Method == "staff" && p.RefundedAt == null && p.CreatedAt >= rangeStart && p.CreatedAt < rangeEnd)
+                .Select(p => new { ClosedAt = (DateTime?)p.CreatedAt, Total = p.Amount, p.StaffUserId })
+                .ToListAsync());
             // и заказы с сайта, закрытые на сотрудника
             staffChecks.AddRange(await _context.Orders.AsNoTracking()
                 .Where(o => o.PaymentMethod == Cafe.API.Models.CheckPayments.Staff && o.CheckId == null && o.Status != OrderStatuses.Cancelled
@@ -153,6 +174,8 @@ namespace Cafe.API.Controllers
                 Summary = new
                 {
                     Revenue = revenue,
+                    BanquetRevenue = banquetRevenue,
+                    Banquets = banquetNow.Count,
                     RevenueChange = Change(revenue, prevRevenue),
                     Orders = valid.Count,
                     OrdersChange = Change(valid.Count, prevValid.Count),
