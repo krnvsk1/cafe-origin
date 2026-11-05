@@ -60,3 +60,21 @@ export const useDeleteDeliveryZone = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['delivery-zones'] }),
   });
 };
+
+/** Общая минимальная сумма заказа на доставку (для любого адреса; у зоны может быть своя, больше) */
+export interface DeliveryRules { minOrderAmount: number }
+
+export const useDeliveryRules = () =>
+  useQuery<DeliveryRules>({
+    queryKey: ['delivery-zones', 'rules'],
+    queryFn: () => apiClient.get('/api/delivery-zones/rules').then(res => res.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+export const useSaveDeliveryRules = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (r: DeliveryRules) => apiClient.put('/api/delivery-zones/rules', r).then(res => res.data as DeliveryRules),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['delivery-zones'] }),
+  });
+};

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Cafe.API.Data;
 using Cafe.API.Models;
 using Cafe.API.Authorization;
+using Cafe.API.Extensions;
 
 namespace Cafe.API.Controllers
 {
@@ -41,6 +42,43 @@ namespace Cafe.API.Controllers
             public decimal Subtotal { get; set; }
         }
 
+        public const string RulesKey = "delivery_rules";
+        private static readonly System.Text.Json.JsonSerializerOptions Json = new(System.Text.Json.JsonSerializerDefaults.Web);
+
+        /// <summary>Общие правила доставки: минимальная сумма заказа для любого адреса (у зоны может быть своя, больше)</summary>
+        public class DeliveryRules
+        {
+            public decimal MinOrderAmount { get; set; }
+        }
+
+        public static async Task<DeliveryRules> RulesAsync(ApplicationDbContext context)
+        {
+            var row = await context.AppSettings.AsNoTracking().FirstOrDefaultAsync(s => s.Key == RulesKey);
+            return row == null ? new DeliveryRules() : System.Text.Json.JsonSerializer.Deserialize<DeliveryRules>(row.Value, Json) ?? new DeliveryRules();
+        }
+
+        /// <summary>Сколько минимум для доставки: больше из общего минимума и минимума зоны</summary>
+        public static decimal MinFor(DeliveryRules rules, DeliveryZone? zone) => Math.Max(rules.MinOrderAmount, zone?.MinOrderAmount ?? 0);
+
+        // GET: api/delivery-zones/rules — общая минимальная сумма заказа на доставку (для сайта)
+        [HttpGet("rules")]
+        public async Task<IActionResult> GetRules() => Ok(await RulesAsync(_context));
+
+        // PUT: api/delivery-zones/rules
+        [HttpPut("rules")]
+        [HasPermission(Permissions.Zones)]
+        public async Task<IActionResult> SaveRules([FromBody] DeliveryRules r)
+        {
+            if (r.MinOrderAmount < 0 || r.MinOrderAmount > 1_000_000) return BadRequest(new { message = "Проверьте сумму" });
+            var row = await _context.AppSettings.FirstOrDefaultAsync(s => s.Key == RulesKey);
+            if (row == null) { row = new AppSetting { Key = RulesKey }; _context.AppSettings.Add(row); }
+            row.Value = System.Text.Json.JsonSerializer.Serialize(new DeliveryRules { MinOrderAmount = Math.Round(r.MinOrderAmount, 2) }, Json);
+            row.UpdatedAt = DateTime.UtcNow;
+            row.UpdatedByUserId = User.GetUserId();
+            await _context.SaveChangesAsync();
+            return Ok(await RulesAsync(_context));
+        }
+
         // GET: api/delivery-zones — активные зоны (для карты у клиента)
         [HttpGet]
         public async Task<IActionResult> GetActive()
@@ -73,6 +111,7 @@ namespace Cafe.API.Controllers
                 .ToListAsync();
 
             var zone = zones.FirstOrDefault(z => z.Contains(request.Latitude, request.Longitude));
+            var rules = await RulesAsync(_context);
             if (zone == null)
                 return Ok(new { Deliverable = false, Message = "К сожалению, по этому адресу мы пока не доставляем" });
 
@@ -82,10 +121,10 @@ namespace Cafe.API.Controllers
                 ZoneId = zone.Id,
                 ZoneName = zone.Name,
                 DeliveryPrice = zone.PriceFor(request.Subtotal),
-                zone.MinOrderAmount,
+                MinOrderAmount = MinFor(rules, zone),
                 zone.FreeDeliveryFrom,
                 zone.DeliveryMinutes,
-                MinOrderReached = request.Subtotal >= zone.MinOrderAmount
+                MinOrderReached = request.Subtotal >= MinFor(rules, zone)
             });
         }
 

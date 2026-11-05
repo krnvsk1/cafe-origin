@@ -34,7 +34,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCreateOrder, useRestaurantSettings } from '../api/hooks';
 import { buildScheduleDays } from '../utils/schedule';
 import AddressMapPicker from './AddressMapPicker';
-import { useDeliveryZones } from '../api/zones';
+import { useDeliveryZones, useDeliveryRules } from '../api/zones';
 import type { ZoneCheck } from '../api/zones';
 import { isMapsConfigured } from '../utils/yandexMaps';
 import type { CreateOrderDto, PromoCodeValidation, PaymentMethod } from '../types';
@@ -133,6 +133,10 @@ const OrderModal: React.FC<OrderModalProps> = ({
   const [zoneCheck, setZoneCheck] = React.useState<ZoneCheck | null>(null);
   const deliveryPrice = useZones && zoneCheck?.deliverable ? zoneCheck.deliveryPrice ?? 0 : 0;
   const zoneBlocked = useZones && (!coords || !zoneCheck?.deliverable || !zoneCheck.minOrderReached);
+  // Общий минимум на доставку (без зон — проверяем здесь, с зонами его учитывает проверка адреса)
+  const { data: deliveryRules } = useDeliveryRules();
+  const deliveryMin = deliveryType === 'Доставка' ? deliveryRules?.minOrderAmount ?? 0 : 0;
+  const belowMin = deliveryMin > 0 && totalAmount < deliveryMin;
 
   const finalTotal = Math.max(0, totalAmount - discountAmount - pointsDiscount) + deliveryPrice;
 
@@ -163,6 +167,10 @@ const OrderModal: React.FC<OrderModalProps> = ({
     }
     if (useZones && zoneCheck && !zoneCheck.deliverable) {
       showSnackbar(zoneCheck.message || 'По этому адресу доставки нет', 'error');
+      return;
+    }
+    if (belowMin) {
+      showSnackbar(`Минимальная сумма заказа на доставку — ${deliveryMin} ₽`, 'error');
       return;
     }
     if (useZones && zoneCheck && !zoneCheck.minOrderReached) {
@@ -591,7 +599,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
             onClick={handleSubmit}
             fullWidth
             disabled={cartItems.length === 0 || createOrder.isPending ||
-              (deliveryType === 'Доставка' && !address.trim()) || zoneBlocked ||
+              (deliveryType === 'Доставка' && !address.trim()) || zoneBlocked || belowMin ||
               !customerName.trim() || !phone.trim() // Добавлена валидация для имени и телефона
             }
             startIcon={createOrder.isPending ? <CircularProgress size={20} color="inherit" /> : null}
@@ -601,7 +609,9 @@ const OrderModal: React.FC<OrderModalProps> = ({
               fontSize: isMobile ? '1rem' : '1.1rem',
             }}
           >
-            {createOrder.isPending ? 'Создание...' : effectivePayment === 'online' ? 'Оформить и оплатить' : 'Оформить заказ'}
+            {createOrder.isPending ? 'Создание...'
+              : belowMin ? `Доставка — от ${deliveryMin} ₽, добавьте ещё ${Math.ceil(deliveryMin - totalAmount)} ₽`
+              : effectivePayment === 'online' ? 'Оформить и оплатить' : 'Оформить заказ'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -473,14 +473,18 @@ namespace Cafe.API.Controllers
                     total += (basePrice + addonsTotal) * itemRequest.Quantity;
                 }
 
-                // Минимальная сумма и стоимость доставки по зоне
+                // Минимальная сумма (общая для доставки и по зоне) и стоимость доставки по зоне
                 decimal deliveryPrice = 0;
-                if (deliveryZone != null)
+                if (deliveryType == "Доставка")
                 {
-                    if (total < deliveryZone.MinOrderAmount)
-                        return BadRequest(new { Message = $"Минимальная сумма заказа для зоны «{deliveryZone.Name}» — {deliveryZone.MinOrderAmount:0.##} ₽" });
-                    deliveryPrice = deliveryZone.PriceFor(total);
+                    var min = DeliveryZonesController.MinFor(await DeliveryZonesController.RulesAsync(_context), deliveryZone);
+                    if (total < min)
+                        return BadRequest(new { Message = deliveryZone != null && deliveryZone.MinOrderAmount >= min
+                            ? $"Минимальная сумма заказа для зоны «{deliveryZone.Name}» — {min:0.##} ₽"
+                            : $"Минимальная сумма заказа на доставку — {min:0.##} ₽" });
                 }
+                if (deliveryZone != null)
+                    deliveryPrice = deliveryZone.PriceFor(total);
                 newOrder.DeliveryPrice = deliveryPrice;
 
                 // Применяем промокод

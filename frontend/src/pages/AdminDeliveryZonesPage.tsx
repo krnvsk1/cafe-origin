@@ -4,7 +4,7 @@ import {
   ListItemText, Chip, Divider, LinearProgress, InputAdornment,
 } from '@mui/material';
 import { Add as AddIcon, Map as MapIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
-import { useAllDeliveryZones, useSaveDeliveryZone, useDeleteDeliveryZone } from '../api/zones';
+import { useAllDeliveryZones, useSaveDeliveryZone, useDeleteDeliveryZone, useDeliveryRules, useSaveDeliveryRules } from '../api/zones';
 import type { DeliveryZone, DeliveryZoneInput } from '../api/zones';
 import { loadYandexMaps, isMapsConfigured } from '../utils/yandexMaps';
 import { useRestaurantSettings } from '../api/hooks';
@@ -24,6 +24,37 @@ const emptyZone = (sortOrder: number): DeliveryZoneInput => ({
   isActive: true,
   sortOrder,
 });
+
+/** Минимальная сумма заказа на доставку — для любого адреса (у зоны может быть своя, больше) */
+const DeliveryMinCard: React.FC = () => {
+  const { data } = useDeliveryRules();
+  const save = useSaveDeliveryRules();
+  const [value, setValue] = React.useState('');
+  const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null);
+  React.useEffect(() => { if (data) setValue(String(data.minOrderAmount || '')); }, [data]);
+  const current = data?.minOrderAmount ?? 0;
+  const next = value === '' ? 0 : Math.max(0, Number(value.replace(',', '.')) || 0);
+  const submit = async () => {
+    setMsg(null);
+    try { await save.mutateAsync({ minOrderAmount: next }); setMsg({ ok: true, text: 'Сохранено' }); }
+    catch { setMsg({ ok: false, text: 'Не удалось сохранить' }); }
+  };
+  return (
+    <Paper sx={{ p: 2, mb: 2, display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+      <Box sx={{ flex: 1, minWidth: 220 }}>
+        <Typography fontWeight={700}>Минимальная сумма заказа на доставку</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Для любого адреса. Если у зоны свой минимум больше — действует он. Самовывоз и заказы в зале не ограничиваются.
+        </Typography>
+      </Box>
+      <TextField size="small" type="number" label="Минимум" value={value} onChange={e => { setValue(e.target.value); setMsg(null); }}
+        placeholder="0 — без ограничения" sx={{ width: 170 }}
+        InputProps={{ endAdornment: <InputAdornment position="end">₽</InputAdornment> }} />
+      <Button variant="contained" onClick={submit} disabled={save.isPending || next === current}>Сохранить</Button>
+      {msg && <Typography variant="body2" color={msg.ok ? 'success.main' : 'error.main'}>{msg.text}</Typography>}
+    </Paper>
+  );
+};
 
 const AdminDeliveryZonesPage: React.FC = () => {
   const { data: zones, isLoading } = useAllDeliveryZones();
@@ -157,6 +188,8 @@ const AdminDeliveryZonesPage: React.FC = () => {
         </Button>
       </Box>
 
+      <DeliveryMinCard />
+
       {!isMapsConfigured() && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           Чтобы рисовать зоны и показывать карту клиентам, задайте переменную <code>VITE_YANDEX_MAPS_API_KEY</code> (ключ JavaScript API Яндекс Карт) и пересоберите фронтенд.
@@ -198,7 +231,7 @@ const AdminDeliveryZonesPage: React.FC = () => {
               <TextField size="small" type="number" label="Стоимость доставки" value={form.deliveryPrice}
                 onChange={e => setForm(f => ({ ...f, deliveryPrice: num(e.target.value) }))}
                 InputProps={{ endAdornment: <InputAdornment position="end">₽</InputAdornment> }} />
-              <TextField size="small" type="number" label="Минимальная сумма заказа" value={form.minOrderAmount}
+              <TextField size="small" type="number" label="Минимальная сумма заказа в этой зоне" value={form.minOrderAmount}
                 onChange={e => setForm(f => ({ ...f, minOrderAmount: num(e.target.value) }))}
                 InputProps={{ endAdornment: <InputAdornment position="end">₽</InputAdornment> }} />
               <TextField size="small" type="number" label="Бесплатная доставка от (необязательно)" value={form.freeDeliveryFrom ?? ''}
