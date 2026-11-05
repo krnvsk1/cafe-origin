@@ -19,7 +19,7 @@ import {
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
   useServeItem, useMyChecks, useSetItemWeight, usePrintCheck, fetchPrintJob, useCheckFiscal,
   useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
-  useStaffChecksInfo, payLabel, useChangePayment, type CheckPayment, type CloseCheckResult,
+  useStaffChecksInfo, payLabel, useChangePayment, useApproveShift, useRejectShift, type CheckPayment, type CloseCheckResult,
   type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
 import { apiError } from '../api/inventory';
@@ -259,6 +259,8 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
   const closeVenue = useCloseVenueShift();
   const openMine = useOpenMyShift();
   const closeMine = useCloseMyShift();
+  const approve = useApproveShift();
+  const reject = useRejectShift();
   const [err, setErr] = React.useState('');
   const [kkt, setKkt] = React.useState<{ ok: boolean; message: string } | null>(null);
   const [confirm, setConfirm] = React.useState<'venue' | 'mine' | null>(null);
@@ -274,8 +276,9 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
     } catch (e) { setErr(apiError(e)); setConfirm(null); }
   };
   const { venue, mine } = shift;
+  const pendingMine = shift.minePending;
   const isWaiter = can(P.Waiter) && !hideMine;
-  const busy = openVenue.isPending || closeVenue.isPending || openMine.isPending || closeMine.isPending;
+  const busy = openVenue.isPending || closeVenue.isPending || openMine.isPending || closeMine.isPending || approve.isPending || reject.isPending;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -290,10 +293,28 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
           Смена заведения открыта {parseUtc(venue.openedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} и не закрыта
         </Alert>
       )}
-      {venue && isWaiter && !mine && (
+      {venue && isWaiter && !mine && !pendingMine && (
         <Button variant="contained" color="secondary" size="large" onClick={() => run(() => openMine.mutateAsync())} disabled={busy} sx={{ py: 1.5, fontWeight: 800 }}>
           Начать мою смену
         </Button>
+      )}
+      {venue && isWaiter && !mine && pendingMine && (
+        <Alert severity="info" icon={<CircularProgress size={20} />}
+          action={<Button color="inherit" size="small" onClick={() => run(() => closeMine.mutateAsync())} disabled={busy}>Отменить</Button>}>
+          Запрос на смену отправлен в {timeOf(pendingMine.requestedAt)} — ждём подтверждения менеджера или администратора
+        </Alert>
+      )}
+      {venue && !!shift.pendingWaiters?.length && (
+        <Alert severity="warning" sx={{ '& .MuiAlert-message': { width: '100%' } }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>Официанты просят открыть смену</Typography>
+          {shift.pendingWaiters.map(w => (
+            <Box key={w.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', py: 0.25 }}>
+              <Typography variant="body2" sx={{ flex: 1, minWidth: 140 }}>{w.name ?? `Сотрудник #${w.userId}`} · {timeOf(w.requestedAt)}</Typography>
+              <Button size="small" variant="contained" color="success" disabled={busy} onClick={() => run(() => approve.mutateAsync(w.id))}>Подтвердить</Button>
+              <Button size="small" color="inherit" disabled={busy} onClick={() => run(() => reject.mutateAsync(w.id))}>Отклонить</Button>
+            </Box>
+          ))}
+        </Alert>
       )}
       {venue && isWaiter && !mine && (
         <Button size="small" onClick={() => setMyChecks(true)} sx={{ alignSelf: 'flex-start' }}>Мои счета за прошлую смену</Button>

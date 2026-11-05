@@ -20,6 +20,8 @@ namespace Cafe.API.Authorization
         public const string TablesManage = "tables";
         public const string Shift = "shift";
         public const string ChecksAll = "checks.all";
+        public const string ShiftApprove = "shift.approve";
+        public const string ShiftSelf = "shift.self";
         public const string Delivery = "delivery";
         public const string CouriersAssign = "couriers.assign";
 
@@ -60,6 +62,8 @@ namespace Cafe.API.Authorization
             new(Waiter, "Заказы", "Официант", "Открывать чеки на столы с телефона, отправлять заказы на кухню, закрывать чек при оплате"),
             new(Voids, "Заказы", "Отменённые блюда", "Видеть, какие блюда официанты убрали из чеков: кто, когда, почему, списано ли со склада"),
             new(Shift, "Заказы", "Смена заведения", "Открывать и закрывать смену заведения на день — без неё официанты не начинают работу"),
+            new(ShiftApprove, "Заказы", "Подтверждение смен официантов", "Подтверждать или отклонять открытие смены официанта — пока смена не подтверждена, официант не может открывать счета"),
+            new(ShiftSelf, "Заказы", "Смена официанта без подтверждения", "Открывать свою смену официанта сразу, без подтверждения менеджера или администратора"),
             new(ChecksAll, "Заказы", "Все чеки и смены", "Видеть чеки всех официантов и все смены, открывать чужие счета и передавать их другому официанту"),
             new(TablesManage, "Заказы", "Зал и столы", "Расставлять столы и перегородки на схеме зала, добавлять и переименовывать столы"),
             new(Kitchen, "Заказы", "Кухня", "Экран кухни: принимать заказы и отмечать готовность"),
@@ -98,7 +102,7 @@ namespace Cafe.API.Authorization
         {
             ["manager"] = new[]
             {
-                Dashboard, Analytics, OrdersView, OrdersManage, Pos, Waiter, Voids, TablesManage, Shift, ChecksAll, Kitchen, Delivery, CouriersAssign,
+                Dashboard, Analytics, OrdersView, OrdersManage, Pos, Waiter, Voids, TablesManage, Shift, ShiftApprove, ShiftSelf, ChecksAll, Kitchen, Delivery, CouriersAssign,
                 Menu, StopList, Zones, PromoCodes, Reviews, Points, UsersView, InventoryView, Haccp, HaccpManage
             },
             ["courier"] = new[] { OrdersView, Delivery },

@@ -987,7 +987,7 @@ namespace Cafe.API.Controllers
             var me = User.GetUserId();
             if (me == null) return Unauthorized();
             var shift = await _shifts.CurrentWaiterAsync(me.Value)
-                        ?? await _context.WaiterShifts.AsNoTracking().Where(w => w.UserId == me).OrderByDescending(w => w.OpenedAt).FirstOrDefaultAsync();
+                        ?? await _context.WaiterShifts.AsNoTracking().Where(w => w.UserId == me && w.ApprovedAt != null).OrderByDescending(w => w.OpenedAt).FirstOrDefaultAsync();
             var shiftId = shift?.Id;
             var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table)
                 .Where(c => c.WaiterId == me && ((shiftId != null && c.WaiterShiftId == shiftId) || c.Status == CheckStatuses.Open))

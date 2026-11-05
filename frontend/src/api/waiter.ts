@@ -290,6 +290,12 @@ export interface ShiftCurrent {
   seesAll: boolean;
   venue: { id: number; businessDate: string; openedAt: string; openedBy: string | null; stale: boolean } | null;
   mine: { id: number; openedAt: string; openChecks: number } | null;
+  /** Мой запрос на смену ждёт подтверждения менеджера */
+  minePending?: { id: number; requestedAt: string } | null;
+  /** Могу подтверждать смены официантов */
+  canApprove?: boolean;
+  /** Запросы официантов на открытие смены */
+  pendingWaiters?: { id: number; userId: number; name: string | null; requestedAt: string }[] | null;
   waiters: { id: number; userId: number; name: string | null; openedAt: string; openChecks: number }[] | null;
   totalOpenChecks: number | null;
   /** Непробитые кассовые чеки за 2 недели (видят менеджеры; null — касса выключена) */
@@ -300,14 +306,17 @@ export const useShiftCurrent = () =>
   useQuery<ShiftCurrent>({
     queryKey: [KEY, 'shift'],
     queryFn: () => apiClient.get('/api/shifts/current').then(r => r.data),
-    refetchInterval: 30_000,
+    // Пока ждём подтверждения смены (или кто-то ждёт нашего) — проверяем чаще
+    refetchInterval: q => (q.state.data?.minePending || q.state.data?.pendingWaiters?.length ? 8_000 : 30_000),
   });
 
 /** Смена заведения; если включена онлайн-касса — смена на АТОЛ открывается/закрывается вместе с ней */
 export interface VenueShiftResult { id: number; fiscal: { ok: boolean; message: string } | null }
 export const useOpenVenueShift = () => useWaiterMutation<void, VenueShiftResult>(() => apiClient.post('/api/shifts/venue/open').then(r => r.data));
 export const useCloseVenueShift = () => useWaiterMutation<void, VenueShiftResult>(() => apiClient.post('/api/shifts/venue/close').then(r => r.data));
-export const useOpenMyShift = () => useWaiterMutation<void>(() => apiClient.post('/api/shifts/mine/open').then(r => r.data));
+export const useOpenMyShift = () => useWaiterMutation<void, { id: number; pending: boolean }>(() => apiClient.post('/api/shifts/mine/open').then(r => r.data));
+export const useApproveShift = () => useWaiterMutation<number>(id => apiClient.post(`/api/shifts/waiters/${id}/approve`).then(r => r.data));
+export const useRejectShift = () => useWaiterMutation<number>(id => apiClient.post(`/api/shifts/waiters/${id}/reject`).then(r => r.data));
 export const useCloseMyShift = () => useWaiterMutation<void>(() => apiClient.post('/api/shifts/mine/close').then(r => r.data));
 
 export const useAssignCheck = () =>

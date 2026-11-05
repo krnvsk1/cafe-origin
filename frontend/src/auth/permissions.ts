@@ -14,6 +14,8 @@ export const P = {
   TablesManage: 'tables',
   Shift: 'shift',
   ChecksAll: 'checks.all',
+  ShiftApprove: 'shift.approve',
+  ShiftSelf: 'shift.self',
   Kitchen: 'kitchen',
   Delivery: 'delivery',
   CouriersAssign: 'couriers.assign',

@@ -41,9 +41,13 @@ namespace Cafe.API.Controllers
             var seesAll = await _shifts.HasAsync(User, Permissions.ChecksAll);
             var venue = await _shifts.CurrentVenueAsync();
             var mine = await _shifts.CurrentWaiterAsync(me);
-            var waiters = venue == null ? new List<WaiterShift>()
+            var minePending = mine == null ? await _shifts.PendingWaiterAsync(me) : null;
+            var canApprove = await _shifts.HasAsync(User, Permissions.ShiftApprove);
+            var all = venue == null ? new List<WaiterShift>()
                 : await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == venue.Id && w.ClosedAt == null).OrderBy(w => w.OpenedAt).ToListAsync();
-            var names = await WaiterController.StaffNamesAsync(_context, waiters.Select(w => (int?)w.UserId).Append(venue?.OpenedByUserId));
+            var waiters = all.Where(w => w.ApprovedAt != null).ToList();
+            var pendingShifts = all.Where(w => w.ApprovedAt == null).ToList();
+            var names = await WaiterController.StaffNamesAsync(_context, all.Select(w => (int?)w.UserId).Append(venue?.OpenedByUserId));
             var openChecks = await _context.TableChecks.AsNoTracking().Where(c => c.Status == CheckStatuses.Open)
                 .GroupBy(c => c.WaiterId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key ?? 0, x => x.Count);
             // Непробитые кассовые чеки — менеджер видит их до закрытия смены
@@ -65,6 +69,13 @@ namespace Cafe.API.Controllers
                     stale = venue.BusinessDate < ShiftService.BusinessDate(DateTime.UtcNow),
                 },
                 mine = mine == null || venue == null || mine.VenueShiftId != venue.Id ? null : new { mine.Id, mine.OpenedAt, openChecks = openChecks.GetValueOrDefault(me) },
+                // Мой запрос на смену ждёт подтверждения менеджера
+                minePending = minePending == null || venue == null || minePending.VenueShiftId != venue.Id ? null : new { minePending.Id, requestedAt = minePending.OpenedAt },
+                canApprove,
+                // Запросы официантов на открытие смены — тем, кто может подтверждать
+                pendingWaiters = canApprove
+                    ? pendingShifts.Select(w => new { w.Id, w.UserId, name = names.GetValueOrDefault(w.UserId), requestedAt = w.OpenedAt })
+                    : null,
                 waiters = canVenue || seesAll
                     ? waiters.Select(w => new { w.Id, w.UserId, name = names.GetValueOrDefault(w.UserId), w.OpenedAt, openChecks = openChecks.GetValueOrDefault(w.UserId) })
                     : null,
@@ -165,7 +176,42 @@ namespace Cafe.API.Controllers
         {
             var me = User.GetUserId();
             if (me == null) return Unauthorized();
-            try { var w = await _shifts.OpenWaiterAsync(me.Value); return Ok(new { w.Id }); }
+            // Без права «Смена без подтверждения» (или «Подтверждение смен») — смену подтверждает менеджер или администратор
+            var approved = await _shifts.HasAsync(User, Permissions.ShiftSelf) || await _shifts.HasAsync(User, Permissions.ShiftApprove);
+            try
+            {
+                var w = await _shifts.OpenWaiterAsync(me.Value, approved);
+                if (w.ApprovedAt == null) _logger.LogInformation("⏳ Официант #{UserId} просит открыть смену", me);
+                return Ok(new { w.Id, pending = w.ApprovedAt == null });
+            }
+            catch (ShiftService.ShiftException ex) { return Fail(ex); }
+        }
+
+        // POST: api/shifts/waiters/{id}/approve — подтвердить смену официанта
+        [HttpPost("waiters/{id:int}/approve")]
+        [HasPermission(Permissions.ShiftApprove)]
+        public async Task<IActionResult> ApproveWaiter(int id)
+        {
+            try
+            {
+                var w = await _shifts.ApproveWaiterAsync(id, User.GetUserId());
+                _logger.LogInformation("✅ Смена официанта #{UserId} подтверждена ({By})", w.UserId, User.GetUserId());
+                return Ok(new { w.Id });
+            }
+            catch (ShiftService.ShiftException ex) { return Fail(ex); }
+        }
+
+        // POST: api/shifts/waiters/{id}/reject — отклонить запрос на смену
+        [HttpPost("waiters/{id:int}/reject")]
+        [HasPermission(Permissions.ShiftApprove)]
+        public async Task<IActionResult> RejectWaiter(int id)
+        {
+            try
+            {
+                var w = await _shifts.RejectWaiterAsync(id);
+                _logger.LogInformation("⛔ Запрос официанта #{UserId} на смену отклонён ({By})", w.UserId, User.GetUserId());
+                return Ok(new { w.Id });
+            }
             catch (ShiftService.ShiftException ex) { return Fail(ex); }
         }
 
@@ -207,7 +253,7 @@ namespace Cafe.API.Controllers
                 .OrderByDescending(s => s.OpenedAt).ToListAsync();
             var ids = shifts.Select(s => s.Id).ToList();
             var checks = await _context.TableChecks.AsNoTracking().Where(c => c.VenueShiftId != null && ids.Contains(c.VenueShiftId.Value)).ToListAsync();
-            var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => ids.Contains(w.VenueShiftId)).ToListAsync();
+            var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => ids.Contains(w.VenueShiftId) && w.ApprovedAt != null).ToListAsync();
             var names = await WaiterController.StaffNamesAsync(_context, shifts.SelectMany(s => new[] { s.OpenedByUserId, s.ClosedByUserId }));
 
             return Ok(shifts.Select(s =>
@@ -241,7 +287,7 @@ namespace Cafe.API.Controllers
             var s = await _context.VenueShifts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
             if (s == null) return NotFound(new { message = "Смена не найдена" });
             var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table).Where(c => c.VenueShiftId == id).OrderBy(c => c.OpenedAt).ToListAsync();
-            var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == id).OrderBy(w => w.OpenedAt).ToListAsync();
+            var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == id && w.ApprovedAt != null).OrderBy(w => w.OpenedAt).ToListAsync();
             var names = await WaiterController.StaffNamesAsync(_context,
                 waiters.Select(w => (int?)w.UserId).Concat(checks.Select(c => c.WaiterId)).Concat(checks.Select(c => c.StaffUserId)).Concat(checks.Select(c => c.PaymentChangedBy))
                     .Append(s.OpenedByUserId).Append(s.ClosedByUserId));

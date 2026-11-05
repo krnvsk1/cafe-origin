@@ -53,5 +53,12 @@ namespace Cafe.API.Models
 
         [Column("closed_at")]
         public DateTime? ClosedAt { get; set; }
+
+        /// <summary>Смену подтвердил менеджер или администратор (null — ждёт подтверждения; отклонённая — закрыта без подтверждения)</summary>
+        [Column("approved_at")]
+        public DateTime? ApprovedAt { get; set; }
+
+        [Column("approved_by")]
+        public int? ApprovedBy { get; set; }
     }
 }
