@@ -40,6 +40,7 @@ import {
   RemoveShoppingCartOutlined as VoidsIcon,
   TableRestaurantOutlined as FloorIcon,
   EventAvailableOutlined as ShiftsIcon,
+  CelebrationOutlined as BanquetIcon,
   MonitorHeartOutlined as SystemIcon,
   AppsRounded as AppsIcon,
   RestaurantMenuOutlined as ProductsIcon,
@@ -89,6 +90,7 @@ import PosPage from './pages/PosPage';
 import WaiterPage from './pages/WaiterPage';
 import VoidsPage from './pages/VoidsPage';
 import ShiftsPage from './pages/ShiftsPage';
+import BanquetsPage from './pages/BanquetsPage';
 import SystemPage from './pages/SystemPage';
 import FloorEditorPage from './pages/FloorEditorPage';
 import FinancePage from './pages/finance/FinancePage';
@@ -242,6 +244,7 @@ function App() {
     { text: 'Касса', icon: <PosIcon />, path: '/pos', perms: [P.Pos], group: 'Смена', hint: 'Заказы у стойки: в зале и с собой' },
     { text: 'Официант', icon: <WaiterIcon />, path: '/waiter', perms: [P.Waiter], group: 'Смена', hint: 'Счета столов с телефона' },
     { text: 'Смены и счета', icon: <ShiftsIcon />, path: '/admin/shifts', perms: [P.Shift, P.ChecksAll], group: 'Смена', hint: 'Открыть смену заведения, все счета по сменам' },
+    { text: 'Банкеты', icon: <BanquetIcon />, path: '/admin/banquets', perms: [P.Banquets], group: 'Смена', hint: 'Банкеты на дату: блюда, обслуживание, предоплаты' },
     { text: 'Зал и столы', icon: <FloorIcon />, path: '/admin/floor', perms: [P.TablesManage], group: 'Смена', hint: 'Расстановка столов и перегородок' },
     { text: 'Отменённые блюда', icon: <VoidsIcon />, path: '/admin/voids', perms: [P.Voids], group: 'Смена', hint: 'Что убрали из счетов и почему' },
     { text: 'Кухня', icon: <KitchenIcon />, path: '/kitchen', perms: [P.Kitchen], group: 'Смена', hint: 'Новые заказы, приготовление, техкарты' },
@@ -456,6 +459,8 @@ function App() {
                 {can(P.Waiter, P.ChecksAll) && <Route path="/waiter" element={<WaiterPage />} />}
                 {can(P.Waiter, P.ChecksAll) && <Route path="/waiter/:checkId" element={<WaiterPage />} />}
                 {can(P.Shift, P.ChecksAll) && <Route path="/admin/shifts" element={<ShiftsPage />} />}
+                {can(P.Banquets) && <Route path="/admin/banquets" element={<BanquetsPage />} />}
+                {can(P.Banquets) && <Route path="/admin/banquets/:id" element={<BanquetsPage />} />}
                 {can(P.Voids) && <Route path="/admin/voids" element={<VoidsPage />} />}
                 {can(P.TablesManage) && <Route path="/admin/floor" element={<FloorEditorPage />} />}
                 {can(P.Kitchen) && <Route path="/kitchen" element={<KitchenPage />} />}

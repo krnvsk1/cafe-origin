@@ -98,6 +98,7 @@ namespace Cafe.API.Controllers
                     o.PaymentMethod,
                     o.PaymentStatus,
                     o.Total,
+                    o.DeliveryPrice,
                     o.ClosedAt,
                     closedBy = o.ClosedBy == null ? null : names.GetValueOrDefault(o.ClosedBy.Value),
                     staffName = o.StaffUserId == null ? null : names.GetValueOrDefault(o.StaffUserId.Value),

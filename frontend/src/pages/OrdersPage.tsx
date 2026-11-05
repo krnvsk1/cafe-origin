@@ -156,9 +156,9 @@ const EditOrderDialog: React.FC<{
 };
 
 // Компонент одной карточки заказа
-type OrderSource = 'online' | 'pos' | 'waiter';
-const SOURCE_LABEL: Record<OrderSource, string> = { online: 'Сайт', pos: 'Касса', waiter: 'Официант' };
-const sourceOf = (o: Order): OrderSource => (o.source === 'pos' || o.source === 'waiter' ? o.source : 'online');
+type OrderSource = 'online' | 'pos' | 'waiter' | 'banquet';
+const SOURCE_LABEL: Record<OrderSource, string> = { online: 'Сайт', pos: 'Касса', waiter: 'Официант', banquet: 'Банкет' };
+const sourceOf = (o: Order): OrderSource => (o.source === 'pos' || o.source === 'waiter' || o.source === 'banquet' ? o.source : 'online');
 const rub = (v: number) => `${v.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`;
 
 // Подачи официанта на экране «Все заказы» показываем одним счётом стола: блюда всех подач, общая сумма
@@ -757,7 +757,7 @@ const OrdersPage: React.FC = () => {
       {!isLoading && isAdmin && orders.length > 0 && (
         <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
           <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>Откуда:</Typography>
-          {(['all', 'online', 'pos', 'waiter'] as const).map(src => (
+          {(['all', 'online', 'pos', 'waiter', 'banquet'] as const).map(src => (
             <Chip
               key={src}
               label={src === 'all' ? 'Все' : `${SOURCE_LABEL[src]} · ${orders.filter(o => sourceOf(o) === src).length}`}

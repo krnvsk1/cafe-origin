@@ -11,6 +11,9 @@ export interface PosOrderInput {
   phone?: string | null;
   comment?: string | null;
   sendToKitchen: boolean;
+  /** Скидка (право «Скидки») */
+  discountType?: 'percent' | 'amount' | null;
+  discountValue?: number | null;
 }
 
 export interface PosOrderResult {

@@ -20,6 +20,8 @@ import {
   useFiscalState, fiscalShift, fiscalSell, fiscalReturn, SHIFT_TEXT, type FiscalReceiptResult,
 } from '../api/fiscal';
 import ProductModal from '../components/ProductModal';
+import DiscountDialog, { discountOf, type DiscountType } from '../components/DiscountDialog';
+import { useCan, P } from '../auth/permissions';
 import FullscreenButton from '../components/FullscreenButton';
 import { useIsFullscreen, useWorkScreen } from '../hooks/useFullscreen';
 import type { Dish, SelectedAddon } from '../types';
@@ -205,10 +207,16 @@ const Ticket: React.FC<{
   const [comment, setComment] = React.useState('');
   const [toKitchen, setToKitchen] = React.useState(true);
   const [error, setError] = React.useState('');
+  // Скидка (право «Скидки»)
+  const canDiscount = useCan()(P.Discounts);
+  const [disc, setDisc] = React.useState<{ type: DiscountType; value: number } | null>(null);
+  const [discOpen, setDiscOpen] = React.useState(false);
 
   const more = useHiddenBelow(lines);
 
-  const total = lines.reduce((s, l) => s + lineTotal(l), 0);
+  const full = lines.reduce((s, l) => s + lineTotal(l), 0);
+  const discount = disc ? discountOf(disc.type, disc.value, full) : 0;
+  const total = full - discount;
   const received = parseFloat(cash.replace(',', '.')) || 0;
   const change = payment === 'cash' && received > 0 ? received - total : null;
   const count = lines.reduce((s, l) => s + l.quantity, 0);
@@ -231,7 +239,7 @@ const Ticket: React.FC<{
     onChange(lines.flatMap(l => (l.key !== key ? [l] : l.quantity + delta <= 0 ? [] : [{ ...l, quantity: l.quantity + delta }])));
 
   const reset = () => {
-    setCash(''); setPhone(''); setName(''); setGuest(null); setComment(''); setShowGuest(false); setError('');
+    setCash(''); setPhone(''); setName(''); setGuest(null); setComment(''); setShowGuest(false); setError(''); setDisc(null);
   };
 
   const submit = async () => {
@@ -257,6 +265,8 @@ const Ticket: React.FC<{
         phone: phone.trim() || null,
         comment: comment.trim() || null,
         sendToKitchen: toKitchen,
+        discountType: disc?.type ?? null,
+        discountValue: disc?.value ?? null,
       });
       onDone(res.id, res.change, res.fiscal ?? null);
       reset();
@@ -389,6 +399,19 @@ const Ticket: React.FC<{
             </Box>
           </Box>
         )}
+
+        {canDiscount && lines.length > 0 && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button size="small" onClick={() => setDiscOpen(true)} sx={{ px: 1 }}>{disc ? 'Изменить скидку' : 'Скидка'}</Button>
+            {discount > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                {money(full)} − {money(discount)}{disc?.type === 'percent' ? ` (${disc.value}%)` : ''}
+              </Typography>
+            )}
+          </Box>
+        )}
+        <DiscountDialog open={discOpen} base={full} type={disc?.type} value={disc?.value} onClose={() => setDiscOpen(false)}
+          onSave={(type, value) => setDisc(type && value ? { type, value } : null)} />
 
         <Button
           size="small"

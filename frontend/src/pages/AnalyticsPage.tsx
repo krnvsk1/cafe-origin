@@ -32,7 +32,9 @@ interface Analytics {
 
 const rub = (v: number) => `${Math.round(v).toLocaleString('ru-RU')} ₽`;
 const short = (v: number) => (v >= 1000 ? `${(v / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}k` : String(Math.round(v)));
-const PAYMENT_LABELS: Record<string, string> = { online: 'Онлайн', card: 'Картой при получении', cash: 'Наличными' };
+const PAYMENT_LABELS: Record<string, string> = {
+  online: 'Онлайн', card: 'Картой', cash: 'Наличными', mixed: 'Раздельно', banquet: 'Банкеты', check: 'Стол, не оплачен',
+};
 
 const toInputDate = (d: Date) => {
   const y = d.getFullYear();

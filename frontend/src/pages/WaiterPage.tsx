@@ -19,7 +19,7 @@ import {
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
   useServeItem, useMyChecks, useSetItemWeight, usePrintCheck, fetchPrintJob, useCheckFiscal,
   useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
-  useStaffChecksInfo, payLabel, useChangePayment, useApproveShift, useRejectShift, type CheckPayment, type CloseCheckResult,
+  useStaffChecksInfo, payLabel, useChangePayment, useApproveShift, useRejectShift, useCheckDiscount, type CheckPayment, type CloseCheckResult,
   type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
 import { apiError } from '../api/inventory';
@@ -36,6 +36,7 @@ import type { Dish, SelectedAddon } from '../types';
 import { tokens } from '../theme';
 import FullscreenButton from '../components/FullscreenButton';
 import { useWorkScreen } from '../hooks/useFullscreen';
+import DiscountDialog from '../components/DiscountDialog';
 
 const money = (v: number) => `${Math.round(v * 100) / 100} ₽`.replace('.', ',');
 const DINE_IN = 'В зале';
@@ -407,7 +408,7 @@ export const TablesSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =
 
 // ==================== Выбор блюд ====================
 
-interface DraftLine {
+export interface DraftLine {
   key: string;
   dishId: number;
   title: string;
@@ -422,7 +423,11 @@ interface DraftLine {
 const lineTotal = (l: DraftLine) => (l.unitPrice + l.addons.reduce((s, a) => s + a.price * a.quantity, 0)) * l.quantity;
 const hasAddons = (s: Dish) => ((s as unknown as { addons?: unknown[] }).addons?.length ?? 0) > 0;
 
-const MenuPicker: React.FC<{ open: boolean; tableName: string; onClose: () => void; onSend: (lines: DraftLine[], comment: string) => Promise<void> }> = ({ open, tableName, onClose, onSend }) => {
+export const MenuPicker: React.FC<{
+  open: boolean; tableName: string; onClose: () => void; onSend: (lines: DraftLine[], comment: string) => Promise<void>;
+  /** Заголовок вместо «Стол N · добавить» и подпись кнопки вместо «На кухню» */
+  title?: string; sendLabel?: string;
+}> = ({ open, tableName, onClose, onSend, title, sendLabel = 'На кухню' }) => {
   const { data: menu = [] } = useDishes();
   const [search, setSearch] = React.useState('');
   const [section, setSection] = React.useState('');
@@ -474,7 +479,7 @@ const MenuPicker: React.FC<{ open: boolean; tableName: string; onClose: () => vo
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, pt: 1.5, pb: 1 }}>
           <IconButton onClick={onClose} aria-label="Закрыть"><CloseIcon /></IconButton>
-          <Typography sx={{ fontWeight: 800, fontSize: '1.15rem', flex: 1 }}>Стол {tableName} · добавить</Typography>
+          <Typography sx={{ fontWeight: 800, fontSize: '1.15rem', flex: 1 }}>{title ?? `Стол ${tableName} · добавить`}</Typography>
         </Box>
         <Box sx={{ px: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
           <TextField size="small" placeholder="Поиск" value={search} onChange={e => setSearch(e.target.value)}
@@ -538,7 +543,7 @@ const MenuPicker: React.FC<{ open: boolean; tableName: string; onClose: () => vo
               </Button>
               <Button fullWidth variant="contained" color="secondary" size="large" onClick={send} disabled={sending}
                 startIcon={sending ? <CircularProgress size={18} color="inherit" /> : undefined}>
-                На кухню · {money(total)}
+                {sendLabel} · {money(total)}
               </Button>
             </Box>
           </Box>
@@ -592,7 +597,8 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const open = useOpenCheck();
   const [picker, setPicker] = React.useState(false);
   const [menu, setMenu] = React.useState<HTMLElement | null>(null);
-  const [dialog, setDialog] = React.useState<'move' | 'split' | 'edit' | 'assign' | null>(null);
+  const [dialog, setDialog] = React.useState<'move' | 'split' | 'edit' | 'assign' | 'discount' | null>(null);
+  const checkDiscount = useCheckDiscount();
   const [toast, setToast] = React.useState('');
   const [voiding, setVoiding] = React.useState<CheckItem | null>(null);
   const [weighing, setWeighing] = React.useState<CheckItem | null>(null);
@@ -767,6 +773,12 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         <MenuItem onClick={() => { setMenu(null); setDialog('edit'); }}>
           <ListItemText primary="Подпись счёта и гости" />
         </MenuItem>
+        {check.canDiscount && active.length > 0 && (
+          <MenuItem onClick={() => { setMenu(null); setDialog('discount'); }}>
+            <ListItemText primary={check.discount ? 'Изменить скидку' : 'Скидка'}
+              secondary={check.discount ? `Сейчас: −${money(check.discount)}${check.discountType === 'percent' ? ` (${check.discountValue}%)` : ''}` : undefined} />
+          </MenuItem>
+        )}
         {check.canManage && (
           <MenuItem onClick={() => { setMenu(null); setDialog('assign'); }}>
             <ListItemText primary="Передать официанту" secondary={check.waiter ? `Сейчас: ${check.waiter}` : undefined} />
@@ -914,6 +926,9 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       }} />}
       {dialog === 'move' && <MoveDialog check={check} onClose={() => setDialog(null)} onDone={name => { setDialog(null); setToast(`Счёт перенесён на стол ${name}`); }} />}
       {dialog === 'edit' && <EditCheckDialog check={check} onClose={() => setDialog(null)} />}
+      <DiscountDialog open={dialog === 'discount'} base={check.subtotal ?? check.total} type={check.discountType} value={check.discountValue}
+        onClose={() => setDialog(null)}
+        onSave={(type, value) => checkDiscount.mutateAsync({ checkId: check.id, type, value }).then(() => setToast(value ? 'Скидка применена' : 'Скидка убрана'))} />
       {dialog === 'assign' && <AssignDialog check={check} onClose={() => setDialog(null)} onDone={name => { setDialog(null); setToast(`Счёт передан: ${name}`); }} />}
       <WeightEditDialog item={weighing} onClose={() => setWeighing(null)}
         onSave={grams => setItemWeight.mutateAsync({ itemId: weighing!.id, grams }).then(() => setToast('Вес изменён, сумма пересчитана'))} />
@@ -927,6 +942,11 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         <DialogTitle>Оплата · стол {check.table.name}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography sx={{ fontWeight: 800, fontSize: '2rem', textAlign: 'center' }}>{money(check.total)}</Typography>
+          {!!check.discount && (
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: -1.5 }}>
+              {money(check.subtotal ?? 0)} − скидка {money(check.discount)}{check.discountType === 'percent' ? ` (${check.discountValue}%)` : ''}
+            </Typography>
+          )}
           {check.notServed > 0 && (
             <Alert severity="warning">Ещё не отдано {check.notServed} {plural(check.notServed, ['блюдо', 'блюда', 'блюд'])} — проверьте перед оплатой</Alert>
           )}

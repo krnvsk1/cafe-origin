@@ -94,6 +94,12 @@ export interface TableCheck {
   paymentChangedAt?: string | null;
   /** Менеджер может исправить оплаченный счёт на сотрудника (смена открыта) */
   canFixToStaff?: boolean;
+  /** Скидка: сумма блюд, скидка, тип и значение, можно ли давать */
+  subtotal?: number;
+  discount?: number;
+  discountType?: 'percent' | 'amount' | null;
+  discountValue?: number | null;
+  canDiscount?: boolean;
   total: number;
   notServed: number;
   /** Принтер счетов включён в настройках */
@@ -200,6 +206,10 @@ export const useStaffChecksInfo = (enabled: boolean) =>
     enabled,
     staleTime: 60_000,
   });
+
+export const useCheckDiscount = () =>
+  useWaiterMutation<{ checkId: number; type: string | null; value: number | null }>(({ checkId, type, value }) =>
+    apiClient.put(`/api/waiter/checks/${checkId}/discount`, { type, value }).then(r => r.data));
 
 export const useCancelCheck = () =>
   useWaiterMutation<number>(id => apiClient.post(`/api/waiter/checks/${id}/cancel`).then(r => r.data));
@@ -399,7 +409,8 @@ export const useReturnCheckFiscal = () =>
 
 /** Кассовый чек, который не пробился или по которому касса не ответила */
 export interface UnfinishedReceipt {
-  id: number; orderId: number; checkId: number | null; kind: 'sell' | 'sellReturn'; status: 'processing' | 'error';
+  id: number; orderId: number | null; checkId: number | null; banquetId?: number | null; banquetPaymentId?: number | null;
+  kind: 'sell' | 'sellReturn'; status: 'processing' | 'error';
   error: string | null; total: number; paymentMethod: string | null; createdAt: string; table: string | null; label: string | null;
 }
 
@@ -414,6 +425,7 @@ export const useUnfinishedReceipts = (enabled: boolean) =>
 /** Повторить или проверить непробитый чек: по счёту стола — через официанта, по заказу кассы — через кассу */
 export const useRetryReceipt = () =>
   useWaiterMutation<UnfinishedReceipt, FiscalResult>(r => {
+    if (r.banquetPaymentId != null) return apiClient.post(`/api/banquets/receipts/${r.id}/retry`).then(x => x.data);
     if (r.checkId != null) {
       const url = r.kind === 'sell' ? `/api/waiter/checks/${r.checkId}/fiscal` : `/api/waiter/checks/${r.checkId}/fiscal/return`;
       return apiClient.post(url).then(x => x.data);
@@ -467,6 +479,7 @@ export interface SiteOrder {
   paymentMethod: string;
   paymentStatus: string;
   total: number;
+  deliveryPrice?: number;
   closedAt: string | null;
   closedBy: string | null;
   staffName: string | null;
@@ -487,7 +500,7 @@ export const useSiteOrders = (enabled: boolean) =>
 export interface SiteCloseResult { fiscal: FiscalResult | null; fiscalSkipped?: 'staff' | 'disabled' | 'yookassa' | null; staff?: string | null }
 
 export const useCloseSiteOrder = () =>
-  useWaiterMutation<{ id: number; paymentMethod: string; staffUserId?: number | null; staffReason?: string | null }, SiteCloseResult>(({ id, ...body }) =>
+  useWaiterMutation<{ id: number; paymentMethod: string; staffUserId?: number | null; staffReason?: string | null; discountType?: string | null; discountValue?: number | null }, SiteCloseResult>(({ id, ...body }) =>
     apiClient.post(`/api/site-orders/${id}/close`, body).then(r => r.data));
 
 export const useSiteOrderFiscal = () =>

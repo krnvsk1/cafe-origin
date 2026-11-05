@@ -14,6 +14,7 @@ import { apiError } from '../api/inventory';
 import { todayMsk } from '../api/haccp';
 import { useCan, P } from '../auth/permissions';
 import { ShiftBar, PushButton } from './WaiterPage';
+import DiscountDialog, { discountOf, type DiscountType } from '../components/DiscountDialog';
 
 const money = (v: number) => `${Math.round(v).toLocaleString('ru-RU')} ₽`;
 const time = (iso: string) => parseUtc(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -56,7 +57,7 @@ const UnfinishedReceipts: React.FC = () => {
         <Box key={r.id} sx={{ display: 'flex', gap: 1.5, alignItems: 'center', py: 0.75, borderTop: 1, borderColor: 'divider', flexWrap: 'wrap' }}>
           <Box sx={{ flex: 1, minWidth: 200 }}>
             <Typography sx={{ fontWeight: 700 }}>
-              {r.kind === 'sell' ? 'Продажа' : 'Возврат'} · {r.checkId != null ? `стол ${r.table ?? '—'}${r.label ? ` · ${r.label}` : ''}` : `заказ #${r.orderId}`}
+              {r.kind === 'sell' ? 'Продажа' : 'Возврат'} · {r.banquetId != null ? `банкет №${r.banquetId}` : r.checkId != null ? `стол ${r.table ?? '—'}${r.label ? ` · ${r.label}` : ''}` : `заказ #${r.orderId}`}
               {' · '}{money(r.total)}{r.paymentMethod ? ` · ${payLabel(r.paymentMethod)}` : ''}
             </Typography>
             <Typography variant="body2" color={r.status === 'processing' ? 'warning.main' : 'error.main'}>
@@ -132,6 +133,11 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
   const [staffId, setStaffId] = React.useState<number | ''>('');
   const [reason, setReason] = React.useState('');
   const [err, setErr] = React.useState('');
+  const canDiscount = useCan()(P.Discounts) && !online;
+  const [disc, setDisc] = React.useState<{ type: DiscountType; value: number } | null>(null);
+  const [discOpen, setDiscOpen] = React.useState(false);
+  const goods = Math.max(0, order.total - (order.deliveryPrice ?? 0));
+  const discount = disc ? discountOf(disc.type, disc.value, goods) : 0;
   React.useEffect(() => {
     if (staffId === '' && staffInfo?.me && staffInfo.staff?.some(u => u.id === staffInfo.me)) setStaffId(staffInfo.me);
   }, [staffInfo, staffId]);
@@ -139,15 +145,24 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
     setErr('');
     try {
       const r = await close.mutateAsync({ id: order.id, paymentMethod: method,
-        ...(method === 'staff' ? { staffUserId: staffId === '' ? null : staffId, staffReason: reason.trim() || null } : {}) });
+        ...(method === 'staff' ? { staffUserId: staffId === '' ? null : staffId, staffReason: reason.trim() || null } : {}),
+        ...(disc ? { discountType: disc.type, discountValue: disc.value } : {}) });
       onDone(`Заказ #${order.id} закрыт · ${payLabel(method === 'online' ? 'онлайн' : method)}. ${atolText(r.fiscal, r.fiscalSkipped, r.staff)}`);
     } catch (e) { setErr(apiError(e)); }
   };
   return (
     <Dialog open onClose={() => !close.isPending && onClose()} maxWidth="xs" fullWidth>
-      <DialogTitle>Закрыть заказ #{order.id} · {money(order.total)}</DialogTitle>
+      <DialogTitle>Закрыть заказ #{order.id} · {money(order.total - discount)}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <Typography variant="body2" color="text.secondary">{order.deliveryType} · {order.customerName}{order.phone ? ` · ${order.phone}` : ''}</Typography>
+        {canDiscount && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button size="small" onClick={() => setDiscOpen(true)}>{disc ? 'Изменить скидку' : 'Скидка'}</Button>
+            {discount > 0 && <Typography variant="body2" color="text.secondary">{money(order.total)} − {money(discount)}</Typography>}
+          </Box>
+        )}
+        <DiscountDialog open={discOpen} base={goods} type={disc?.type} value={disc?.value} onClose={() => setDiscOpen(false)}
+          onSave={(type, value) => setDisc(type && value ? { type, value } : null)} />
         {online ? (
           <Alert severity="info">Оплачен онлайн — способ оплаты не меняется.</Alert>
         ) : (

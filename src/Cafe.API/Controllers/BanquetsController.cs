@@ -191,6 +191,10 @@ namespace Cafe.API.Controllers
                 }),
                 canDiscount = b.Status == BanquetStatuses.Open && User.HasPermission(Permissions.Discounts),
                 staffAllowed = fo.StaffChecks,
+                staff = fo.StaffChecks && b.Status == BanquetStatuses.Open
+                    ? (await WaiterController.StaffListAsync(_context)).OrderBy(x => x.Value).Select(x => new { id = x.Key, name = x.Value }).ToList()
+                    : null,
+                me = User.GetUserId(),
                 fiscalEnabled = fo.Enabled,
                 printEnabled = (await _print.SettingsAsync()).Enabled,
             });
