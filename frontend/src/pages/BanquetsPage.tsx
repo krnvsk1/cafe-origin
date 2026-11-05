@@ -129,7 +129,7 @@ const PrepayDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t
     setErr('');
     try {
       const r = await prepay.mutateAsync({ id: banquet.id, amount: num, method });
-      onDone(`Предоплата ${money(num)} · ${payLabel(method)}. ${atolText(r.fiscal, r.fiscalSkipped)}`);
+      onDone(r.fiscal ? `Предоплата ${money(num)} · ${payLabel(method)}. ${atolText(r.fiscal, r.fiscalSkipped)}` : `Предоплата ${money(num)} · ${payLabel(method)} записана`);
     } catch (e) { setErr(apiError(e)); }
   };
   return (
@@ -144,7 +144,7 @@ const PrepayDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t
           <ToggleButton value="cash">Наличные</ToggleButton>
         </ToggleButtonGroup>
         <Typography variant="caption" color="text.secondary">
-          {banquet.fiscalEnabled ? 'В АТОЛ уйдёт чек «Аванс». При закрытии банкета предоплата зачтётся в итоговом чеке.' : 'Онлайн-касса выключена — чек не пробивается.'}
+          Предоплата только записывается, чек не печатается. При закрытии банкета вся сумма (предоплата и остаток) уйдёт в АТОЛ одним чеком.
         </Typography>
         {err && <Alert severity="error">{err}</Alert>}
       </DialogContent>
@@ -198,7 +198,7 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
         )}
         {banquet.fiscalEnabled && (
           <Typography variant="caption" color="text.secondary">
-            В АТОЛ уйдёт чек расчёта{t.prepaid > 0 ? ' с зачётом предоплаты' : ''}: блюда{t.service > 0 ? ' и обслуживание' : ''}.
+            В АТОЛ уйдёт один чек на {money(t.prepaid + (method === 'staff' ? 0 : t.due))}: блюда{t.service > 0 ? ' и обслуживание' : ''}{t.prepaid > 0 ? ', оплата — предоплата и остаток, теми способами, которыми платили' : ''}.
           </Typography>
         )}
         {err && <Alert severity="error">{err}</Alert>}
@@ -230,7 +230,7 @@ const CancelDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t
     <Dialog open onClose={() => !cancel.isPending && onClose()} maxWidth="xs" fullWidth>
       <DialogTitle>Отменить банкет №{banquet.id}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: '8px !important' }}>
-        {prepaid.length > 0 && <Alert severity="warning">Предоплата {money(prepaid.reduce((s, p) => s + p.amount, 0))} будет возвращена — по каждой уйдёт чек возврата. Деньги гостю возвращаете вы.</Alert>}
+        {prepaid.length > 0 && <Alert severity="warning">Предоплата {money(prepaid.reduce((s, p) => s + p.amount, 0))} отметится как возвращённая — деньги гостю возвращаете вы.</Alert>}
         {banquet.items.some(i => i.sent) && <Typography variant="body2" color="text.secondary">Блюда на кухне отменятся по обычным правилам: начатые — с подтверждением кухни, готовые — со списанием.</Typography>}
         <TextField label="Причина" value={reason} onChange={e => setReason(e.target.value)} autoFocus />
         {err && <Alert severity="error">{err}</Alert>}
@@ -400,7 +400,7 @@ const BanquetView: React.FC<{ id: number }> = ({ id }) => {
                 onClick={() => run(async () => { const r = await retry.mutateAsync(f!.id); setToast(atolText(r)); })}>{f!.status === 'processing' ? 'Проверить' : 'Пробить'}</Button>}
               {open && p.kind === 'prepay' && !p.refundedAt && (
                 <Button size="small" color="inherit" disabled={refund.isPending}
-                  onClick={() => window.confirm(`Вернуть предоплату ${money(p.amount)}? В АТОЛ уйдёт чек возврата, деньги возвращаете вы.`)
+                  onClick={() => window.confirm(`Вернуть предоплату ${money(p.amount)}? Деньги гостю возвращаете вы.${p.fiscal?.sold ? ' В АТОЛ уйдёт чек возврата.' : ''}`)
                     && run(() => refund.mutateAsync({ id: b.id, paymentId: p.id }), 'Предоплата возвращена')}>Вернуть</Button>
               )}
             </Box>

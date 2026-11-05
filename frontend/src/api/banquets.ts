@@ -128,7 +128,7 @@ export const useRemoveBanquetItem = () =>
 export const useSendBanquetToKitchen = () => useBanquetMutation<number>(id => apiClient.post(`/api/banquets/${id}/kitchen`).then(r => r.data));
 export const usePrintBanquet = () => useBanquetMutation<number, { jobId: number }>(id => apiClient.post(`/api/banquets/${id}/print`).then(r => r.data));
 
-export interface BanquetFiscalResult { fiscal: FiscalResult | null; fiscalSkipped?: 'staff' | 'disabled' | null; staff?: string | null }
+export interface BanquetFiscalResult { fiscal: FiscalResult | null; fiscalSkipped?: 'staff' | 'disabled' | 'recorded' | null; staff?: string | null }
 export const usePrepayBanquet = () =>
   useBanquetMutation<{ id: number; amount: number; method: 'cash' | 'card' }, BanquetFiscalResult>(({ id, ...b }) => apiClient.post(`/api/banquets/${id}/prepay`, b).then(r => r.data));
 export const useRefundBanquetPayment = () =>

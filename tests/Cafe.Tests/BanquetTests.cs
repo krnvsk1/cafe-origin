@@ -46,7 +46,7 @@ namespace Cafe.Tests
         }
 
         [Fact]
-        public void PrepayReceipt_IsAdvance_AndFinalUsesPrepaidPayment()
+        public void FinalReceipt_MixedPayments_AdvanceLinesStillSupported()
         {
             var o = new FiscalOptions();
             var b = new Banquet { Id = 7, EventAt = new DateTime(2026, 12, 20, 15, 0, 0, DateTimeKind.Utc) };
@@ -55,8 +55,8 @@ namespace Cafe.Tests
             Assert.Equal("payment", adv["items"]![0]!["paymentObject"]!.GetValue<string>());
 
             var lines = new List<ReceiptLine> { new("Шашлык", 8000, 1, 8000, false) };
-            var fin = FiscalTasks.Receipt(FiscalKinds.Sell, o, lines, "cash", "Иванова", null, null, new List<(string, decimal)> { ("prepaid", 5000), ("cash", 3000) });
-            Assert.Equal("prepaid", fin["payments"]![0]!["type"]!.GetValue<string>());
+            var fin = FiscalTasks.Receipt(FiscalKinds.Sell, o, lines, "cash", "Иванова", null, null, new List<(string, decimal)> { ("cash", 5000), ("electronically", 3000) });
+            Assert.Equal("cash", fin["payments"]![0]!["type"]!.GetValue<string>());
             Assert.Equal(3000m, fin["payments"]![1]!["sum"]!.GetValue<decimal>());
             Assert.Equal("fullPayment", fin["items"]![0]!["paymentMethod"]!.GetValue<string>());
         }

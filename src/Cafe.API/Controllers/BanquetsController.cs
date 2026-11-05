@@ -369,8 +369,8 @@ namespace Cafe.API.Controllers
             _context.BanquetPayments.Add(p);
             await _context.SaveChangesAsync();
             _logger.LogInformation("🎉 Банкет #{Id}: предоплата {Amount} ₽ ({Method})", id, p.Amount, method);
-            var fiscal = await FiscalSellAsync(b, p, BanquetService.PrepayLines(b, p.Amount), method!, null);
-            return Ok(new { paymentId = p.Id, fiscal, fiscalSkipped = fiscal == null ? "disabled" : null });
+            // Предоплата только записывается — чек на всю сумму уйдёт при закрытии банкета
+            return Ok(new { paymentId = p.Id, fiscal = (object?)null, fiscalSkipped = "recorded" });
         }
 
         // POST: api/banquets/{id}/payments/{paymentId}/refund — вернуть предоплату (чек возврата аванса)
@@ -407,6 +407,31 @@ namespace Cafe.API.Controllers
             await _context.SaveChangesAsync();
             _logger.LogInformation("🎉 Банкет #{Id}: предоплата {Amount} ₽ возвращена", b.Id, p.Amount);
             return (true, null, view);
+        }
+
+        /// <summary>
+        /// Оплаты итогового чека: предоплаты (наличными/картой — как вносили) и остаток.
+        /// Предоплата, по которой уже пробит чек аванса, зачитывается (prepaid).
+        /// </summary>
+        private async Task<(List<(string, decimal)> Payments, decimal Sum)> FinalPaymentsAsync(int banquetId, IEnumerable<BanquetPayment> all, BanquetPayment final)
+        {
+            var prepays = all.Where(p => p.Kind == BanquetPaymentKinds.Prepay && p.RefundedAt == null).ToList();
+            var ids = prepays.Select(p => (int?)p.Id).ToList();
+            var receipts = await _context.FiscalReceipts.AsNoTracking().Where(r => ids.Contains(r.BanquetPaymentId)).ToListAsync();
+            decimal cash = 0, card = 0, prepaid = 0;
+            foreach (var p in prepays)
+            {
+                if (FiscalService.IsSold(receipts.Where(r => r.BanquetPaymentId == p.Id))) prepaid += p.Amount;
+                else if (p.Method == CheckPayments.Cash) cash += p.Amount;
+                else card += p.Amount;
+            }
+            if (final.Method == CheckPayments.Cash) cash += final.Amount;
+            else if (final.Method == CheckPayments.Card) card += final.Amount;
+            var list = new List<(string, decimal)>();
+            if (prepaid > 0) list.Add(("prepaid", prepaid));
+            if (cash > 0) list.Add(("cash", cash));
+            if (card > 0) list.Add(("electronically", card));
+            return (list, prepaid + cash + card);
         }
 
         // POST: api/banquets/{id}/close — расчёт: остаток наличными, картой или на сотрудника; чек с зачётом предоплаты
@@ -459,18 +484,14 @@ namespace Cafe.API.Controllers
             await _context.SaveChangesAsync();
             _logger.LogInformation("🎉 Банкет #{Id} закрыт: {Total} ₽, предоплата {Prepaid}, остаток {Due} ({Method})", id, t.Total, t.Prepaid, t.Due, final.Method);
 
-            // Чек расчёта: зачёт предоплаты + деньги за остаток (часть на сотрудника — без чека)
-            var money = method == CheckPayments.Staff ? 0 : t.Due;
-            var fiscalSum = t.Prepaid + money;
+            // Один чек на всё, что заплатили деньгами: предоплаты и остаток (часть на сотрудника — без чека)
+            var (pays, fiscalSum) = await FinalPaymentsAsync(id, payments, final);
             object? fiscal = null;
             string? skipped = null;
             if (fiscalSum <= 0) skipped = "staff";
             else
             {
-                var pays = new List<(string, decimal)>();
-                if (t.Prepaid > 0) pays.Add(("prepaid", t.Prepaid));
-                if (money > 0) pays.Add((method == CheckPayments.Cash ? "cash" : "electronically", money));
-                fiscal = await FiscalSellAsync(b, final, BanquetService.FinalLines(items, t, fiscalSum), money > 0 ? method! : "card", pays);
+                fiscal = await FiscalSellAsync(b, final, BanquetService.FinalLines(items, t, fiscalSum), pays.Any(x => x.Item1 == "cash") ? "cash" : "card", pays);
                 if (fiscal == null) skipped = "disabled";
             }
             return Ok(new { t.Total, t.Prepaid, t.Due, fiscal, fiscalSkipped = skipped, staff = staffName });
@@ -493,13 +514,10 @@ namespace Cafe.API.Controllers
                 var items = await _context.BanquetItems.AsNoTracking().Where(i => i.BanquetId == b.Id).OrderBy(i => i.Id).ToListAsync();
                 var all = await _context.BanquetPayments.AsNoTracking().Where(x => x.BanquetId == b.Id).ToListAsync();
                 var t = BanquetService.Totals(b, items, all);
-                var money = p.Method is CheckPayments.Cash or CheckPayments.Card ? p.Amount : 0;
-                lines = BanquetService.FinalLines(items, t, t.Prepaid + money);
-                var list = new List<(string, decimal)>();
-                if (t.Prepaid > 0) list.Add(("prepaid", t.Prepaid));
-                if (money > 0) list.Add((p.Method == CheckPayments.Cash ? "cash" : "electronically", money));
+                var (list, sum) = await FinalPaymentsAsync(b.Id, all, p);
+                lines = BanquetService.FinalLines(items, t, sum);
                 pays = list;
-                if (money == 0) method = "card";
+                method = list.Any(x => x.Item1 == "cash") ? "cash" : "card";
             }
             try { return Ok(FiscalController.View(await _fiscal.PrintBanquetAsync(b.Id, p.Id, rc.Kind, lines, method, pays, b.Phone, User.GetUserId(), HttpContext.RequestAborted))); }
             catch (FiscalException ex) { return BadRequest(new { message = ex.Message }); }
