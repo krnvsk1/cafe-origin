@@ -289,14 +289,14 @@ export interface ShiftCurrent {
   canManageVenue: boolean;
   seesAll: boolean;
   venue: { id: number; businessDate: string; openedAt: string; openedBy: string | null; stale: boolean } | null;
-  mine: { id: number; openedAt: string; openChecks: number } | null;
+  mine: { id: number; openedAt: string; openChecks: number; approvedBy?: string | null } | null;
   /** Мой запрос на смену ждёт подтверждения менеджера */
   minePending?: { id: number; requestedAt: string } | null;
   /** Могу подтверждать смены официантов */
   canApprove?: boolean;
   /** Запросы официантов на открытие смены */
   pendingWaiters?: { id: number; userId: number; name: string | null; requestedAt: string }[] | null;
-  waiters: { id: number; userId: number; name: string | null; openedAt: string; openChecks: number }[] | null;
+  waiters: { id: number; userId: number; name: string | null; openedAt: string; openChecks: number; approvedBy?: string | null }[] | null;
   totalOpenChecks: number | null;
   /** Непробитые кассовые чеки за 2 недели (видят менеджеры; null — касса выключена) */
   unfiscalized?: number | null;
@@ -346,7 +346,7 @@ export interface ShiftDetails {
   closedAt: string | null;
   openedBy: string | null;
   closedBy: string | null;
-  waiters: { id: number; userId: number; name: string | null; openedAt: string; closedAt: string | null; checks: number; revenue: number }[];
+  waiters: { id: number; userId: number; name: string | null; openedAt: string; closedAt: string | null; checks: number; revenue: number; approvedBy?: string | null }[];
   /** Закрыто на сотрудников: к удержанию по людям */
   staff?: { userId: number; name: string; checks: number; total: number }[];
   checks: {

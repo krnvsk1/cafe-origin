@@ -20,9 +20,11 @@ namespace Cafe.API.Controllers
         private readonly ShiftService _shifts;
         private readonly FiscalService _fiscal;
         private readonly ILogger<ShiftsController> _logger;
+        private readonly WebPushService _push;
 
-        public ShiftsController(ApplicationDbContext context, ShiftService shifts, FiscalService fiscal, ILogger<ShiftsController> logger)
+        public ShiftsController(ApplicationDbContext context, ShiftService shifts, FiscalService fiscal, ILogger<ShiftsController> logger, WebPushService push)
         {
+            _push = push;
             _fiscal = fiscal;
             _logger = logger;
             _context = context;
@@ -47,7 +49,10 @@ namespace Cafe.API.Controllers
                 : await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == venue.Id && w.ClosedAt == null).OrderBy(w => w.OpenedAt).ToListAsync();
             var waiters = all.Where(w => w.ApprovedAt != null).ToList();
             var pendingShifts = all.Where(w => w.ApprovedAt == null).ToList();
-            var names = await WaiterController.StaffNamesAsync(_context, all.Select(w => (int?)w.UserId).Append(venue?.OpenedByUserId));
+            var names = await WaiterController.StaffNamesAsync(_context, all.Select(w => (int?)w.UserId).Concat(all.Select(w => w.ApprovedBy))
+                .Append(mine?.ApprovedBy).Append(venue?.OpenedByUserId));
+            // Кто подтвердил смену (если официант открыл её сам — не показываем)
+            string? ApprovedByName(WaiterShift w) => w.ApprovedBy == null || w.ApprovedBy == w.UserId ? null : names.GetValueOrDefault(w.ApprovedBy.Value);
             var openChecks = await _context.TableChecks.AsNoTracking().Where(c => c.Status == CheckStatuses.Open)
                 .GroupBy(c => c.WaiterId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key ?? 0, x => x.Count);
             // Непробитые кассовые чеки — менеджер видит их до закрытия смены
@@ -68,7 +73,7 @@ namespace Cafe.API.Controllers
                     // Смена с прошлого дня не закрыта
                     stale = venue.BusinessDate < ShiftService.BusinessDate(DateTime.UtcNow),
                 },
-                mine = mine == null || venue == null || mine.VenueShiftId != venue.Id ? null : new { mine.Id, mine.OpenedAt, openChecks = openChecks.GetValueOrDefault(me) },
+                mine = mine == null || venue == null || mine.VenueShiftId != venue.Id ? null : new { mine.Id, mine.OpenedAt, openChecks = openChecks.GetValueOrDefault(me), approvedBy = ApprovedByName(mine) },
                 // Мой запрос на смену ждёт подтверждения менеджера
                 minePending = minePending == null || venue == null || minePending.VenueShiftId != venue.Id ? null : new { minePending.Id, requestedAt = minePending.OpenedAt },
                 canApprove,
@@ -77,7 +82,7 @@ namespace Cafe.API.Controllers
                     ? pendingShifts.Select(w => new { w.Id, w.UserId, name = names.GetValueOrDefault(w.UserId), requestedAt = w.OpenedAt })
                     : null,
                 waiters = canVenue || seesAll
-                    ? waiters.Select(w => new { w.Id, w.UserId, name = names.GetValueOrDefault(w.UserId), w.OpenedAt, openChecks = openChecks.GetValueOrDefault(w.UserId) })
+                    ? waiters.Select(w => new { w.Id, w.UserId, name = names.GetValueOrDefault(w.UserId), w.OpenedAt, openChecks = openChecks.GetValueOrDefault(w.UserId), approvedBy = ApprovedByName(w) })
                     : null,
                 totalOpenChecks = canVenue || seesAll ? openChecks.Values.Sum() : (int?)null,
                 unfiscalized,
@@ -181,7 +186,15 @@ namespace Cafe.API.Controllers
             try
             {
                 var w = await _shifts.OpenWaiterAsync(me.Value, approved);
-                if (w.ApprovedAt == null) _logger.LogInformation("⏳ Официант #{UserId} просит открыть смену", me);
+                if (w.ApprovedAt == null)
+                {
+                    _logger.LogInformation("⏳ Официант #{UserId} просит открыть смену", me);
+                    // Оповещение всем, кто может подтвердить
+                    var approvers = await ApproversAsync();
+                    var name = (await WaiterController.StaffNamesAsync(_context, new int?[] { me })).GetValueOrDefault(me.Value) ?? "Официант";
+                    _push.Enqueue(approvers.Where(id => id != me.Value).ToList(), new PushMessage(
+                        "Подтвердите смену официанта", $"{name} просит открыть смену", "/admin/shifts", $"shift-request-{w.Id}"));
+                }
                 return Ok(new { w.Id, pending = w.ApprovedAt == null });
             }
             catch (ShiftService.ShiftException ex) { return Fail(ex); }
@@ -196,6 +209,8 @@ namespace Cafe.API.Controllers
             {
                 var w = await _shifts.ApproveWaiterAsync(id, User.GetUserId());
                 _logger.LogInformation("✅ Смена официанта #{UserId} подтверждена ({By})", w.UserId, User.GetUserId());
+                var by = (await WaiterController.StaffNamesAsync(_context, new[] { User.GetUserId() })).GetValueOrDefault(User.GetUserId() ?? 0);
+                _push.Enqueue(new[] { w.UserId }, new PushMessage("Смена подтверждена", by != null ? $"Подтвердил(а) {by} — можно работать" : "Можно работать", "/waiter", $"shift-ok-{w.Id}"));
                 return Ok(new { w.Id });
             }
             catch (ShiftService.ShiftException ex) { return Fail(ex); }
@@ -210,6 +225,8 @@ namespace Cafe.API.Controllers
             {
                 var w = await _shifts.RejectWaiterAsync(id);
                 _logger.LogInformation("⛔ Запрос официанта #{UserId} на смену отклонён ({By})", w.UserId, User.GetUserId());
+                var by = (await WaiterController.StaffNamesAsync(_context, new[] { User.GetUserId() })).GetValueOrDefault(User.GetUserId() ?? 0);
+                _push.Enqueue(new[] { w.UserId }, new PushMessage("Смена не подтверждена", by != null ? $"Отклонил(а) {by}" : "Запрос отклонён", "/waiter", $"shift-no-{w.Id}"));
                 return Ok(new { w.Id });
             }
             catch (ShiftService.ShiftException ex) { return Fail(ex); }
@@ -224,6 +241,15 @@ namespace Cafe.API.Controllers
             if (me == null) return Unauthorized();
             try { var w = await _shifts.CloseWaiterAsync(me.Value); return Ok(new { w.Id }); }
             catch (ShiftService.ShiftException ex) { return Fail(ex); }
+        }
+
+        /// <summary>Кто может подтверждать смены: администраторы и роли с правом «Подтверждение смен официантов»</summary>
+        private async Task<List<int>> ApproversAsync()
+        {
+            var roleIds = await _context.Roles
+                .Where(r => r.Name == AppRoles.Admin || _context.RoleClaims.Any(c => c.RoleId == r.Id && c.ClaimType == Permissions.ClaimType && c.ClaimValue == Permissions.ShiftApprove))
+                .Select(r => r.Id).ToListAsync();
+            return await _context.UserRoles.Where(ur => roleIds.Contains(ur.RoleId)).Select(ur => ur.UserId).Distinct().ToListAsync();
         }
 
         /// <summary>Сумма открытого счёта — по его блюдам; закрытого — как при оплате</summary>
@@ -289,7 +315,7 @@ namespace Cafe.API.Controllers
             var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table).Where(c => c.VenueShiftId == id).OrderBy(c => c.OpenedAt).ToListAsync();
             var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == id && w.ApprovedAt != null).OrderBy(w => w.OpenedAt).ToListAsync();
             var names = await WaiterController.StaffNamesAsync(_context,
-                waiters.Select(w => (int?)w.UserId).Concat(checks.Select(c => c.WaiterId)).Concat(checks.Select(c => c.StaffUserId)).Concat(checks.Select(c => c.PaymentChangedBy))
+                waiters.Select(w => (int?)w.UserId).Concat(waiters.Select(w => w.ApprovedBy)).Concat(checks.Select(c => c.WaiterId)).Concat(checks.Select(c => c.StaffUserId)).Concat(checks.Select(c => c.PaymentChangedBy))
                     .Append(s.OpenedByUserId).Append(s.ClosedByUserId));
             var staffChecks = checks.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff).ToList();
             var openTotals = await OpenTotalsAsync(checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList());
@@ -325,6 +351,7 @@ namespace Cafe.API.Controllers
                         name = names.GetValueOrDefault(w.UserId),
                         w.OpenedAt,
                         w.ClosedAt,
+                        approvedBy = w.ApprovedBy == null || w.ApprovedBy == w.UserId ? null : names.GetValueOrDefault(w.ApprovedBy.Value),
                         checks = mine.Count,
                         revenue = mine.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff).Sum(c => c.Total),
                     };

@@ -13,7 +13,7 @@ import {
 import { apiError } from '../api/inventory';
 import { todayMsk } from '../api/haccp';
 import { useCan, P } from '../auth/permissions';
-import { ShiftBar } from './WaiterPage';
+import { ShiftBar, PushButton } from './WaiterPage';
 
 const money = (v: number) => `${Math.round(v).toLocaleString('ru-RU')} ₽`;
 const time = (iso: string) => parseUtc(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -283,7 +283,7 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
           {data.waiters.map(w => (
             <Box key={w.id} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', py: 0.25 }}>
               <Typography sx={{ fontWeight: 700, flex: 1 }}>{w.name ?? `Сотрудник #${w.userId}`}</Typography>
-              <Typography variant="body2" color="text.secondary">{time(w.openedAt)}–{w.closedAt ? time(w.closedAt) : 'сейчас'}</Typography>
+              <Typography variant="body2" color="text.secondary">{time(w.openedAt)}–{w.closedAt ? time(w.closedAt) : 'сейчас'}{w.approvedBy ? ` · подтв. ${w.approvedBy}` : ''}</Typography>
               <Typography variant="body2" color="text.secondary">{w.checks} сч.</Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{money(w.revenue)}</Typography>
             </Box>
@@ -386,7 +386,14 @@ const ShiftsPage: React.FC = () => {
 
   return (
     <Box sx={{ maxWidth: 1000, mx: 'auto', p: { xs: 2, md: 3 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Typography variant="h4" sx={{ fontWeight: 800 }}>Смены и счета</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="h4" sx={{ fontWeight: 800, flex: 1 }}>Смены и счета</Typography>
+        {current?.canApprove && (
+          <PushButton title="Уведомления о запросах на смену"
+            text="Официант нажал «Начать мою смену» — на это устройство придёт уведомление, даже если сайт закрыт. Нажмите на него, чтобы подтвердить смену."
+            hint="Включите уведомления — узнаете, когда официант просит открыть смену" />
+        )}
+      </Box>
 
       {current && <ShiftBar shift={current} hideMine />}
       {(seesAll || can(P.Pos)) && current?.unfiscalized != null && <UnfinishedReceipts />}
@@ -398,7 +405,7 @@ const ShiftsPage: React.FC = () => {
           </Typography>
           {current.waiters.map(w => (
             <Typography key={w.id} variant="body2">
-              {w.name ?? `Сотрудник #${w.userId}`} · с {time(w.openedAt)}{w.openChecks ? ` · открытых счетов: ${w.openChecks}` : ''}
+              {w.name ?? `Сотрудник #${w.userId}`} · с {time(w.openedAt)}{w.approvedBy ? ` · подтвердил(а) ${w.approvedBy}` : ''}{w.openChecks ? ` · открытых счетов: ${w.openChecks}` : ''}
             </Typography>
           ))}
         </Paper>

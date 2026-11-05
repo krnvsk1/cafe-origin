@@ -323,7 +323,9 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', bgcolor: 'background.paper', borderRadius: '12px', px: 1.5, py: 0.75 }}>
           {mine && isWaiter && (
             <>
-              <Typography variant="body2" sx={{ fontWeight: 700 }}>Моя смена с {timeOf(mine.openedAt)}</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                Моя смена с {timeOf(mine.openedAt)}{mine.approvedBy ? ` · подтвердил(а) ${mine.approvedBy}` : ''}
+              </Typography>
               <Button size="small" onClick={() => setMyChecks(true)}>Мои счета</Button>
               <Button size="small" color="inherit" onClick={() => setConfirm('mine')} disabled={busy}>Закончить</Button>
             </>
@@ -1311,8 +1313,12 @@ const PUSH_HINT: Record<Exclude<PushState, 'loading' | 'on' | 'off'>, string> = 
   denied: 'Уведомления запрещены для этого сайта. Разрешите их в настройках браузера (значок замка у адреса → Уведомления) и обновите страницу.',
 };
 
-/** Колокольчик: уведомления на телефон, когда блюдо готово */
-const PushButton: React.FC = () => {
+/** Колокольчик: уведомления на телефон (официанту — блюдо готово; менеджеру — запросы на смену) */
+export const PushButton: React.FC<{ title?: string; text?: string; hint?: string }> = ({
+  title = 'Уведомления о готовых блюдах',
+  text = 'Кухня отметила блюдо готовым — на этот телефон придёт уведомление со столом и блюдами, даже если экран заблокирован. Нажмите на него, чтобы открыть счёт.',
+  hint = 'Включите уведомления — телефон подскажет, когда блюдо готово',
+}) => {
   const push = usePushNotifications();
   const [open, setOpen] = React.useState(false);
   const [msg, setMsg] = React.useState('');
@@ -1345,16 +1351,13 @@ const PushButton: React.FC = () => {
       {(push.state === 'off' || push.state === 'ios-install') && !dismissed && (
         <Alert severity="info" onClose={hide} onClick={() => setOpen(true)}
           sx={{ position: 'fixed', left: 12, right: 12, bottom: 12, zIndex: 1200, cursor: 'pointer', boxShadow: 3 }}>
-          Включите уведомления — телефон подскажет, когда блюдо готово
+          {hint}
         </Alert>
       )}
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Уведомления о готовых блюдах</DialogTitle>
+        <DialogTitle>{title}</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <Typography variant="body2" color="text.secondary">
-            Кухня отметила блюдо готовым — на этот телефон придёт уведомление со столом и блюдами, даже если экран заблокирован.
-            Нажмите на него, чтобы открыть счёт.
-          </Typography>
+          <Typography variant="body2" color="text.secondary">{text}</Typography>
           {push.state in PUSH_HINT && <Alert severity="warning">{PUSH_HINT[push.state as keyof typeof PUSH_HINT]}</Alert>}
           {on && <Alert severity="success">Уведомления включены на этом телефоне</Alert>}
           {msg && <Alert severity="info">{msg}</Alert>}
