@@ -51,7 +51,7 @@ export const KitchenStationSelect: React.FC<{ item: Dish; parent?: Dish | null; 
 /** Кнопка «Кухни»: добавить, переименовать, расставить по порядку, убрать — только для администратора */
 /** compact — только значок (узкий экран) */
 export const KitchenStationsButton: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
-  const isAdmin = useAuthStore(s => s.user?.roles?.includes('admin') ?? false);
+  const isAdmin = useAuthStore(s => (s.user?.roles?.includes('admin') || s.user?.roles?.includes('support')) ?? false);
   const { data: stations = [] } = useKitchenStations();
   const rename = useRenameStation();
   const add = useAddStation();

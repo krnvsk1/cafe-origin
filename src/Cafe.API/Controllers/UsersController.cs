@@ -33,13 +33,13 @@ namespace Cafe.API.Controllers
 
         /// <summary>
         /// Можно ли текущему пользователю выдавать или снимать эту роль:
-        /// администратор — любую; остальные — только роли с правами не шире своих и не «Администратор»
+        /// техподдержка — любую; остальные (в том числе администратор) — только роли с правами не шире своих и не «Техническая поддержка»
         /// </summary>
         private async Task<string?> CheckRoleChangeAllowedAsync(string role)
         {
             if (!await _roleManager.RoleExistsAsync(role)) return "Такой роли нет";
-            if (User.IsInRole(AppRoles.Admin)) return null;
-            if (role == AppRoles.Admin) return "Назначать администраторов может только администратор";
+            if (User.IsSupport()) return null;
+            if (role == AppRoles.Support) return "Назначать и снимать техподдержку может только техподдержка";
 
             var rolePerms = await _permissions.GetPermissionsAsync(new[] { role });
             var mine = await _permissions.GetPermissionsAsync(User.FindAll(ClaimTypes.Role).Select(c => c.Value));
@@ -193,10 +193,10 @@ namespace Cafe.API.Controllers
                 return BadRequest(new { message = denied });
             }
 
-            // Нельзя остаться без единого администратора
-            if (role == AppRoles.Admin && (await _userManager.GetUsersInRoleAsync(AppRoles.Admin)).Count <= 1)
+            // Нельзя остаться без единого сотрудника техподдержки
+            if (role == AppRoles.Support && (await _userManager.GetUsersInRoleAsync(AppRoles.Support)).Count <= 1)
             {
-                return BadRequest(new { message = "Это последний администратор — сначала назначьте другого" });
+                return BadRequest(new { message = "Это последний сотрудник техподдержки — сначала назначьте другого" });
             }
 
             var result = await _userManager.RemoveFromRoleAsync(user, role);

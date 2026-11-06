@@ -11,8 +11,8 @@ using Cafe.API.Models;
 namespace Cafe.API.Controllers
 {
     /// <summary>
-    /// Роли и их права. Администратор может всё и не настраивается; «Клиент» — без доступа к управлению.
-    /// Не-администратор с правом «Роли и доступы» может выдавать только те права, что есть у него самого.
+    /// Роли и их права. Техническая поддержка может всё и не настраивается; «Клиент» — без доступа к управлению.
+    /// Остальные с правом «Роли и доступы» (в том числе администратор) выдают только те права, что есть у них самих.
     /// </summary>
     [ApiController]
     [Route("api/roles")]
@@ -60,16 +60,16 @@ namespace Cafe.API.Controllers
             var result = roles.Select(r =>
             {
                 var own = claims.Where(c => c.RoleId == r.Id).ToList();
-                var isAdmin = r.Name == AppRoles.Admin;
+                var isSupport = r.Name == AppRoles.Support;
                 return new
                 {
                     name = r.Name,
                     title = own.FirstOrDefault(c => c.ClaimType == RoleClaimTypes.Title)?.ClaimValue ?? r.Name,
                     description = own.FirstOrDefault(c => c.ClaimType == RoleClaimTypes.Description)?.ClaimValue,
                     isSystem = AppRoles.AllRoles.Contains(r.Name),
-                    // Права админа и клиента не настраиваются
-                    isLocked = isAdmin || r.Name == AppRoles.User,
-                    permissions = isAdmin
+                    // Права техподдержки и клиента не настраиваются
+                    isLocked = isSupport || r.Name == AppRoles.User,
+                    permissions = isSupport
                         ? Permissions.All.Select(p => p.Key).ToList()
                         : own.Where(c => c.ClaimType == Permissions.ClaimType && c.ClaimValue != null)
                              .Select(c => c.ClaimValue!).Where(Permissions.Keys.Contains).Distinct().ToList(),
@@ -77,7 +77,7 @@ namespace Cafe.API.Controllers
                 };
             })
             // Сначала служебные роли, потом созданные админом
-            .OrderBy(r => r.name == AppRoles.Admin ? 0 : r.isSystem && r.name != AppRoles.User ? 1 : r.name == AppRoles.User ? 3 : 2)
+            .OrderBy(r => r.name == AppRoles.Support ? 0 : r.name == AppRoles.Admin ? 1 : r.isSystem && r.name != AppRoles.User ? 2 : r.name == AppRoles.User ? 4 : 3)
             .ThenBy(r => r.title);
 
             return Ok(result);
@@ -110,18 +110,18 @@ namespace Cafe.API.Controllers
             var role = await _roleManager.FindByNameAsync(name);
             if (role == null) return NotFound(new { message = "Роль не найдена" });
 
-            var locked = name == AppRoles.Admin || name == AppRoles.User;
+            var locked = name == AppRoles.Support || name == AppRoles.User;
+            if (name == AppRoles.Support && !User.IsSupport()) return StatusCode(403, new { message = "Роль техподдержки не настраивается" });
             var error = await ValidateAsync(request, role, permissionsLocked: locked);
             if (error != null) return BadRequest(new { message = error });
 
-            // Не-админ не может менять роль, в которой есть права сверх его собственных
-            if (!User.IsInRole(AppRoles.Admin))
+            // Нельзя менять роль, в которой есть права сверх своих собственных (техподдержке — можно)
+            if (!User.IsSupport())
             {
-                if (name == AppRoles.Admin) return Forbid();
                 var current = await _permissions.GetPermissionsAsync(new[] { name });
                 var mine = await MyPermissionsAsync();
                 if (!current.IsSubsetOf(mine))
-                    return BadRequest(new { message = "У этой роли есть права, которых нет у вас, — изменить её может только администратор" });
+                    return BadRequest(new { message = "У этой роли есть права, которых нет у вас, — изменить её может только техподдержка" });
             }
 
             await WriteClaimsAsync(role, request, permissionsLocked: locked);
@@ -140,11 +140,11 @@ namespace Cafe.API.Controllers
             var role = await _roleManager.FindByNameAsync(name);
             if (role == null) return NotFound(new { message = "Роль не найдена" });
 
-            if (!User.IsInRole(AppRoles.Admin))
+            if (!User.IsSupport())
             {
                 var current = await _permissions.GetPermissionsAsync(new[] { name });
                 if (!current.IsSubsetOf(await MyPermissionsAsync()))
-                    return BadRequest(new { message = "Удалить эту роль может только администратор" });
+                    return BadRequest(new { message = "Удалить эту роль может только техподдержка" });
             }
 
             // Пользователи просто теряют эту роль (user_roles удаляются каскадом)
@@ -173,7 +173,7 @@ namespace Cafe.API.Controllers
                 .AnyAsync(c => c.ClaimType == RoleClaimTypes.Title && c.ClaimValue == title && (existing == null || c.RoleId != existing.Id));
             if (duplicate) return "Роль с таким названием уже есть";
 
-            if (!permissionsLocked && !User.IsInRole(AppRoles.Admin))
+            if (!permissionsLocked && !User.IsSupport())
             {
                 var mine = await MyPermissionsAsync();
                 var extra = r.Permissions.FirstOrDefault(p => !mine.Contains(p));

@@ -36,7 +36,7 @@ const RoleEditor: React.FC<{
   const save = useSaveRole();
   const remove = useDeleteRole();
   const me = useAuthStore(s => s.user);
-  const iAmAdmin = !!me?.roles.includes('admin');
+  const iAmSupport = !!me?.roles.includes('support');
   const myPerms = new Set(me?.permissions ?? []);
 
   const [title, setTitle] = React.useState('');
@@ -56,7 +56,7 @@ const RoleEditor: React.FC<{
 
   const locked = !!role?.isLocked;
   // Не-админ может выдавать только свои права
-  const canToggle = (key: string) => !locked && (iAmAdmin || myPerms.has(key));
+  const canToggle = (key: string) => !locked && (iAmSupport || myPerms.has(key));
 
   const toggle = (key: string, on: boolean) =>
     setPerms(prev => {
@@ -74,7 +74,7 @@ const RoleEditor: React.FC<{
 
   const copyFrom = (name: string) => {
     const source = roles.find(r => r.name === name);
-    if (source) setPerms(new Set(source.permissions.filter(p => iAmAdmin || myPerms.has(p))));
+    if (source) setPerms(new Set(source.permissions.filter(p => iAmSupport || myPerms.has(p))));
   };
 
   const handleSave = async () => {
@@ -118,7 +118,7 @@ const RoleEditor: React.FC<{
           onChange={e => setTitle(e.target.value)}
           placeholder="Например: Повар, Старший смены, Кладовщик"
           autoFocus={!role}
-          disabled={role?.name === 'admin'}
+          disabled={role?.name === 'support'}
           slotProps={{ htmlInput: { maxLength: 60 } }}
           sx={{ mt: 1 }}
         />
@@ -129,14 +129,14 @@ const RoleEditor: React.FC<{
           placeholder="Чем занимается сотрудник"
           multiline
           minRows={1}
-          disabled={role?.name === 'admin'}
+          disabled={role?.name === 'support'}
           slotProps={{ htmlInput: { maxLength: 300 } }}
         />
 
         {locked ? (
           <Alert severity="info" icon={<LockIcon />}>
-            {role?.name === 'admin'
-              ? 'Администратор всегда имеет доступ ко всему — так нельзя случайно потерять управление сайтом.'
+            {role?.name === 'support'
+              ? 'Техническая поддержка всегда имеет доступ ко всему — так нельзя случайно потерять управление сайтом. Назначает и снимает её только сама техподдержка.'
               : 'Роль «Клиент» есть у всех покупателей, поэтому доступа к управлению у неё нет.'}
           </Alert>
         ) : (
@@ -148,7 +148,7 @@ const RoleEditor: React.FC<{
                 ))}
               </TextField>
             )}
-            {!iAmAdmin && (
+            {!iAmSupport && (
               <Typography variant="body2" color="text.secondary">
                 Можно выдать только те права, которые есть у вас самих.
               </Typography>
@@ -218,7 +218,7 @@ const RoleEditor: React.FC<{
           </Button>
         )}
         <Button onClick={onClose} disabled={busy} sx={{ color: 'text.secondary', ml: role && !role.isSystem ? 0 : 'auto' }}>Отмена</Button>
-        {role?.name !== 'admin' && (
+        {role?.name !== 'support' && (
           <Button
             variant="contained"
             color="secondary"
@@ -304,14 +304,14 @@ const RolesPage: React.FC = () => {
                     {role.usersCount} {plural(role.usersCount, 'человек', 'человека', 'человек')}
                   </Box>
                   <span>
-                    {role.name === 'admin'
+                    {role.name === 'support'
                       ? 'полный доступ'
                       : role.permissions.length === 0
                         ? 'нет доступа к управлению'
                         : `${role.permissions.length} из ${total} прав`}
                   </span>
                 </Box>
-                {role.name !== 'admin' && role.permissions.length > 0 && (
+                {role.name !== 'support' && role.permissions.length > 0 && (
                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                     {role.permissions.slice(0, 6).map(p => (
                       <Box key={p} component="span" sx={{ px: 1, py: 0.25, borderRadius: '8px', bgcolor: 'action.hover', fontSize: '0.75rem', fontWeight: 600 }}>

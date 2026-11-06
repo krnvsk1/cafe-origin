@@ -23,7 +23,8 @@ import {
   Shield as ShieldIcon,
 } from '@mui/icons-material';
 import { useRoles, roleColor } from '../api/roles';
-import { useCan, P } from '../auth/permissions';
+import { useCan, P, isSupport } from '../auth/permissions';
+import { useAuthStore } from '../store/authStore';
 import { apiError } from '../api/inventory';
 import { useUsers, useAssignRole, useRemoveRole, useUserPointsBalance, useAdminGrantPoints } from '../api/hooks';
 import type { User, UserRole } from '../types';
@@ -32,6 +33,7 @@ import type { User, UserRole } from '../types';
 const ROLE_ICONS: Record<string, React.ReactNode> = {
   user: <PersonIcon fontSize="small" />,
   admin: <AdminIcon fontSize="small" />,
+  support: <AdminIcon fontSize="small" color="error" />,
   manager: <ManagerIcon fontSize="small" />,
   courier: <CourierIcon fontSize="small" />,
 };
@@ -42,7 +44,9 @@ const UsersPage: React.FC = () => {
   const canAssign = can(P.UsersRoles);
   const canPoints = can(P.Points);
   const { data: roles = [] } = useRoles();
-  const ALL_ROLES = roles.map(r => r.name);
+  // Техподдержку назначает и снимает только техподдержка
+  const iAmSupport = isSupport(useAuthStore(s => s.user));
+  const ALL_ROLES = roles.map(r => r.name).filter(r => r !== 'support' || iAmSupport);
   const roleCfg = (key: string) => {
     const info = roles.find(r => r.name === key);
     return { label: info?.title ?? key, color: roleColor(key), icon: ROLE_ICONS[key] ?? <ShieldIcon fontSize="small" /> };
@@ -481,7 +485,7 @@ const UsersPage: React.FC = () => {
             <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 1, display: 'block' }}>
               Удалить роль:
             </Typography>
-            {selectedUser.roles.map((role) => (
+            {selectedUser.roles.filter(r => r !== 'support' || iAmSupport).map((role) => (
               <MenuItem key={role} onClick={() => handleRemoveRole(role)}>
                 <ListItemIcon>
                   <RemoveIcon fontSize="small" color="error" />

@@ -249,7 +249,7 @@ namespace Cafe.API.Controllers
         private async Task<List<int>> ApproversAsync()
         {
             var roleIds = await _context.Roles
-                .Where(r => r.Name == AppRoles.Admin || _context.RoleClaims.Any(c => c.RoleId == r.Id && c.ClaimType == Permissions.ClaimType && c.ClaimValue == Permissions.ShiftApprove))
+                .Where(r => r.Name == AppRoles.Support || _context.RoleClaims.Any(c => c.RoleId == r.Id && c.ClaimType == Permissions.ClaimType && c.ClaimValue == Permissions.ShiftApprove))
                 .Select(r => r.Id).ToListAsync();
             return await _context.UserRoles.Where(ur => roleIds.Contains(ur.RoleId)).Select(ur => ur.UserId).Distinct().ToListAsync();
         }

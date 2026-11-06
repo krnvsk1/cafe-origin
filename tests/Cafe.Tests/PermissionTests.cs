@@ -24,10 +24,20 @@ namespace Cafe.Tests
         }
 
         [Fact]
-        public void Admin_HasEveryPermission()
+        public void Support_HasEveryPermission()
         {
-            var admin = Principal(new[] { "admin" });
-            Assert.All(Permissions.Keys, p => Assert.True(admin.HasPermission(p)));
+            var support = Principal(new[] { "support" });
+            Assert.True(support.IsSupport());
+            Assert.All(Permissions.Keys, p => Assert.True(support.HasPermission(p)));
+        }
+
+        [Fact]
+        public void Admin_HasOnlyItsConfiguredPermissions()
+        {
+            var admin = Principal(new[] { "admin" }, Permissions.Menu);
+            Assert.False(admin.IsSupport());
+            Assert.True(admin.HasPermission(Permissions.Menu));
+            Assert.False(admin.HasPermission(Permissions.Roles));
         }
 
         [Fact]

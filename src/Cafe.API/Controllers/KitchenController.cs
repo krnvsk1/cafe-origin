@@ -132,7 +132,7 @@ namespace Cafe.API.Controllers
         }
 
         private IActionResult? AdminOnly() =>
-            User.IsInRole(AppRoles.Admin) ? null : StatusCode(403, new { message = "Кухни настраивает только администратор" });
+            User.IsInRole(AppRoles.Admin) || User.IsSupport() ? null : StatusCode(403, new { message = "Кухни настраивает только администратор" });
 
         // POST: api/kitchen/stations — добавить кухню (только администратор)
         [HttpPost("stations")]

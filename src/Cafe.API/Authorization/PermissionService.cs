@@ -18,7 +18,7 @@ namespace Cafe.API.Authorization
 
     public interface IPermissionService
     {
-        /// <summary>Разрешения набора ролей (admin — все)</summary>
+        /// <summary>Разрешения набора ролей (техподдержка — все)</summary>
         Task<HashSet<string>> GetPermissionsAsync(IEnumerable<string> roles);
 
         /// <summary>Названия ролей для интерфейса: ключ → «Менеджер»</summary>
@@ -49,7 +49,7 @@ namespace Cafe.API.Authorization
         public async Task<HashSet<string>> GetPermissionsAsync(IEnumerable<string> roles)
         {
             var list = roles.ToList();
-            if (list.Contains(AppRoles.Admin)) return new HashSet<string>(Permissions.Keys);
+            if (list.Contains(AppRoles.Support)) return new HashSet<string>(Permissions.Keys);
 
             var snapshot = await GetSnapshotAsync();
             var result = new HashSet<string>();
@@ -155,7 +155,10 @@ namespace Cafe.API.Authorization
     public static class PermissionPrincipalExtensions
     {
         public static bool HasPermission(this ClaimsPrincipal user, string permission) =>
-            user.IsInRole(AppRoles.Admin) || user.HasClaim(Permissions.ClaimType, permission);
+            user.IsSupport() || user.HasClaim(Permissions.ClaimType, permission);
+
+        /// <summary>Техническая поддержка — все права, без ограничений</summary>
+        public static bool IsSupport(this ClaimsPrincipal user) => user.IsInRole(AppRoles.Support);
 
         public static bool HasAnyPermission(this ClaimsPrincipal user, params string[] permissions) =>
             permissions.Any(user.HasPermission);
@@ -213,7 +216,8 @@ namespace Cafe.API.Authorization
         public static readonly IReadOnlyDictionary<string, (string Title, string Description)> BuiltIn =
             new Dictionary<string, (string, string)>
             {
-                [AppRoles.Admin] = ("Администратор", "Полный доступ ко всему. Права не настраиваются."),
+                [AppRoles.Support] = ("Техническая поддержка", "Полный доступ ко всему. Права не настраиваются."),
+                [AppRoles.Admin] = ("Администратор", "Управление заведением. Права настраиваются."),
                 [AppRoles.Manager] = ("Менеджер", "Управление заказами, меню и маркетингом"),
                 [AppRoles.Courier] = ("Курьер", "Доставка заказов"),
                 [AppRoles.User] = ("Клиент", "Обычный покупатель — есть у всех зарегистрированных"),

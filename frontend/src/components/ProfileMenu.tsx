@@ -153,7 +153,7 @@ export default function ProfileMenu({ onLoginClick }: ProfileMenuProps) {
             <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5 }}>
               {user.roleTitles?.length
                 ? user.roleTitles.join(', ')
-                : user.roles.includes('admin') ? 'Администратор' : 'Клиент'}
+                : user.roles.includes('support') ? 'Техническая поддержка' : user.roles.includes('admin') ? 'Администратор' : 'Клиент'}
             </Typography>
           )}
         </Box>

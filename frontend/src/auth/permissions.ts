@@ -43,9 +43,13 @@ export const P = {
 
 export type Permission = typeof P[keyof typeof P];
 
-/** Есть ли у пользователя хотя бы одно из разрешений (администратор — всегда) */
+/** Техническая поддержка — все права, роль не настраивается */
+export const SUPPORT_ROLE = 'support';
+export const isSupport = (user: User | null | undefined) => !!user?.roles?.includes(SUPPORT_ROLE);
+
+/** Есть ли у пользователя хотя бы одно из разрешений (техподдержка — всегда) */
 export const userCan = (user: User | null | undefined, ...permissions: string[]) =>
-  !!user && (user.roles?.includes('admin') || permissions.some(p => user.permissions?.includes(p)));
+  !!user && (isSupport(user) || permissions.some(p => user.permissions?.includes(p)));
 
 /** Сотрудник, которому видны все заказы */
 export const STAFF_PERMISSIONS = [P.OrdersView, P.Pos, P.Waiter, P.Kitchen, P.Delivery];
