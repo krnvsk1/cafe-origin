@@ -428,8 +428,8 @@ const ShiftsPage: React.FC = () => {
 
       {seesAll && (
         <>
-          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-            <Typography sx={{ fontWeight: 700, flex: 1 }}>История смен</Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr 180px 180px' }, gap: 1.5, alignItems: 'center' }}>
+            <Typography sx={{ fontWeight: 700, gridColumn: { xs: '1 / -1', sm: 'auto' } }}>История смен</Typography>
             <TextField type="date" size="small" label="С" value={from} onChange={e => setFrom(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
             <TextField type="date" size="small" label="По" value={to} onChange={e => setTo(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
           </Box>

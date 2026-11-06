@@ -311,8 +311,10 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
           {shift.pendingWaiters.map(w => (
             <Box key={w.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', py: 0.25 }}>
               <Typography variant="body2" sx={{ flex: 1, minWidth: 140 }}>{w.name ?? `Сотрудник #${w.userId}`} · {timeOf(w.requestedAt)}</Typography>
-              <Button size="small" variant="contained" color="success" disabled={busy} onClick={() => run(() => approve.mutateAsync(w.id))}>Подтвердить</Button>
-              <Button size="small" color="inherit" disabled={busy} onClick={() => run(() => reject.mutateAsync(w.id))}>Отклонить</Button>
+              <Box sx={{ display: 'flex', gap: 0.5, ml: 'auto', flexShrink: 0 }}>
+                <Button size="small" variant="contained" color="success" disabled={busy} onClick={() => run(() => approve.mutateAsync(w.id))}>Подтвердить</Button>
+                <Button size="small" color="inherit" disabled={busy} onClick={() => run(() => reject.mutateAsync(w.id))}>Отклонить</Button>
+              </Box>
             </Box>
           ))}
         </Alert>

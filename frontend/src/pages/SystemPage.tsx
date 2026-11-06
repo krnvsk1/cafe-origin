@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { TitleWithHint } from '../components/Hint';
+import { TitleWithHint, Hint } from '../components/Hint';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Paper, Chip, Alert, CircularProgress, ToggleButtonGroup, ToggleButton, Collapse, ButtonBase, TextField, Button, Tabs, Tab,
@@ -95,10 +95,9 @@ const AlertsSettings: React.FC = () => {
       )}
       {data && !data.pingUrl && !data.siteNotify && <Alert severity="warning">Оповещения выключены — о сбоях сервера никто не узнает</Alert>}
       {data && (
-        <Typography variant="body2" color="text.secondary">
-          <TitleWithHint hint="Для сервисов, которые сами открывают сайт (UptimeRobot и т.п.): добавьте проверку этого адреса — «код ответа 200» или «есть слово Healthy». Если база, диск или фоновые задачи не в порядке, адрес ответит 503.">
-            Проверка сайта снаружи: <b>{data.healthUrl}</b>
-          </TitleWithHint>
+        <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-all' }}>
+          Проверка сайта снаружи: <b>{data.healthUrl}</b>
+          <Hint title="Для сервисов, которые сами открывают сайт (UptimeRobot и т.п.): добавьте проверку этого адреса — «код ответа 200» или «есть слово Healthy». Если база, диск или фоновые задачи не в порядке, адрес ответит 503." />
         </Typography>
       )}
       {msg && <Alert severity={msg.ok ? 'success' : 'error'} onClose={() => setMsg(null)}>{msg.text}</Alert>}
@@ -265,9 +264,9 @@ const SystemPage: React.FC = () => {
           ['База данных', data.dbSizeMb != null ? `${data.dbSizeMb} МБ` : '—'],
           ['Версия', `${data.version} · ${data.environment}`],
         ].map(([label, value]) => (
-          <Paper key={label} variant="outlined" sx={{ p: 2, borderRadius: '16px' }}>
+          <Paper key={label} variant="outlined" sx={{ p: 2, borderRadius: '16px', minWidth: 0 }}>
             <Typography variant="body2" color="text.secondary">{label}</Typography>
-            <Typography sx={{ fontWeight: 800 }} noWrap>{value}</Typography>
+            <Typography sx={{ fontWeight: 800, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={value}>{value}</Typography>
           </Paper>
         ))}
       </Box>
@@ -277,10 +276,10 @@ const SystemPage: React.FC = () => {
         {data.checks.map(c => {
           const s = STATUS[c.status] ?? STATUS.Degraded;
           return (
-            <Box key={c.name} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75, borderTop: '1px solid', borderColor: 'divider', '&:first-of-type': { borderTop: 0 } }}>
+            <Box key={c.name} sx={{ display: 'flex', alignItems: 'center', columnGap: 1.5, rowGap: 0.25, py: 0.75, flexWrap: 'wrap', borderTop: '1px solid', borderColor: 'divider', '&:first-of-type': { borderTop: 0 } }}>
               <Chip size="small" color={s.color} label={s.text} sx={{ minWidth: 110 }} />
-              <Typography sx={{ fontWeight: 600, minWidth: 140 }}>{c.title}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>{c.description}</Typography>
+              <Typography sx={{ fontWeight: 600, minWidth: { sm: 140 } }}>{c.title}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 220px', minWidth: 0, wordBreak: 'break-word' }}>{c.description}</Typography>
             </Box>
           );
         })}
@@ -293,8 +292,8 @@ const SystemPage: React.FC = () => {
             <Box key={j.name} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.75, flexWrap: 'wrap', borderTop: '1px solid', borderColor: 'divider', '&:first-of-type': { borderTop: 0 } }}>
               <Chip size="small" color={j.failuresInRow >= 3 ? 'error' : j.failuresInRow > 0 ? 'warning' : 'success'}
                 label={j.failuresInRow > 0 ? `ошибок подряд: ${j.failuresInRow}` : 'работает'} sx={{ minWidth: 110 }} />
-              <Typography sx={{ fontWeight: 600, minWidth: 140 }}>{j.name}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+              <Typography sx={{ fontWeight: 600, minWidth: { sm: 140 } }}>{j.name}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 220px', minWidth: 0, wordBreak: 'break-word' }}>
                 успешно: {when(j.lastSuccess)}{j.lastError ? ` · последняя ошибка ${when(j.lastFailure)}: ${j.lastError}` : ''}
               </Typography>
             </Box>
@@ -303,8 +302,8 @@ const SystemPage: React.FC = () => {
       )}
 
       <Paper ref={logRef} variant="outlined" sx={{ borderRadius: '16px', p: 2, scrollMarginTop: 90 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Typography sx={{ fontWeight: 700, flex: 1 }}>Предупреждения и ошибки с момента запуска</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+          <Typography sx={{ fontWeight: 700, flex: '1 1 200px' }}>Предупреждения и ошибки с момента запуска</Typography>
           <ToggleButtonGroup size="small" exclusive value={level} onChange={(_, v) => v && setLevel(v)}>
             <ToggleButton value="all">Все</ToggleButton>
             <ToggleButton value="Error">Только ошибки</ToggleButton>
@@ -316,12 +315,12 @@ const SystemPage: React.FC = () => {
           return (
             <Box key={i} sx={{ borderTop: '1px solid', borderColor: 'divider', '&:first-of-type': { borderTop: 0 } }}>
               <ButtonBase onClick={() => setOpenLog(openLog === i ? null : i)} disabled={!l.exception}
-                sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, py: 0.75, width: '100%', textAlign: 'left' }}>
+                sx={{ display: 'flex', alignItems: 'flex-start', columnGap: 1.5, rowGap: 0.5, py: 0.75, width: '100%', textAlign: 'left', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
                 <Chip size="small" color={error ? 'error' : 'warning'} label={error ? 'ошибка' : 'внимание'} sx={{ minWidth: 80 }} />
-                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 90 }}>{when(l.at)}</Typography>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 90, pt: 0.25 }}>{when(l.at)}</Typography>
+                <Box sx={{ flex: { xs: '1 1 100%', sm: 1 }, minWidth: 0 }}>
                   <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{l.message}</Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-all' }}>
                     {shortSource(l.source)}{l.requestId ? ` · запрос ${l.requestId}` : ''}{l.exception ? ' · нажмите, чтобы увидеть подробности' : ''}
                   </Typography>
                 </Box>

@@ -245,8 +245,11 @@ const CancelDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t
 
 const Row: React.FC<{ label: string; value: string; bold?: boolean; big?: boolean; action?: React.ReactNode }> = ({ label, value, bold, big, action }) => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.25 }}>
-    <Typography sx={{ flex: 1, fontWeight: bold ? 700 : 400, fontSize: big ? '1.15rem' : undefined }}>{label}{action}</Typography>
-    <Typography sx={{ fontWeight: bold ? 800 : 500, fontSize: big ? '1.15rem' : undefined }}>{value}</Typography>
+    <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 0.5 }}>
+      <Typography sx={{ fontWeight: bold ? 700 : 400, fontSize: big ? '1.15rem' : undefined }}>{label}</Typography>
+      {action}
+    </Box>
+    <Typography sx={{ fontWeight: bold ? 800 : 500, fontSize: big ? '1.15rem' : undefined, whiteSpace: 'nowrap' }}>{value}</Typography>
   </Box>
 );
 
@@ -303,15 +306,16 @@ const BanquetView: React.FC<{ id: number }> = ({ id }) => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: 900, mx: 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <IconButton onClick={() => navigate('/admin/banquets')} aria-label="К банкетам"><BackIcon /></IconButton>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="h5" sx={{ fontWeight: 800 }} noWrap>Банкет №{b.id} · {b.customerName}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            {dt(b.eventAt)}{b.guests ? ` · гостей ${b.guests}` : ''}{b.phone ? ` · ${b.phone}` : ''}{b.table ? ` · стол ${b.table}` : ''}
-          </Typography>
-        </Box>
-        <Chip color={STATUS[b.status].color} label={STATUS[b.status].text} />
+        <IconButton onClick={() => navigate('/admin/banquets')} aria-label="К банкетам" sx={{ ml: -1 }}><BackIcon /></IconButton>
+        <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>Банкет №{b.id}</Typography>
+        <Chip size="small" color={STATUS[b.status].color} label={STATUS[b.status].text} />
         {open && <IconButton onClick={() => setDialog('edit')} aria-label="Изменить"><EditIcon /></IconButton>}
+      </Box>
+      <Box sx={{ mt: -1 }}>
+        <Typography variant="h5" sx={{ fontWeight: 800, wordBreak: 'break-word' }}>{b.customerName}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {dt(b.eventAt)}{b.guests ? ` · гостей ${b.guests}` : ''}{b.phone ? ` · ${b.phone}` : ''}{b.table ? ` · стол ${b.table}` : ''}
+        </Typography>
       </Box>
       {b.comment && <Typography variant="body2" sx={{ whiteSpace: 'pre-line' }}>{b.comment}</Typography>}
 
@@ -339,21 +343,21 @@ const BanquetView: React.FC<{ id: number }> = ({ id }) => {
         </Box>
         {b.items.length === 0 && <Typography color="text.secondary">Пока пусто</Typography>}
         {b.items.map(i => (
-          <Box key={i.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5, borderTop: 1, borderColor: 'divider' }}>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box key={i.id} sx={{ display: 'flex', alignItems: 'center', columnGap: 1, rowGap: 0.25, py: 0.75, borderTop: 1, borderColor: 'divider', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+            <Box sx={{ flex: { xs: '1 1 100%', sm: 1 }, minWidth: 0 }}>
               <Typography sx={{ fontWeight: 600 }}>{i.name}{i.addons.length ? <Typography component="span" variant="body2" color="text.secondary"> + {i.addons.map(a => a.name).join(', ')}</Typography> : null}</Typography>
               <Typography variant="caption" color={i.sent ? 'success.main' : 'text.secondary'}>
                 {i.sent ? (KITCHEN[i.kitchenStatus ?? ''] ?? 'на кухне') : 'ещё не на кухне'}{i.comment ? ` · ${i.comment}` : ''} · {money(i.price)}
               </Typography>
             </Box>
             {open && !i.sent ? (
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', ml: { xs: -1, sm: 0 }, flex: { xs: 1, sm: 'none' } }}>
                 <IconButton size="small" disabled={i.quantity <= 1} onClick={() => run(() => setQty.mutateAsync({ id: b.id, itemId: i.id, quantity: i.quantity - 1 }))}><RemoveIcon fontSize="small" /></IconButton>
                 <Typography sx={{ minWidth: 28, textAlign: 'center', fontWeight: 700 }}>{i.quantity}</Typography>
                 <IconButton size="small" onClick={() => run(() => setQty.mutateAsync({ id: b.id, itemId: i.id, quantity: i.quantity + 1 }))}><AddIcon fontSize="small" /></IconButton>
                 <IconButton size="small" onClick={() => run(() => removeItem.mutateAsync({ id: b.id, itemId: i.id }))} aria-label="Убрать"><DeleteIcon fontSize="small" /></IconButton>
               </Box>
-            ) : <Typography sx={{ fontWeight: 700 }}>× {i.quantity}</Typography>}
+            ) : <Typography sx={{ fontWeight: 700, flex: { xs: 1, sm: 'none' } }}>× {i.quantity}</Typography>}
             <Typography sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{money(i.price * i.quantity)}</Typography>
           </Box>
         ))}
@@ -364,10 +368,10 @@ const BanquetView: React.FC<{ id: number }> = ({ id }) => {
         {(t.discount > 0 || b.canDiscount) && (
           <Row label={t.discount > 0 ? `Скидка${b.discountType === 'percent' ? ` ${b.discountValue}%` : ''}${b.discountBy ? ` (${b.discountBy})` : ''}` : 'Скидка'}
             value={t.discount > 0 ? `−${money(t.discount)}` : '—'}
-            action={b.canDiscount ? <Button size="small" onClick={() => setDialog('discount')} sx={{ ml: 1 }}>{t.discount > 0 ? 'Изменить' : 'Добавить'}</Button> : undefined} />
+            action={b.canDiscount ? <Button size="small" onClick={() => setDialog('discount')} sx={{ minWidth: 0, px: 1, py: 0 }}>{t.discount > 0 ? 'Изменить' : 'Добавить'}</Button> : undefined} />
         )}
         <Row label={`Обслуживание${b.serviceType === 'percent' && b.serviceValue ? ` ${b.serviceValue}%` : ''}`} value={t.service > 0 ? money(t.service) : '—'}
-          action={open ? <Button size="small" onClick={() => setDialog('edit')} sx={{ ml: 1 }}>Изменить</Button> : undefined} />
+          action={open ? <Button size="small" onClick={() => setDialog('edit')} sx={{ minWidth: 0, px: 1, py: 0 }}>Изменить</Button> : undefined} />
         <Divider sx={{ my: 0.75 }} />
         <Row label="Итого" value={money(t.total)} bold big />
         {t.prepaid > 0 && <Row label="Предоплата" value={`−${money(t.prepaid)}`} />}
@@ -441,28 +445,30 @@ const BanquetList: React.FC = () => {
   const [creating, setCreating] = React.useState(false);
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: 900, mx: 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
         <Typography variant="h4" sx={{ fontWeight: 800, flex: 1 }}>Банкеты</Typography>
+        <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => setCreating(true)}>Новый</Button>
+      </Box>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: '180px 180px' }, gap: 1 }}>
         <TextField type="date" size="small" label="С" value={from} onChange={e => setFrom(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
         <TextField type="date" size="small" label="По" value={to} onChange={e => setTo(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
-        <Button variant="contained" color="secondary" startIcon={<AddIcon />} onClick={() => setCreating(true)}>Новый банкет</Button>
       </Box>
       {error && <Alert severity="error">{apiError(error, 'Не удалось загрузить банкеты')}</Alert>}
       {isLoading && <Box sx={{ display: 'grid', placeItems: 'center', py: 4 }}><CircularProgress /></Box>}
       {data?.length === 0 && <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>Банкетов нет</Typography>}
       {data?.map(x => (
         <Paper key={x.id} variant="outlined" sx={{ borderRadius: '16px' }}>
-          <ButtonBase onClick={() => navigate(`/admin/banquets/${x.id}`)} sx={{ width: '100%', textAlign: 'left', p: 2, borderRadius: '16px', display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Box sx={{ flex: 1, minWidth: 200 }}>
+          <ButtonBase onClick={() => navigate(`/admin/banquets/${x.id}`)} sx={{ width: '100%', textAlign: 'left', p: 2, borderRadius: '16px', display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography sx={{ fontWeight: 800 }}>{dt(x.eventAt)}</Typography>
               <Typography variant="body2" color="text.secondary">
                 №{x.id} · {x.customerName}{x.guests ? ` · гостей ${x.guests}` : ''}{x.table ? ` · стол ${x.table}` : ''}
                 {x.status === 'open' && x.unsent > 0 ? ` · не на кухне: ${x.unsent}${x.kitchenAt ? '' : ' (время не задано)'}` : ''}
               </Typography>
             </Box>
-            <Chip size="small" color={STATUS[x.status].color} label={STATUS[x.status].text} />
-            <Box sx={{ textAlign: 'right' }}>
-              <Typography sx={{ fontWeight: 800 }}>{money(x.total)}</Typography>
+            <Box sx={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+              <Chip size="small" color={STATUS[x.status].color} label={STATUS[x.status].text} />
+              <Typography sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>{money(x.total)}</Typography>
               {x.prepaid > 0 && <Typography variant="body2" color="text.secondary">предоплата {money(x.prepaid)}</Typography>}
             </Box>
           </ButtonBase>
