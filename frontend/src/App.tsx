@@ -91,6 +91,7 @@ import WaiterPage from './pages/WaiterPage';
 import VoidsPage from './pages/VoidsPage';
 import ShiftsPage from './pages/ShiftsPage';
 import BanquetsPage from './pages/BanquetsPage';
+import ErrorsBell from './components/ErrorsBell';
 import SystemPage from './pages/SystemPage';
 import FloorEditorPage from './pages/FloorEditorPage';
 import FinancePage from './pages/finance/FinancePage';
@@ -342,6 +343,8 @@ function App() {
                   )}
 
                   <Box sx={{ flex: 1 }} />
+
+                  <ErrorsBell />
 
                   {!isMobile && (
                     <IconButton onClick={toggleTheme} aria-label={themeMode === 'light' ? 'Тёмная тема' : 'Светлая тема'}>

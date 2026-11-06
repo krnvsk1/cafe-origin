@@ -17,6 +17,9 @@ namespace Cafe.API.Monitoring
         /// проблема — POST на адрес/fail с описанием. Перестали приходить пинги (сервер упал) — сервис сам поднимет тревогу.
         /// </summary>
         public string? PingUrl { get; set; }
+
+        /// <summary>Оповещать об ошибках сервера на сайте: значок с числом новых ошибок у тех, кто видит «Состояние системы»</summary>
+        public bool SiteNotify { get; set; }
     }
 
     /// <summary>

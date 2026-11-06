@@ -100,6 +100,8 @@ namespace Cafe.API.Controllers
         {
             /// <summary>Адрес пинга внешнего мониторинга (Healthchecks.io и т.п.); пусто — выключить</summary>
             public string? PingUrl { get; set; }
+            /// <summary>Оповещать об ошибках на сайте; null — не менять</summary>
+            public bool? SiteNotify { get; set; }
         }
 
         // GET: api/admin/system/alerts — внешний мониторинг: адрес пинга и адрес проверки сайта
@@ -108,6 +110,7 @@ namespace Cafe.API.Controllers
         public async Task<IActionResult> GetAlerts() => Ok(new
         {
             pingUrl = await _alerts.PingUrlAsync(),
+            siteNotify = (await _alerts.GetAsync()).SiteNotify,
             healthUrl = $"{Request.Scheme}://{Request.Host}/health/full",
         });
 
@@ -119,8 +122,34 @@ namespace Cafe.API.Controllers
             var url = string.IsNullOrWhiteSpace(r.PingUrl) ? null : r.PingUrl.Trim();
             if (url != null && (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme != "https" || url.Length > 500))
                 return BadRequest(new { message = "Адрес пинга — https://… из сервиса мониторинга (например, https://hc-ping.com/…)" });
-            await _alerts.SaveAsync(new AlertSettings { PingUrl = url }, User.GetUserId());
+            var current = await _alerts.GetAsync();
+            await _alerts.SaveAsync(new AlertSettings
+            {
+                PingUrl = url,
+                SiteNotify = r.SiteNotify ?? current.SiteNotify,
+                TelegramChatId = current.TelegramChatId,
+            }, User.GetUserId());
             return await GetAlerts();
+        }
+
+        // GET: api/admin/system/errors?since=… — ошибки сервера после since: для значка оповещений на сайте
+        [HttpGet("api/admin/system/errors")]
+        [HasPermission(Permissions.Settings)]
+        public async Task<IActionResult> Errors([FromQuery] DateTime? since)
+        {
+            var enabled = (await _alerts.GetAsync()).SiteNotify;
+            if (!enabled) return Ok(new { enabled, count = 0, latest = Array.Empty<object>(), now = DateTime.UtcNow });
+            var from = since?.ToUniversalTime() ?? DateTime.UtcNow.AddHours(-24);
+            var errors = _logs.Snapshot(300)
+                .Where(e => (e.Level == "Error" || e.Level == "Fatal") && e.At > from)
+                .OrderByDescending(e => e.At).ToList();
+            return Ok(new
+            {
+                enabled,
+                count = errors.Count,
+                latest = errors.Take(5).Select(e => new { e.At, e.Message, source = e.Source?.Split('.').Last(), e.RequestId }),
+                now = DateTime.UtcNow,
+            });
         }
 
         // POST: api/admin/system/alerts/test — проверочный пинг: в сервисе мониторинга появится «пинг получен»

@@ -3,7 +3,9 @@ import { TitleWithHint } from '../components/Hint';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Paper, Chip, Alert, CircularProgress, ToggleButtonGroup, ToggleButton, Collapse, ButtonBase, TextField, Button, Tabs, Tab,
+  FormControlLabel, Switch,
 } from '@mui/material';
+import { useLocation } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { apiError } from '../api/inventory';
 import { parseUtc } from '../api/waiter';
@@ -31,7 +33,7 @@ const when = (iso: string | null) => (iso ? parseUtc(iso).toLocaleString('ru-RU'
 const uptime = (m: number) => (m < 60 ? `${m} мин` : m < 1440 ? `${Math.floor(m / 60)} ч ${m % 60} мин` : `${Math.floor(m / 1440)} дн ${Math.floor((m % 1440) / 60)} ч`);
 const shortSource = (s: string | null) => (s ? s.split('.').pop() : '');
 
-interface AlertsInfo { pingUrl: string | null; healthUrl: string }
+interface AlertsInfo { pingUrl: string | null; healthUrl: string; siteNotify?: boolean }
 
 /** Внешний мониторинг: сервер шлёт «пульс» в сервис мониторинга, тот присылает тревоги на почту, SMS и т.п. */
 const AlertsSettings: React.FC = () => {
@@ -40,6 +42,11 @@ const AlertsSettings: React.FC = () => {
   const [url, setUrl] = React.useState('');
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null);
   React.useEffect(() => { if (data) setUrl(data.pingUrl ?? ''); }, [data]);
+  const notify = useMutation({
+    mutationFn: (siteNotify: boolean) => apiClient.put('/api/admin/system/alerts', { pingUrl: data?.pingUrl ?? null, siteNotify }).then(r => r.data),
+    onSuccess: d => { qc.setQueryData(['system-alerts'], d); qc.invalidateQueries({ queryKey: ['system-errors'] }); },
+    onError: e => setMsg({ ok: false, text: apiError(e) }),
+  });
   const save = useMutation({
     mutationFn: (pingUrl: string | null) => apiClient.put('/api/admin/system/alerts', { pingUrl }).then(r => r.data),
     onSuccess: d => { qc.setQueryData(['system-alerts'], d); setMsg({ ok: true, text: 'Сохранено' }); },
@@ -78,7 +85,15 @@ const AlertsSettings: React.FC = () => {
           onClick={() => save.mutate(trimmed === '' ? null : trimmed)}>Сохранить</Button>
         <Button disabled={!data?.pingUrl || changed || test.isPending} onClick={() => test.mutate()}>Проверить</Button>
       </Box>
-      {data && !data.pingUrl && <Alert severity="warning">Мониторинг не подключён — о сбоях сервера никто не узнает</Alert>}
+      {data && (
+        <FormControlLabel
+          control={<Switch checked={!!data.siteNotify} disabled={notify.isPending} onChange={e => notify.mutate(e.target.checked)} />}
+          label={<TitleWithHint hint="Ошибка на сервере — в верхней панели сайта появится красный значок с числом новых ошибок и всплывёт сообщение. Видят те, у кого есть доступ к «Состоянию системы». Нажатие открывает список ошибок.">
+            Оповещать об ошибках на сайте
+          </TitleWithHint>}
+        />
+      )}
+      {data && !data.pingUrl && !data.siteNotify && <Alert severity="warning">Оповещения выключены — о сбоях сервера никто не узнает</Alert>}
       {data && (
         <Typography variant="body2" color="text.secondary">
           <TitleWithHint hint="Для сервисов, которые сами открывают сайт (UptimeRobot и т.п.): добавьте проверку этого адреса — «код ответа 200» или «есть слово Healthy». Если база, диск или фоновые задачи не в порядке, адрес ответит 503.">
@@ -202,7 +217,11 @@ const EndpointsView: React.FC = () => {
 
 /** Состояние системы: сервер, база, фоновые задачи, последние ошибки — обновляется раз в 30 секунд */
 const SystemPage: React.FC = () => {
-  const [level, setLevel] = React.useState<'all' | 'Error'>('all');
+  // Пришли со значка ошибок — сразу «Только ошибки» и прокрутка к журналу
+  const location = useLocation();
+  const fromBell = new URLSearchParams(location.search).get('errors') === '1';
+  const [level, setLevel] = React.useState<'all' | 'Error'>(fromBell ? 'Error' : 'all');
+  const logRef = React.useRef<HTMLDivElement | null>(null);
   const [openLog, setOpenLog] = React.useState<number | null>(null);
   const [tab, setTab] = React.useState<'overview' | 'endpoints'>('overview');
   const { data, isLoading, error } = useQuery<SystemInfo>({
@@ -210,6 +229,15 @@ const SystemPage: React.FC = () => {
     queryFn: () => apiClient.get('/api/admin/system', { params: { take: 200 } }).then(r => r.data),
     refetchInterval: 30_000,
   });
+
+  const loaded = !!data;
+  React.useEffect(() => {
+    if (!fromBell || !loaded) return;
+    setTab('overview');
+    setLevel('Error');
+    const t = setTimeout(() => logRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    return () => clearTimeout(t);
+  }, [fromBell, loaded, location.key]);
 
   if (isLoading) return <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }}><CircularProgress /></Box>;
   if (error || !data) return <Alert severity="error" sx={{ m: 2 }}>{apiError(error, 'Не удалось получить состояние системы')}</Alert>;
@@ -274,7 +302,7 @@ const SystemPage: React.FC = () => {
         </Paper>
       )}
 
-      <Paper variant="outlined" sx={{ borderRadius: '16px', p: 2 }}>
+      <Paper ref={logRef} variant="outlined" sx={{ borderRadius: '16px', p: 2, scrollMarginTop: 90 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
           <Typography sx={{ fontWeight: 700, flex: 1 }}>Предупреждения и ошибки с момента запуска</Typography>
           <ToggleButtonGroup size="small" exclusive value={level} onChange={(_, v) => v && setLevel(v)}>
