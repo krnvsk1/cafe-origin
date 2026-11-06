@@ -157,7 +157,7 @@ namespace Cafe.API.Controllers
             if (r.DiscountValue is > 0 && !string.IsNullOrEmpty(r.DiscountType))
             {
                 if (order.PaymentMethod == "online") return BadRequest(new { message = "Заказ оплачен онлайн — скидку уже не дать" });
-                if (!User.HasPermission(Permissions.Discounts)) return StatusCode(403, new { message = "Нет права давать скидки" });
+                if (!User.HasPermission(Permissions.Discounts)) return StatusCode(403, new { message = "Нет права добавлять скидки" });
                 if (WaiterController.ValidateDiscount(new WaiterController.DiscountRequest { Type = r.DiscountType, Value = r.DiscountValue }) is { } derr)
                     return BadRequest(new { message = derr });
                 var goods = order.Total - order.DeliveryPrice;

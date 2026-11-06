@@ -116,7 +116,7 @@ namespace Cafe.API.Controllers
             // Скидка от кассира (право «Скидки») — распределится по позициям чека
             if (request.DiscountValue is > 0 && !string.IsNullOrEmpty(request.DiscountType))
             {
-                if (!User.HasPermission(Permissions.Discounts)) return StatusCode(403, new { message = "Нет права давать скидки" });
+                if (!User.HasPermission(Permissions.Discounts)) return StatusCode(403, new { message = "Нет права добавлять скидки" });
                 if (WaiterController.ValidateDiscount(new WaiterController.DiscountRequest { Type = request.DiscountType, Value = request.DiscountValue }) is { } derr)
                     return BadRequest(new { message = derr });
                 var d = DiscountTypes.Of(request.DiscountType, request.DiscountValue, total);
