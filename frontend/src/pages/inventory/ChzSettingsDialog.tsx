@@ -38,7 +38,7 @@ export const ChzSettings: React.FC<{ state: ChzState; onDone: () => void }> = ({
         value={inn}
         onChange={e => setInn(e.target.value.replace(/\D/g, '').slice(0, 12))}
         helperText={<FieldHint text="Тот же, что в сертификате КЭП руководителя" />}
-        slotProps={{ htmlInput: { inputMode: 'numeric' } }}
+        slotProps={{ htmlInput: { inputMode: 'decimal' } }}
         sx={{ maxWidth: 320 }}
       />
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: '1fr 200px' }, gap: 1.5 }}>
@@ -54,7 +54,7 @@ export const ChzSettings: React.FC<{ state: ChzState; onDone: () => void }> = ({
           value={kpp}
           onChange={e => setKpp(e.target.value.replace(/\D/g, '').slice(0, 9))}
           helperText={<FieldHint text={inn.length === 12 ? 'У ИП нет — оставьте пустым' : 'Для организации'} />}
-          slotProps={{ htmlInput: { inputMode: 'numeric' } }}
+          slotProps={{ htmlInput: { inputMode: 'decimal' } }}
         />
       </Box>
       <Box>

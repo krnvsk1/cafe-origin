@@ -123,7 +123,7 @@ const EditOrderDialog: React.FC<{
             label="Телефон"
             value={formData.phone}
             type="tel"
-            inputProps={{ inputMode: 'tel' }}
+            inputProps={{ inputMode: 'decimal' }}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             margin="normal"
             required
@@ -693,7 +693,7 @@ const OrdersPage: React.FC = () => {
                 fullWidth
                 variant="outlined"
                 label="Поиск по телефону"
-                inputProps={{ inputMode: 'tel' }}
+                inputProps={{ inputMode: 'decimal' }}
                 placeholder="+7..."
                 value={searchPhone}
                 onChange={(e) => setSearchPhone(e.target.value)}

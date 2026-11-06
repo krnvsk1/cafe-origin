@@ -119,7 +119,7 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
               onChange={e => setFsrarId(e.target.value.replace(/\D/g, '').slice(0, 12))}
               placeholder="030000000000"
               helperText={<FieldHint text="Точно как на главной странице УТМ — по нему ЕГАИС проверяет подпись запросов" />}
-              slotProps={{ htmlInput: { inputMode: 'numeric' } }}
+              slotProps={{ htmlInput: { inputMode: 'decimal' } }}
             />
             {detected && detected !== fsrarId.trim() && (
               <Alert
@@ -138,7 +138,7 @@ const EgaisSettingsDialog: React.FC<{ open: boolean; onClose: () => void }> = ({
               helperText={<FieldHint text="0 — только по кнопке «Проверить входящие»" />}
               slotProps={{
                 input: { startAdornment: <InputAdornment position="start">каждые</InputAdornment>, endAdornment: <InputAdornment position="end">мин</InputAdornment> },
-                htmlInput: { min: 0, max: 1440, inputMode: 'numeric' },
+                htmlInput: { min: 0, max: 1440, inputMode: 'decimal' },
               }}
               sx={{ maxWidth: 280 }}
             />

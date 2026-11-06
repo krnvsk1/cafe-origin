@@ -57,7 +57,7 @@ export const WeightChooser: React.FC<{ grams: number; onChange: (g: number) => v
       </Box>
       <TextField
         label="Свой вес, г" type="number" size="small" value={text} sx={{ mt: 1.5, width: 160 }}
-        inputProps={{ min: MIN_GRAMS, max: MAX_GRAMS, step: 10, inputMode: 'numeric' }}
+        inputProps={{ min: MIN_GRAMS, max: MAX_GRAMS, step: 10, inputMode: 'decimal' }}
         onChange={e => { setText(e.target.value); const g = Math.round(Number(e.target.value)); if (g > 0) onChange(g); }}
         error={!valid}
         helperText={valid ? `${priceForWeight(per100, grams).toLocaleString('ru-RU')} ₽` : `от ${MIN_GRAMS} г до ${MAX_GRAMS / 1000} кг`}

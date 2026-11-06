@@ -669,7 +669,7 @@ const CreateMenuItemPage: React.FC = () => {
                     helperText={errors.price}
                     slotProps={{
                       input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> },
-                      htmlInput: { min: 0, step: 10, inputMode: 'numeric' },
+                      htmlInput: { min: 0, step: 10, inputMode: 'decimal' },
                     }}
                   />
                 </Field>

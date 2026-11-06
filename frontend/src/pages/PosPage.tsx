@@ -425,7 +425,7 @@ const Ticket: React.FC<{
         <Collapse in={showGuest}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
-              <TextField size="small" label="Телефон" value={phone} onChange={e => setPhone(e.target.value)} slotProps={{ htmlInput: { inputMode: 'tel' } }}
+              <TextField size="small" label="Телефон" value={phone} onChange={e => setPhone(e.target.value)} slotProps={{ htmlInput: { inputMode: 'decimal' } }}
                 helperText={guest ? (guest.found ? 'Гость найден — начислим баллы' : 'Не зарегистрирован') : ' '} />
               <TextField size="small" label="Имя" value={name} onChange={e => setName(e.target.value)} helperText=" " />
             </Box>

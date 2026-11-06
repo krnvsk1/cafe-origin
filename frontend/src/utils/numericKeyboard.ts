@@ -1,30 +1,30 @@
 /**
- * Цифровая клавиатура на телефоне и планшете для числовых полей.
- * У <input type="number"> iOS и Android по умолчанию показывают обычную клавиатуру с рядом цифр —
- * подставляем inputmode: целые (step="1") — цифры, остальные — цифры с запятой, телефон — набор номера.
- * Поле, где inputmode уже задан явно, не трогаем.
+ * Клавиатура только с цифрами на телефоне и планшете.
+ * На iPhone раскладки numeric и tel показывают буквы под цифрами («2 ABC»), без букв — только decimal
+ * (цифры и запятая). Поэтому всем числовым полям — type="number", type="tel" и полям с inputmode numeric/tel —
+ * ставим inputmode="decimal". Отключить для поля: data-auto-inputmode="off".
  */
-const MODES: Record<string, (el: HTMLInputElement) => string> = {
-  number: el => (el.step && /^\d+$/.test(el.step) ? 'numeric' : 'decimal'),
-  tel: () => 'tel',
+const DIGITS = 'decimal';
+
+const needsDigits = (el: HTMLInputElement) => {
+  if (el.dataset.autoInputmode === 'off') return false;
+  if (el.type === 'number' || el.type === 'tel') return true;
+  const mode = el.getAttribute('inputmode');
+  return mode === 'numeric' || mode === 'tel';
 };
 
 const apply = (el: Element) => {
-  if (!(el instanceof HTMLInputElement)) return;
-  const mode = MODES[el.type];
-  if (!mode || el.dataset.autoInputmode === 'off') return;
-  if (el.hasAttribute('inputmode') && el.dataset.autoInputmode !== '1') return;
-  const value = mode(el);
-  if (el.getAttribute('inputmode') !== value) el.setAttribute('inputmode', value);
-  el.dataset.autoInputmode = '1';
+  if (!(el instanceof HTMLInputElement) || !needsDigits(el)) return;
+  if (el.getAttribute('inputmode') !== DIGITS) el.setAttribute('inputmode', DIGITS);
   // Колесо мыши не должно менять число в поле (частая случайная ошибка на ноутбуке)
-  if (!el.dataset.noWheel) {
+  if (el.type === 'number' && !el.dataset.noWheel) {
     el.dataset.noWheel = '1';
     el.addEventListener('wheel', () => { if (document.activeElement === el) el.blur(); }, { passive: true });
   }
 };
 
-const scan = (root: ParentNode) => root.querySelectorAll('input[type="number"], input[type="tel"]').forEach(apply);
+const SELECTOR = 'input[type="number"], input[type="tel"], input[inputmode="numeric"], input[inputmode="tel"]';
+const scan = (root: ParentNode) => root.querySelectorAll(SELECTOR).forEach(apply);
 
 export const installNumericKeyboard = () => {
   if (typeof MutationObserver === 'undefined') return;
@@ -38,5 +38,5 @@ export const installNumericKeyboard = () => {
         scan(n as Element);
       });
     }
-  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['type', 'step'] });
+  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['type', 'inputmode'] });
 };

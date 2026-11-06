@@ -65,8 +65,8 @@ export const SupplierDialog: React.FC<{
         {error && <Alert severity="error">{error}</Alert>}
         <TextField label="Название" value={form.name} onChange={e => set('name', e.target.value)} autoFocus placeholder="ООО «Мясной двор»" />
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
-          <TextField label="ИНН" value={form.inn ?? ''} onChange={e => set('inn', e.target.value.replace(/\D/g, ''))} slotProps={{ htmlInput: { maxLength: 12, inputMode: 'numeric' } }} />
-          <TextField label="Телефон" value={form.phone ?? ''} onChange={e => set('phone', e.target.value)} slotProps={{ htmlInput: { inputMode: 'tel' } }} />
+          <TextField label="ИНН" value={form.inn ?? ''} onChange={e => set('inn', e.target.value.replace(/\D/g, ''))} slotProps={{ htmlInput: { maxLength: 12, inputMode: 'decimal' } }} />
+          <TextField label="Телефон" value={form.phone ?? ''} onChange={e => set('phone', e.target.value)} slotProps={{ htmlInput: { inputMode: 'decimal' } }} />
         </Box>
         <TextField label="Контактное лицо" value={form.contactPerson ?? ''} onChange={e => set('contactPerson', e.target.value)} />
         <TextField label="Заметки" value={form.notes ?? ''} onChange={e => set('notes', e.target.value)} multiline minRows={2} placeholder="Дни поставки, условия оплаты…" />

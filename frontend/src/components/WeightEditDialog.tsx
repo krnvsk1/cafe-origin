@@ -36,7 +36,7 @@ const WeightEditDialog: React.FC<{
         </Box>
         <TextField
           autoFocus fullWidth label="Вес, г" type="number" value={text} onChange={e => setText(e.target.value)}
-          inputProps={{ min: MIN_GRAMS, max: MAX_GRAMS, step: 10, inputMode: 'numeric' }}
+          inputProps={{ min: MIN_GRAMS, max: MAX_GRAMS, step: 10, inputMode: 'decimal' }}
           error={!!text && !ok} helperText={!text || ok ? 'Сумма в счёте пересчитается' : `от ${MIN_GRAMS} г до ${MAX_GRAMS / 1000} кг`}
           onKeyDown={e => { if (e.key === 'Enter' && ok && !busy) void save(); }}
         />

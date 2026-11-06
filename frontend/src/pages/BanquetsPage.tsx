@@ -90,8 +90,8 @@ const BanquetForm: React.FC<{ banquet?: Banquet | null; onClose: () => void; onS
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.75, pt: '8px !important' }}>
         <TextField label="На кого (имя, компания)" value={f.customerName} onChange={e => set('customerName', e.target.value)} autoFocus />
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
-          <TextField label="Телефон" value={f.phone} onChange={e => set('phone', e.target.value)} slotProps={{ htmlInput: { inputMode: 'tel' } }} />
-          <TextField label="Гостей" value={f.guests} onChange={e => set('guests', e.target.value.replace(/\D/g, ''))} slotProps={{ htmlInput: { inputMode: 'numeric' } }} />
+          <TextField label="Телефон" value={f.phone} onChange={e => set('phone', e.target.value)} slotProps={{ htmlInput: { inputMode: 'decimal' } }} />
+          <TextField label="Гостей" value={f.guests} onChange={e => set('guests', e.target.value.replace(/\D/g, ''))} slotProps={{ htmlInput: { inputMode: 'decimal' } }} />
           <TextField label="Дата и время банкета" type="datetime-local" value={f.eventAt} onChange={e => set('eventAt', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
           <TextField label="Отправить на кухню" type="datetime-local" value={f.kitchenAt} onChange={e => set('kitchenAt', e.target.value)}
             slotProps={{ inputLabel: { shrink: true } }}

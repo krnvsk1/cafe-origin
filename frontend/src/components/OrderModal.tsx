@@ -313,7 +313,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
               fullWidth
               label="Телефон "
               type="tel"
-              inputProps={{ inputMode: 'tel', autoComplete: 'tel' }}
+              inputProps={{ inputMode: 'decimal', autoComplete: 'tel' }}
               value={phone}
               onChange={(e) => onPhoneChange(e.target.value)}
               margin="normal"

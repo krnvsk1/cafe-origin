@@ -68,7 +68,7 @@ const FiscalSettingsDialog: React.FC<{ open: boolean; state: FiscalState; onClos
             <MenuItem value="service">Услуга</MenuItem>
           </TextField>
           <TextField label="ИНН кассира (необязательно)" value={form.cashierInn ?? ''} onChange={e => set('cashierInn', e.target.value)}
-            slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 12 } }} />
+            slotProps={{ htmlInput: { inputMode: 'decimal', maxLength: 12 } }} />
         </Box>
         <FormControlLabel
           control={<Switch checked={form.sendToCustomer} onChange={e => set('sendToCustomer', e.target.checked)} />}
