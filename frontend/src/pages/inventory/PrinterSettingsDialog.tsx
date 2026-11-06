@@ -77,7 +77,7 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField label="IP-адрес принтера" value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.1.87" sx={{ flex: 1 }}
               helperText={<FieldHint text="Есть на тестовой странице: выключите принтер, зажмите FEED и включите" />} />
-            <TextField label="Порт" value={port} onChange={e => setPort(e.target.value.replace(/\D/g, ''))} sx={{ width: 110 }} />
+            <TextField label="Порт" value={port} onChange={e => setPort(e.target.value.replace(/\D/g, ''))} sx={{ width: 110 }} slotProps={{ htmlInput: { inputMode: 'numeric' } }} />
           </Box>
         ) : (
           <TextField label="Имя принтера в Windows" value={printerName} onChange={e => setPrinterName(e.target.value)}

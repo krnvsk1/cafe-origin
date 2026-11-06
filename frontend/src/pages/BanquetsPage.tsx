@@ -90,8 +90,8 @@ const BanquetForm: React.FC<{ banquet?: Banquet | null; onClose: () => void; onS
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.75, pt: '8px !important' }}>
         <TextField label="На кого (имя, компания)" value={f.customerName} onChange={e => set('customerName', e.target.value)} autoFocus />
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
-          <TextField label="Телефон" value={f.phone} onChange={e => set('phone', e.target.value)} inputMode="tel" />
-          <TextField label="Гостей" value={f.guests} onChange={e => set('guests', e.target.value.replace(/\D/g, ''))} inputMode="numeric" />
+          <TextField label="Телефон" value={f.phone} onChange={e => set('phone', e.target.value)} slotProps={{ htmlInput: { inputMode: 'tel' } }} />
+          <TextField label="Гостей" value={f.guests} onChange={e => set('guests', e.target.value.replace(/\D/g, ''))} slotProps={{ htmlInput: { inputMode: 'numeric' } }} />
           <TextField label="Дата и время банкета" type="datetime-local" value={f.eventAt} onChange={e => set('eventAt', e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
           <TextField label="Отправить на кухню" type="datetime-local" value={f.kitchenAt} onChange={e => set('kitchenAt', e.target.value)}
             slotProps={{ inputLabel: { shrink: true } }}
@@ -102,9 +102,9 @@ const BanquetForm: React.FC<{ banquet?: Banquet | null; onClose: () => void; onS
             <ToggleButton value="percent">% от суммы</ToggleButton>
             <ToggleButton value="amount">Суммой</ToggleButton>
           </ToggleButtonGroup>
-          <TextField size="small" label="Обслуживание" value={f.serviceValue} onChange={e => set('serviceValue', e.target.value)} inputMode="decimal"
+          <TextField size="small" label="Обслуживание" value={f.serviceValue} onChange={e => set('serviceValue', e.target.value)}
             placeholder="0 — без обслуживания" sx={{ flex: 1, minWidth: 160 }}
-            slotProps={{ input: { endAdornment: <InputAdornment position="end">{f.serviceType === 'percent' ? '%' : '₽'}</InputAdornment> } }} />
+            slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">{f.serviceType === 'percent' ? '%' : '₽'}</InputAdornment> } }} />
         </Box>
         <TextField label="Комментарий (зал, пожелания)" value={f.comment} onChange={e => set('comment', e.target.value)} multiline minRows={2} />
         {err && <Alert severity="error">{err}</Alert>}
@@ -136,9 +136,9 @@ const PrepayDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t
     <Dialog open onClose={() => !prepay.isPending && onClose()} maxWidth="xs" fullWidth>
       <DialogTitle>Предоплата</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
-        <TextField autoFocus label="Сумма" value={amount} onChange={e => setAmount(e.target.value)} inputMode="decimal"
+        <TextField autoFocus label="Сумма" value={amount} onChange={e => setAmount(e.target.value)}
           helperText={banquet.totals.due > 0 ? `Осталось оплатить ${money(banquet.totals.due)}` : undefined}
-          slotProps={{ input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
+          slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
         <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
           <ToggleButton value="card">Карта</ToggleButton>
           <ToggleButton value="cash">Наличные</ToggleButton>

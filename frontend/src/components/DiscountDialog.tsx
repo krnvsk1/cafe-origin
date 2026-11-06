@@ -60,9 +60,9 @@ const DiscountDialog: React.FC<{
             {[5, 10, 15, 20, 50].map(p => <Chip key={p} label={`${p}%`} color={num === p ? 'primary' : 'default'} onClick={() => setValue(String(p))} />)}
           </Box>
         )}
-        <TextField autoFocus label={type === 'percent' ? 'Процент' : 'Сумма скидки'} value={value} onChange={e => setValue(e.target.value)} inputMode="decimal"
+        <TextField autoFocus label={type === 'percent' ? 'Процент' : 'Сумма скидки'} value={value} onChange={e => setValue(e.target.value)}
           error={bad} helperText={bad ? 'Процент — от 0 до 100' : base > 0 ? `Скидка ${rub(d)} · к оплате ${rub(base - d)}` : undefined}
-          slotProps={{ input: { endAdornment: <InputAdornment position="end">{type === 'percent' ? '%' : '₽'}</InputAdornment> } }} />
+          slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">{type === 'percent' ? '%' : '₽'}</InputAdornment> } }} />
         <Typography variant="caption" color="text.secondary">Скидка распределится по позициям кассового чека.</Typography>
         {err && <Alert severity="error">{err}</Alert>}
       </DialogContent>

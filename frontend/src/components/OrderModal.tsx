@@ -312,6 +312,8 @@ const OrderModal: React.FC<OrderModalProps> = ({
             <TextField
               fullWidth
               label="Телефон "
+              type="tel"
+              inputProps={{ inputMode: 'tel', autoComplete: 'tel' }}
               value={phone}
               onChange={(e) => onPhoneChange(e.target.value)}
               margin="normal"

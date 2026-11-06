@@ -272,6 +272,8 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
             <TextField
               fullWidth
               label="Номер телефона"
+              type="tel"
+              inputProps={{ inputMode: 'tel', autoComplete: 'tel' }}
               value={phone}
               onChange={handlePhoneChange}
               placeholder="+7 (999) 123-45-67"
@@ -329,6 +331,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
             <TextField
               fullWidth
               label="Код из SMS"
+              inputProps={{ inputMode: 'numeric', autoComplete: 'one-time-code', pattern: '[0-9]*' }}
               value={code}
               onChange={handleCodeChange}
               placeholder="0000"
