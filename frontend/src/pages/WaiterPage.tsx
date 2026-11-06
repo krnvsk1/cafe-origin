@@ -775,7 +775,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         </MenuItem>
         {check.canDiscount && active.length > 0 && (
           <MenuItem onClick={() => { setMenu(null); setDialog('discount'); }}>
-            <ListItemText primary={check.discount ? 'Изменить скидку' : 'Скидка'}
+            <ListItemText primary={check.discount ? 'Изменить скидку' : 'Добавить скидку'}
               secondary={check.discount ? `Сейчас: −${money(check.discount)}${check.discountType === 'percent' ? ` (${check.discountValue}%)` : ''}` : undefined} />
           </MenuItem>
         )}

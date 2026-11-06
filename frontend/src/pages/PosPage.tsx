@@ -402,7 +402,7 @@ const Ticket: React.FC<{
 
         {canDiscount && lines.length > 0 && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button size="small" onClick={() => setDiscOpen(true)} sx={{ px: 1 }}>{disc ? 'Изменить скидку' : 'Скидка'}</Button>
+            <Button size="small" onClick={() => setDiscOpen(true)} sx={{ px: 1 }}>{disc ? 'Изменить скидку' : 'Добавить скидку'}</Button>
             {discount > 0 && (
               <Typography variant="body2" color="text.secondary">
                 {money(full)} − {money(discount)}{disc?.type === 'percent' ? ` (${disc.value}%)` : ''}

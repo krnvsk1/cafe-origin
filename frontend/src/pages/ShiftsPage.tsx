@@ -157,7 +157,7 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
         <Typography variant="body2" color="text.secondary">{order.deliveryType} · {order.customerName}{order.phone ? ` · ${order.phone}` : ''}</Typography>
         {canDiscount && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button size="small" onClick={() => setDiscOpen(true)}>{disc ? 'Изменить скидку' : 'Скидка'}</Button>
+            <Button size="small" onClick={() => setDiscOpen(true)}>{disc ? 'Изменить скидку' : 'Добавить скидку'}</Button>
             {discount > 0 && <Typography variant="body2" color="text.secondary">{money(order.total)} − {money(discount)}</Typography>}
           </Box>
         )}

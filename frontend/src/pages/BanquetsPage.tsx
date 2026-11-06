@@ -364,7 +364,7 @@ const BanquetView: React.FC<{ id: number }> = ({ id }) => {
         {(t.discount > 0 || b.canDiscount) && (
           <Row label={t.discount > 0 ? `Скидка${b.discountType === 'percent' ? ` ${b.discountValue}%` : ''}${b.discountBy ? ` (${b.discountBy})` : ''}` : 'Скидка'}
             value={t.discount > 0 ? `−${money(t.discount)}` : '—'}
-            action={b.canDiscount ? <Button size="small" onClick={() => setDialog('discount')} sx={{ ml: 1 }}>{t.discount > 0 ? 'Изменить' : 'Дать'}</Button> : undefined} />
+            action={b.canDiscount ? <Button size="small" onClick={() => setDialog('discount')} sx={{ ml: 1 }}>{t.discount > 0 ? 'Изменить' : 'Добавить'}</Button> : undefined} />
         )}
         <Row label={`Обслуживание${b.serviceType === 'percent' && b.serviceValue ? ` ${b.serviceValue}%` : ''}`} value={t.service > 0 ? money(t.service) : '—'}
           action={open ? <Button size="small" onClick={() => setDialog('edit')} sx={{ ml: 1 }}>Изменить</Button> : undefined} />
