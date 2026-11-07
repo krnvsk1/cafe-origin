@@ -111,6 +111,14 @@ namespace Cafe.API.Controllers
                 await _userManager.AddToRoleAsync(user, AppRoles.User);
                 _logger.LogInformation("Новый пользователь через Telegram: {TelegramId}", tg.Id);
             }
+            // Логин Telegram — сохраняем и обновляем при каждом входе (его могут сменить или убрать)
+            var username = Trim(tg.Username?.TrimStart('@'), 64);
+            if (user.TelegramUsername != username)
+            {
+                user.TelegramUsername = username;
+                user.UpdatedAt = DateTime.UtcNow;
+                await _userManager.UpdateAsync(user);
+            }
             return (user, null);
         }
 

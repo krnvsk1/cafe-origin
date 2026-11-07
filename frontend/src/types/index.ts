@@ -271,6 +271,8 @@ export interface Dish {
     firstName?: string | null;
     lastName?: string | null;
     phoneVerified: boolean;
+    /** Логин Telegram без @ */
+    telegramUsername?: string | null;
     roles: string[];
     /** Разрешения по всем ролям (приходят с профилем) */
     permissions?: string[];

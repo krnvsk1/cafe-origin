@@ -87,6 +87,7 @@ namespace Cafe.API.Controllers
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     PhoneVerified = user.PhoneVerified,
+                    TelegramUsername = user.TelegramUsername,
                     Roles = roles.ToList(),
                     CreatedAt = user.CreatedAt
                 });
@@ -122,6 +123,7 @@ namespace Cafe.API.Controllers
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 PhoneVerified = user.PhoneVerified,
+                TelegramUsername = user.TelegramUsername,
                 Roles = roles.ToList(),
                 CreatedAt = user.CreatedAt,
                 Addresses = addresses.Select(a => new UserAddressDto
@@ -386,6 +388,8 @@ namespace Cafe.API.Controllers
         public string? FirstName { get; set; }
         public string? LastName { get; set; }
         public bool PhoneVerified { get; set; }
+        /// <summary>Логин Telegram без @</summary>
+        public string? TelegramUsername { get; set; }
         public List<string> Roles { get; set; } = new();
         public DateTime CreatedAt { get; set; }
     }

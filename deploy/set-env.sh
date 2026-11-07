@@ -2,6 +2,7 @@
 # Записать настройки в /opt/cafe/.env (файл не в git — git pull его не трогает) и перезапустить API.
 #
 #   sh deploy/set-env.sh telegram              — спросит токен и имя бота (секрет вебхука создаст сам)
+#   sh deploy/set-env.sh sms                   — спросит SMS-сервис (smsaero/smsru), логин, ключ и имя отправителя
 #   sh deploy/set-env.sh КЛЮЧ=значение [...]   — любые переменные, например EXTRA_DOMAINS="xn--... www.xn--..."
 #
 # Перед изменением делается копия .env.bak-ДАТА. Значения секретов на экран не выводятся.
@@ -31,7 +32,7 @@ ask() {
 	eval "$1=\$answer"
 }
 
-[ $# -gt 0 ] || { sed -n '2,6p' "$0"; exit 1; }
+[ $# -gt 0 ] || { sed -n '2,7p' "$0"; exit 1; }
 cp "$ENV" "$ENV.bak-$(date +%Y%m%d-%H%M%S)"
 chmod 600 "$ENV" "$ENV".bak-* 2>/dev/null || true
 
@@ -45,6 +46,19 @@ if [ "$1" = telegram ]; then
 	if ! grep -q '^TELEGRAM_WEBHOOK_SECRET=.\+' "$ENV"; then
 		set_var TELEGRAM_WEBHOOK_SECRET "$(openssl rand -hex 16)"
 	fi
+elif [ "$1" = sms ]; then
+	echo "SMS-коды подтверждения телефона перед доставкой"
+	ask provider "Сервис: smsaero или smsru"
+	case "$provider" in smsaero|smsru) ;; *) echo "Нужно smsaero или smsru — ничего не меняю"; exit 1 ;; esac
+	login=""
+	[ "$provider" = smsaero ] && ask login "Email аккаунта SMS Aero"
+	ask key "API-ключ" hide
+	ask sender "Имя отправителя (Enter — общее имя сервиса)"
+	[ -n "$key" ] || { echo "Ключ пустой — ничего не меняю"; exit 1; }
+	set_var SMS_PROVIDER "$provider"
+	set_var SMS_LOGIN "$login"
+	set_var SMS_API_KEY "$key"
+	set_var SMS_SENDER "$sender"
 else
 	for pair in "$@"; do
 		case "$pair" in *=*) set_var "${pair%%=*}" "${pair#*=}" ;; *) echo "Ожидается КЛЮЧ=значение: $pair"; exit 1 ;; esac

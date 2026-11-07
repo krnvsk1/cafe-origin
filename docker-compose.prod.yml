@@ -34,6 +34,11 @@ services:
       Telegram__WebhookSecret: ${TELEGRAM_WEBHOOK_SECRET:-}
       Telegram__PublicApiUrl: https://${DOMAIN}
       Telegram__WebAppUrl: https://${DOMAIN}
+      # SMS-коды подтверждения телефона перед доставкой: smsaero (SMS_LOGIN — email) или smsru
+      Sms__Provider: ${SMS_PROVIDER:-}
+      Sms__Login: ${SMS_LOGIN:-}
+      Sms__ApiKey: ${SMS_API_KEY:-}
+      Sms__Sender: ${SMS_SENDER:-}
       YooKassa__ShopId: ${YOOKASSA_SHOP_ID:-}
       YooKassa__SecretKey: ${YOOKASSA_SECRET_KEY:-}
       YooKassa__ReturnUrl: https://${DOMAIN}

@@ -91,6 +91,7 @@ const UsersPage: React.FC = () => {
     const query = searchQuery.toLowerCase();
     return users.filter(user =>
       user.phone.toLowerCase().includes(query) ||
+      user.telegramUsername?.toLowerCase().includes(query.replace(/^@/, '')) ||
       user.firstName?.toLowerCase().includes(query) ||
       user.lastName?.toLowerCase().includes(query) ||
       user.id.toString().includes(query)
@@ -342,7 +343,7 @@ const UsersPage: React.FC = () => {
                   <TableHead>
                     <TableRow>
                       <TableCell>Пользователь</TableCell>
-                      <TableCell>Телефон</TableCell>
+                      <TableCell>Телефон / Telegram</TableCell>
                       <TableCell>Роли</TableCell>
                       <TableCell>Баллы</TableCell>
                       <TableCell>Статус</TableCell>
@@ -379,8 +380,14 @@ const UsersPage: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {user.phone}
+                            {user.phone || '—'}
                           </Typography>
+                          {user.telegramUsername && (
+                            <Typography variant="caption" component="a" href={`https://t.me/${user.telegramUsername}`} target="_blank" rel="noopener noreferrer"
+                              sx={{ color: 'text.secondary', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                              @{user.telegramUsername}
+                            </Typography>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>

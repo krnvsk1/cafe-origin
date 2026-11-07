@@ -71,7 +71,7 @@ namespace Cafe.API.Services
                     if (remainingBlock.TotalSeconds > 0)
                     {
                         return (false,
-                            $"Too many attempts. Try again in {(int)remainingBlock.TotalMinutes + 1} min",
+                            $"Слишком много попыток. Попробуйте через {(int)remainingBlock.TotalMinutes + 1} мин",
                             Math.Max(0, (int)remainingBlock.TotalSeconds));
                     }
                     // Блок истёк — удаляем старую запись
@@ -85,7 +85,7 @@ namespace Cafe.API.Services
                     {
                         var retryAfter = ResendCooldownSeconds - (int)timeSinceCreation.TotalSeconds;
                         return (false,
-                            $"Wait {retryAfter} seconds before resending",
+                            $"Новый код можно запросить через {retryAfter} с",
                             Math.Max(0, retryAfter));
                     }
 
@@ -109,10 +109,10 @@ namespace Cafe.API.Services
 
             if (!smsSuccess)
             {
-                return (false, smsMessage ?? "Failed to send SMS", null);
+                return (false, smsMessage ?? "Не удалось отправить SMS", null);
             }
 
-            return (true, "Verification code sent", null);
+            return (true, "Код отправлен", null);
         }
 
         public async Task<(bool Success, string Message)> VerifyCodeAsync(string phone, string code)
@@ -126,22 +126,22 @@ namespace Cafe.API.Services
 
             if (verificationCode == null)
             {
-                return (false, "Code not found. Request a new code");
+                return (false, "Код не найден — запросите новый");
             }
 
             if (verificationCode.IsBlocked)
             {
-                return (false, "Too many attempts. Request a new code");
+                return (false, "Слишком много попыток — запросите новый код");
             }
 
             if (verificationCode.IsExpired)
             {
-                return (false, "Code expired. Request a new code");
+                return (false, "Код устарел — запросите новый");
             }
 
             if (verificationCode.IsVerified)
             {
-                return (false, "Code already used");
+                return (false, "Код уже использован — запросите новый");
             }
 
             verificationCode.Attempts++;
@@ -153,22 +153,22 @@ namespace Cafe.API.Services
                     verificationCode.BlockedUntil = DateTime.UtcNow.AddMinutes(BlockDurationMinutes);
                     await _context.SaveChangesAsync();
                     return (false,
-                        $"Too many attempts. Try again in {BlockDurationMinutes} minutes");
+                        $"Слишком много попыток. Попробуйте через {BlockDurationMinutes} мин");
                 }
 
                 await _context.SaveChangesAsync();
                 var remainingAttempts = MaxAttempts - verificationCode.Attempts;
                 return (false,
-                    $"Invalid code. {remainingAttempts} attempts remaining");
+                    $"Неверный код. Осталось попыток: {remainingAttempts}");
             }
 
             verificationCode.VerifiedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            return (true, "Code verified");
+            return (true, "Телефон подтверждён");
         }
 
-        private static string NormalizePhone(string phone)
+        public static string NormalizePhone(string phone)
         {
             var digits = new string(phone.Where(c => char.IsDigit(c) || c == '+').ToArray());
 

@@ -17,6 +17,7 @@ namespace Cafe.API.Authorization
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 PhoneVerified = user.PhoneVerified,
+                TelegramUsername = user.TelegramUsername,
                 Roles = roles,
                 Permissions = granted.OrderBy(p => p).ToList(),
                 RoleTitles = roles

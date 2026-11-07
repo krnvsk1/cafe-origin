@@ -362,6 +362,18 @@ namespace Cafe.API.Controllers
                     var allowed = SalesChannels.Parse(blocked.OrderTypes) ?? SalesChannels.Parse(blocked.ParentTypes) ?? SalesChannels.All;
                     return BadRequest(new { Message = $"«{blocked.ParentName ?? blocked.Name}» можно заказать {SalesChannels.Describe(allowed)} — уберите позицию из корзины или выберите другой способ получения" });
                 }
+                // Доставка — только с подтверждённым по SMS телефоном (когда SMS-сервис подключён); в заказ идёт этот телефон
+                string? verifiedPhone = null;
+                if (deliveryType == "Доставка" && PhoneController.Required(HttpContext.RequestServices.GetRequiredService<ISmsService>()))
+                {
+                    if (userId == null)
+                        return BadRequest(new { Message = "Для доставки войдите и подтвердите телефон", Code = "phone_required" });
+                    var phoneInfo = await _context.Users.AsNoTracking().Where(u => u.Id == userId)
+                        .Select(u => new { u.PhoneNumber, u.PhoneVerified }).FirstOrDefaultAsync();
+                    if (phoneInfo == null || !phoneInfo.PhoneVerified || string.IsNullOrWhiteSpace(phoneInfo.PhoneNumber))
+                        return BadRequest(new { Message = "Для доставки подтвердите телефон по SMS", Code = "phone_required" });
+                    verifiedPhone = phoneInfo.PhoneNumber;
+                }
                 if (deliveryType == "Доставка")
                 {
                     var zones = await _context.DeliveryZones.AsNoTracking()
@@ -393,7 +405,7 @@ namespace Cafe.API.Controllers
                 {
                     UserId = userId,
                     CustomerName = request.CustomerName.Trim(),
-                    Phone = request.Phone?.Trim() ?? string.Empty,
+                    Phone = verifiedPhone ?? request.Phone?.Trim() ?? string.Empty,
                     Address = request.Address?.Trim() ?? string.Empty,
                     Total = 0,
                     Status = "Новый",

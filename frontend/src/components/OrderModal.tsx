@@ -34,6 +34,9 @@ import { useNavigate } from 'react-router-dom';
 import { useCreateOrder, useRestaurantSettings } from '../api/hooks';
 import { buildScheduleDays } from '../utils/schedule';
 import AddressMapPicker from './AddressMapPicker';
+import PhoneVerify from './PhoneVerify';
+import { usePhoneRequired } from '../api/phone';
+import { useAuthStore } from '../store/authStore';
 import { useDeliveryZones, useDeliveryRules } from '../api/zones';
 import type { ZoneCheck } from '../api/zones';
 import { isMapsConfigured } from '../utils/yandexMaps';
@@ -50,6 +53,8 @@ interface OrderModalProps {
   open: boolean;
   onClose: () => void;
   onBackToCart: () => void;
+  /** Открыть вход (для доставки нужен вход и подтверждённый телефон) */
+  onLoginClick?: () => void;
   deliveryType: DeliveryType;
   address: string;
   onAddressChange: (addr: string) => void;
@@ -65,6 +70,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
   open,
   onClose,
   onBackToCart,
+  onLoginClick,
   deliveryType,
   address,
   onAddressChange,
@@ -140,6 +146,11 @@ const OrderModal: React.FC<OrderModalProps> = ({
 
   const finalTotal = Math.max(0, totalAmount - discountAmount - pointsDiscount) + deliveryPrice;
 
+  // Доставка — с подтверждённым по SMS телефоном (когда SMS-сервис подключён)
+  const user = useAuthStore(s => s.user);
+  const { data: phoneRule } = usePhoneRequired();
+  const needPhone = deliveryType === 'Доставка' && !!phoneRule?.required && !(user?.phoneVerified && user.phone);
+
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
     setSnackbar({ open: true, message, severity });
   };
@@ -147,6 +158,10 @@ const OrderModal: React.FC<OrderModalProps> = ({
   const handleSubmit = async () => {
     if (!customerName.trim()) {
       showSnackbar('Введите имя клиента', 'error');
+      return;
+    }
+    if (needPhone) {
+      showSnackbar(user ? 'Подтвердите телефон по SMS' : 'Для доставки войдите через Telegram', 'error');
       return;
     }
     if (!phone.trim()) {
@@ -309,18 +324,28 @@ const OrderModal: React.FC<OrderModalProps> = ({
               disabled={createOrder.isPending}
               sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
             />
-            <TextField
-              fullWidth
-              label="Телефон "
-              type="tel"
-              inputProps={{ inputMode: 'decimal', autoComplete: 'tel' }}
-              value={phone}
-              onChange={(e) => onPhoneChange(e.target.value)}
-              margin="normal"
-              required
-              disabled={createOrder.isPending}
-              sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
-            />
+            {needPhone && !user ? (
+              <Alert severity="info" sx={{ mt: 2, borderRadius: 3 }}
+                action={onLoginClick ? <Button color="inherit" size="small" onClick={onLoginClick}>Войти</Button> : undefined}>
+                Для доставки войдите через Telegram и подтвердите телефон.
+              </Alert>
+            ) : needPhone ? (
+              <PhoneVerify phone={phone} onPhoneChange={onPhoneChange} disabled={createOrder.isPending} />
+            ) : (
+              <TextField
+                fullWidth
+                label="Телефон "
+                type="tel"
+                inputProps={{ inputMode: 'decimal', autoComplete: 'tel' }}
+                value={deliveryType === 'Доставка' && phoneRule?.required ? user?.phone ?? phone : phone}
+                onChange={(e) => onPhoneChange(e.target.value)}
+                margin="normal"
+                required
+                disabled={createOrder.isPending || (deliveryType === 'Доставка' && !!phoneRule?.required)}
+                helperText={deliveryType === 'Доставка' && phoneRule?.required ? 'Подтверждён по SMS' : undefined}
+                sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
+              />
+            )}
             {deliveryType === 'Доставка' && useZones && (
               <AddressMapPicker
                 address={address}
@@ -602,7 +627,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
             fullWidth
             disabled={cartItems.length === 0 || createOrder.isPending ||
               (deliveryType === 'Доставка' && !address.trim()) || zoneBlocked || belowMin ||
-              !customerName.trim() || !phone.trim() // Добавлена валидация для имени и телефона
+              !customerName.trim() || needPhone || !phone.trim()
             }
             startIcon={createOrder.isPending ? <CircularProgress size={20} color="inherit" /> : null}
             sx={{

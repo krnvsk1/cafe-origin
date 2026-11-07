@@ -62,6 +62,8 @@ namespace Cafe.API.DTOs.Auth
         public string? FirstName { get; set; }
         public string? LastName { get; set; }
         public bool PhoneVerified { get; set; }
+        /// <summary>Логин Telegram без @</summary>
+        public string? TelegramUsername { get; set; }
         public IList<string> Roles { get; set; } = new List<string>();
         /// <summary>Разрешения по всем ролям пользователя — по ним интерфейс показывает разделы</summary>
         public IList<string> Permissions { get; set; } = new List<string>();

@@ -225,7 +225,9 @@ builder.Services.Configure<RestaurantOptions>(builder.Configuration.GetSection(R
 builder.Services.Configure<ReferralOptions>(builder.Configuration.GetSection(ReferralOptions.SectionName));
 
 // Custom Services
-builder.Services.AddScoped<ISmsService, SmsService>();
+builder.Services.AddMemoryCache();
+builder.Services.Configure<SmsOptions>(builder.Configuration.GetSection(SmsOptions.SectionName));
+builder.Services.AddHttpClient<ISmsService, SmsService>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IVerificationService, VerificationService>();
 

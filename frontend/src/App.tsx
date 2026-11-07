@@ -510,6 +510,7 @@ function App() {
               open={orderOpen}
               onClose={closeOrder}
               onBackToCart={backToCart}
+              onLoginClick={() => setAuthOpen(true)}
               deliveryType={deliveryType}
               address={address}
               onAddressChange={setAddress}

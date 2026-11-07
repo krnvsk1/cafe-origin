@@ -253,6 +253,11 @@ namespace Cafe.API.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("telegram_user_id");
 
+                    b.Property<string>("TelegramUsername")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("telegram_username");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
 

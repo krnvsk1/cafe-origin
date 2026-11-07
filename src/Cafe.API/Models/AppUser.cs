@@ -45,6 +45,11 @@ namespace Cafe.API.Models
         [Column("telegram_user_id")]
         public long? TelegramUserId { get; set; }
 
+        // Логин в Telegram (@username, без @) — обновляется при каждом входе через Telegram
+        [MaxLength(64)]
+        [Column("telegram_username")]
+        public string? TelegramUsername { get; set; }
+
         // Присылать уведомления о статусе заказов в Telegram
         [Column("telegram_notifications")]
         public bool TelegramNotifications { get; set; } = true;
