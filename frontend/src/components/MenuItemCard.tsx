@@ -13,6 +13,8 @@ import { allowedOrderTypes, describeOrderTypes } from '../utils/orderTypes';
 interface MenuItemCardProps {
   item: Dish;
   onOpen: () => void;
+  /** «Добавить»: сразу в корзину, если выбирать нечего (иначе — как onOpen) */
+  onAdd?: () => void;
   isFavorite?: boolean;
   // Если не передан — кнопка «в избранное» не показывается (например, для гостей)
   onToggleFavorite?: () => void;
@@ -30,9 +32,9 @@ const priceOf = (item: Dish) => {
 
 /**
  * Карточка позиции меню: фото, цена, название, кнопка «Добавить».
- * Клик по карточке или кнопке открывает выбор варианта и добавок.
+ * Клик по карточке открывает её; «Добавить» сразу кладёт в корзину, если выбирать нечего.
  */
-const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = false, onToggleFavorite, inCartCount = 0 }) => {
+const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, onAdd, isFavorite = false, onToggleFavorite, inCartCount = 0 }) => {
   const theme = useTheme();
   const muted = theme.palette.mode === 'light' ? tokens.light.surfaceMuted : tokens.dark.surfaceMuted;
   const image = item.primaryImage || item.images?.find(i => i.isPrimary)?.filePath || item.images?.[0]?.filePath;
@@ -161,7 +163,7 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, isFavorite = 
         <Button
           fullWidth
           startIcon={inCartCount > 0 ? undefined : <AddIcon />}
-          onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          onClick={(e) => { e.stopPropagation(); (onAdd ?? onOpen)(); }}
           sx={{
             mt: 1.25,
             bgcolor: inCartCount > 0 ? tokens.saffron : muted,

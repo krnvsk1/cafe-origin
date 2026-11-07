@@ -28,6 +28,10 @@ import { useFavoriteIds, useToggleFavorite } from '../api/favorites';
 import { useDishes, useRestaurantSettings, useBrand } from '../api/hooks';
 import type { Dish, SelectedAddon } from '../types';
 import ProductModal from '../components/ProductModal';
+import { useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '../api/client';
+import type { AddonCategory } from '../types';
+import { isWeightedDish } from '../utils/weight';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { tokens } from '../theme';
@@ -228,6 +232,28 @@ const MenuPage: React.FC = () => {
     addToCart(product, quantity, selectedAddons, instructions, selectedChild, weight);
   };
 
+  // «Добавить» на карточке: блюдо без разновидностей, не весовое и без обязательных добавок —
+  // сразу в корзину; иначе — карточка с выбором
+  const queryClient = useQueryClient();
+  const quickAdd = async (card: Dish) => {
+    const children = (card.children ?? []).filter(c => c.isAvailable);
+    const child = children[0];
+    if (children.length > 1 || isWeightedDish(card, child)) { setSelectedProduct(card); return; }
+    const dishId = child?.id ?? card.id;
+    try {
+      const groups = await queryClient.fetchQuery<AddonCategory[]>({
+        queryKey: ['dish-addons', dishId],
+        queryFn: () => apiClient.get(`/api/addons/dish/${dishId}`).then(r => r.data),
+        staleTime: 5 * 60 * 1000,
+      });
+      if (groups.some(g => g.isRequired)) { setSelectedProduct(card); return; }
+    } catch {
+      setSelectedProduct(card);
+      return;
+    }
+    addToCart(card, 1, [], '', child);
+  };
+
   return (
     <>
       <RestaurantHero />
@@ -347,6 +373,7 @@ const MenuPage: React.FC = () => {
                     key={card.id}
                     item={card}
                     onOpen={() => setSelectedProduct(card)}
+                    onAdd={() => quickAdd(card)}
                     inCartCount={inCart.get(card.id) ?? 0}
                     isFavorite={favoriteSet.has(card.id)}
                     onToggleFavorite={isAuthenticated
