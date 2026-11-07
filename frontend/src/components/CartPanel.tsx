@@ -5,7 +5,7 @@ import { useCartStore, useTotalItems, useTotalPrice } from '../store/cartStore';
 import { useOrderFlowStore } from '../store/orderFlowStore';
 import type { CartItem } from '../types';
 
-export const MIN_ORDER = 499;
+import { useMinOrder } from '../api/zones';
 
 const lineTotal = (item: CartItem) => {
   const base = item.selectedChild?.price ?? item.price;
@@ -45,7 +45,8 @@ const CartPanel: React.FC = () => {
   const totalItems = useTotalItems();
   const totalPrice = useTotalPrice();
   const openCart = useOrderFlowStore(s => s.openCart);
-  const left = Math.max(0, MIN_ORDER - totalPrice);
+  const minOrder = useMinOrder(useOrderFlowStore(s => s.deliveryType));
+  const left = Math.max(0, minOrder - totalPrice);
 
   return (
     <Box

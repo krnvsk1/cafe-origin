@@ -1,4 +1,5 @@
 import React from 'react';
+import { useMinOrder } from '../api/zones';
 import {
   Dialog,
   DialogTitle,
@@ -84,7 +85,7 @@ const CartModal: React.FC<CartModalProps> = ({
 
   const pointsBalance = pointsBalanceData?.balance ?? 0;
 
-  const MIN_ORDER = 499;
+  const MIN_ORDER = useMinOrder(deliveryType);
   const deliveryPrice = 0;
   const isMinOrderReached = totalPrice >= MIN_ORDER;
   const deliveryOptions: DeliveryType[] = ['Доставка', 'Самовывоз', 'В зале'];

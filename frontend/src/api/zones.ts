@@ -71,6 +71,12 @@ export const useDeliveryRules = () =>
     staleTime: 5 * 60 * 1000,
   });
 
+/** Минимальная сумма заказа: только для доставки (из «Зон доставки»); самовывоз и «в зале» — без минимума */
+export const useMinOrder = (deliveryType: string) => {
+  const { data } = useDeliveryRules();
+  return deliveryType === 'Доставка' ? data?.minOrderAmount ?? 0 : 0;
+};
+
 export const useSaveDeliveryRules = () => {
   const qc = useQueryClient();
   return useMutation({
