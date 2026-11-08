@@ -16,8 +16,12 @@ namespace Cafe.API.Services
         private readonly IOrderStatusService _statusService;
         private readonly IOrderEventBus _events;
 
-        public VoidService(ApplicationDbContext context, IInventoryService inventory, IOrderStatusService statusService, IOrderEventBus events)
+        private readonly KitchenPushNotifier? _kitchenPush;
+
+        public VoidService(ApplicationDbContext context, IInventoryService inventory, IOrderStatusService statusService, IOrderEventBus events,
+            KitchenPushNotifier? kitchenPush = null)
         {
+            _kitchenPush = kitchenPush;
             _context = context;
             _inventory = inventory;
             _statusService = statusService;
@@ -76,7 +80,12 @@ namespace Cafe.API.Services
             if (!NeedsKitchen(order.Status))
                 await ApplyAsync(v, writeOff: AlreadyMade(order.Status), resolvedBy: userId);
             else
+            {
                 _events.Publish(new OrderEvent("updated", order.Id, order.UserId, order.Status, null, DateTime.UtcNow));
+                // Повару на телефон: отказ ждёт решения кухни
+                if (_kitchenPush != null)
+                    try { await _kitchenPush.VoidRequestAsync(v); } catch { /* уведомление не обязательно */ }
+            }
             return v;
         }
 

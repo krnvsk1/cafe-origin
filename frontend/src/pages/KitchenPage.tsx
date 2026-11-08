@@ -22,6 +22,7 @@ import {
 } from '../utils/sound';
 import { formatScheduled } from '../utils/schedule';
 import FullscreenButton from '../components/FullscreenButton';
+import { PushButton } from './WaiterPage';
 import { useWorkScreen, useWidePage, useScreenScale } from '../hooks/useFullscreen';
 import KitchenTechCardDialog from '../components/KitchenTechCardDialog';
 import WeightEditDialog from '../components/WeightEditDialog';
@@ -381,6 +382,9 @@ const KitchenPage: React.FC = () => {
         </Tooltip>
         <Tooltip title="Мельче"><span><IconButton onClick={() => changeZoom(-0.1)} disabled={zoomFactor <= 0.5} aria-label="Мельче"><ZoomOutIcon /></IconButton></span></Tooltip>
         <Tooltip title="Крупнее"><span><IconButton onClick={() => changeZoom(0.1)} disabled={zoomFactor >= 2} aria-label="Крупнее"><ZoomInIcon /></IconButton></span></Tooltip>
+        <PushButton title="Уведомления для кухни"
+          text="Пришёл новый заказ или официант убирает блюдо, которое уже готовят, — на этот телефон придёт уведомление, даже если экран заблокирован. Нажмите на него, чтобы открыть кухню."
+          hint="Включите уведомления — телефон подскажет о новых заказах" />
         <FullscreenButton />
       </Box>
 
