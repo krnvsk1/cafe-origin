@@ -299,6 +299,8 @@ builder.Services.AddHostedService<Cafe.API.Services.BanquetKitchenWorker>();
 builder.Services.AddScoped<Cafe.API.Services.ShiftService>();
 builder.Services.AddSingleton<Cafe.API.Services.WebPushService>();
 builder.Services.AddScoped<Cafe.API.Services.WaiterReadyNotifier>();
+builder.Services.AddScoped<Cafe.API.Services.KitchenPushNotifier>();
+builder.Services.AddHostedService<Cafe.API.Services.KitchenPushWorker>();
 
 // Онлайн-касса АТОЛ (АТОЛ Web Server в локальной сети): чеки по заказам кассы
 builder.Services.AddSingleton<Cafe.API.Services.Fiscal.FiscalSettingsProvider>();
