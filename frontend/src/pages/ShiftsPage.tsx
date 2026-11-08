@@ -166,8 +166,8 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
           <Alert severity="info">Оплачен онлайн — способ оплаты не меняется.</Alert>
         ) : (
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
-            {staffInfo?.allowed && <ToggleButton value="staff">На сотрудника</ToggleButton>}
             <ToggleButton value="card">Карта</ToggleButton>
+            {staffInfo?.allowed && <ToggleButton value="staff">На сотрудника</ToggleButton>}
             <ToggleButton value="cash">Наличные</ToggleButton>
           </ToggleButtonGroup>
         )}
