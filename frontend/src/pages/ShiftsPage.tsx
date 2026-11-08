@@ -167,9 +167,9 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
           <Alert severity="info">Оплачен онлайн — способ оплаты не меняется.</Alert>
         ) : (
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
-            <ToggleButton value="cash">Наличные</ToggleButton>
-            <ToggleButton value="card">Карта</ToggleButton>
             {staffInfo?.allowed && <ToggleButton value="staff">На сотрудника</ToggleButton>}
+            <ToggleButton value="card">Карта</ToggleButton>
+            <ToggleButton value="cash">Наличные</ToggleButton>
           </ToggleButtonGroup>
         )}
         {method === 'staff' && staffInfo?.allowed && (
@@ -179,7 +179,6 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
             </TextField>
             <TextField size="small" label="Причина (необязательно)" value={reason} onChange={e => setReason(e.target.value)}
               placeholder={staffInfo.reasons[0]} slotProps={{ htmlInput: { maxLength: 60 } }} />
-            <Alert severity="info">Без оплаты: чек в АТОЛ не отправляется, сумма — к удержанию с сотрудника, в выручку не входит.</Alert>
           </>
         )}
         {err && <Alert severity="error">{err}</Alert>}

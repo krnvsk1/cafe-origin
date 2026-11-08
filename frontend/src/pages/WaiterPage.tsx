@@ -954,8 +954,8 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           )}
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
-            <ToggleButton value="cash">Наличные</ToggleButton>
             {staffInfo?.allowed && <ToggleButton value="staff">На сотрудника</ToggleButton>}
+            <ToggleButton value="cash">Наличные</ToggleButton>
           </ToggleButtonGroup>
           {method === 'staff' && staffInfo?.allowed && (
             <>
@@ -967,10 +967,6 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
               </Box>
               <TextField size="small" label="Причина (необязательно)" value={staffReason} onChange={e => setStaffReason(e.target.value)}
                 placeholder={staffInfo.reasons[0]} slotProps={{ htmlInput: { maxLength: 60 } }} />
-              <Alert severity="info">
-                Без оплаты: деньги не принимаются, чек в АТОЛ не отправляется. Сумма записывается на сотрудника — к удержанию.
-                {check.printEnabled ? ' На принтер счетов выйдет счёт на сотрудника.' : ''}
-              </Alert>
             </>
           )}
           {method === 'cash' && (
@@ -996,8 +992,8 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           <Typography variant="body2" color="text.secondary">Сейчас: {payLabel(check.paymentMethod)}</Typography>
           <ToggleButtonGroup exclusive fullWidth value={repay} onChange={(_, v) => v && setRepay(v)}>
             <ToggleButton value="card" disabled={check.paymentMethod === 'card'}>Карта</ToggleButton>
-            <ToggleButton value="cash" disabled={check.paymentMethod === 'cash'}>Наличные</ToggleButton>
             {check.canFixToStaff && <ToggleButton value="staff">На сотрудника</ToggleButton>}
+            <ToggleButton value="cash" disabled={check.paymentMethod === 'cash'}>Наличные</ToggleButton>
           </ToggleButtonGroup>
           {repay === 'staff' && (
             <>

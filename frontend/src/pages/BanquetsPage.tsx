@@ -183,8 +183,8 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
         {t.due > 0 && (
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
-            <ToggleButton value="cash">Наличные</ToggleButton>
             {banquet.staffAllowed && <ToggleButton value="staff">На сотрудника</ToggleButton>}
+            <ToggleButton value="cash">Наличные</ToggleButton>
           </ToggleButtonGroup>
         )}
         {t.due > 0 && method === 'staff' && (
