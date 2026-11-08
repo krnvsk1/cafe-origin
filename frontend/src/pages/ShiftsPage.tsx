@@ -131,7 +131,6 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
   const [method, setMethod] = React.useState<string>(online ? 'online' : order.paymentMethod === 'card' ? 'card' : 'cash');
   const { data: staffInfo } = useStaffChecksInfo(!online);
   const [staffId, setStaffId] = React.useState<number | ''>('');
-  const [reason, setReason] = React.useState('');
   const [err, setErr] = React.useState('');
   const canDiscount = useCan()(P.Discounts) && !online;
   const [disc, setDisc] = React.useState<{ type: DiscountType; value: number } | null>(null);
@@ -145,7 +144,7 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
     setErr('');
     try {
       const r = await close.mutateAsync({ id: order.id, paymentMethod: method,
-        ...(method === 'staff' ? { staffUserId: staffId === '' ? null : staffId, staffReason: reason.trim() || null } : {}),
+        ...(method === 'staff' ? { staffUserId: staffId === '' ? null : staffId } : {}),
         ...(disc ? { discountType: disc.type, discountValue: disc.value } : {}) });
       onDone(`Заказ #${order.id} закрыт · ${payLabel(method === 'online' ? 'онлайн' : method)}. ${atolText(r.fiscal, r.fiscalSkipped, r.staff)}`);
     } catch (e) { setErr(apiError(e)); }
@@ -177,8 +176,6 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
             <TextField select label="Сотрудник" value={staffId} onChange={e => setStaffId(Number(e.target.value))}>
               {(staffInfo.staff ?? []).map(u => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
             </TextField>
-            <TextField size="small" label="Причина (необязательно)" value={reason} onChange={e => setReason(e.target.value)}
-              placeholder={staffInfo.reasons[0]} slotProps={{ htmlInput: { maxLength: 60 } }} />
           </>
         )}
         {err && <Alert severity="error">{err}</Alert>}

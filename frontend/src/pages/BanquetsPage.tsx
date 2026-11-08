@@ -162,12 +162,11 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
   const t = banquet.totals;
   const [method, setMethod] = React.useState<'cash' | 'card' | 'staff'>('card');
   const [staffId, setStaffId] = React.useState<number | ''>(() => (banquet.me && banquet.staff?.some(u => u.id === banquet.me) ? banquet.me : ''));
-  const [reason, setReason] = React.useState('');
   const [err, setErr] = React.useState('');
   const submit = async () => {
     setErr('');
     try {
-      const r = await close.mutateAsync({ id: banquet.id, method, ...(method === 'staff' ? { staffUserId: staffId === '' ? null : staffId, staffReason: reason.trim() || null } : {}) });
+      const r = await close.mutateAsync({ id: banquet.id, method, ...(method === 'staff' ? { staffUserId: staffId === '' ? null : staffId } : {}) });
       onDone(`Банкет закрыт · ${money(r.total)}. ${atolText(r.fiscal, r.fiscalSkipped, r.staff)}`);
     } catch (e) { setErr(apiError(e)); }
   };
@@ -192,7 +191,6 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
             <TextField select label="Сотрудник" value={staffId} onChange={e => setStaffId(Number(e.target.value))}>
               {(banquet.staff ?? []).map(u => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
             </TextField>
-            <TextField size="small" label="Причина (необязательно)" value={reason} onChange={e => setReason(e.target.value)} slotProps={{ htmlInput: { maxLength: 60 } }} />
             <Alert severity="info">Остаток без оплаты — к удержанию с сотрудника, в выручку не входит и в чек не попадает.</Alert>
           </>
         )}

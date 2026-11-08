@@ -642,7 +642,6 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   // Закрытие на сотрудника: без оплаты и без чека ККТ
   const { data: staffInfo } = useStaffChecksInfo(closing);
   const [staffUserId, setStaffUserId] = React.useState<number | ''>('');
-  const [staffReason, setStaffReason] = React.useState('');
   // По умолчанию — на того, кто закрывает: можно ничего не выбирать
   React.useEffect(() => {
     if (closing && staffUserId === '' && staffInfo?.me && staffInfo.staff?.some(u => u.id === staffInfo.me)) setStaffUserId(staffInfo.me);
@@ -662,14 +661,13 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const [repayErr, setRepayErr] = React.useState('');
   const { data: repayStaff } = useStaffChecksInfo(!!repay && !!check?.canFixToStaff);
   const [fixStaffId, setFixStaffId] = React.useState<number | ''>('');
-  const [fixReason, setFixReason] = React.useState('');
   const doRepay = async () => {
     if (!repay || !check) return;
     setRepayErr('');
     try {
       const r = await changePayment.mutateAsync({
         checkId: check.id, paymentMethod: repay,
-        ...(repay === 'staff' ? { staffUserId: fixStaffId === '' ? null : fixStaffId, staffReason: fixReason.trim() || null } : {}),
+        ...(repay === 'staff' ? { staffUserId: fixStaffId === '' ? null : fixStaffId } : {}),
       });
       setRepay(null);
       const ret = r.returned ? `Возврат пробит${r.returned.fiscalDocumentNumber ? ` (ФД ${r.returned.fiscalDocumentNumber})` : ''}. ` : '';
@@ -715,7 +713,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
     try {
       const r = await close.mutateAsync({
         checkId: check.id, paymentMethod: method, cashReceived: method === 'cash' && received > 0 ? received : null,
-        ...(method === 'staff' ? { staffUserId: staffUserId === '' ? null : staffUserId, staffReason: staffReason.trim() || null } : {}),
+        ...(method === 'staff' ? { staffUserId: staffUserId === '' ? null : staffUserId } : {}),
       });
       setClosing(false);
       setDone(r);
@@ -790,7 +788,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
 
       {!isOpen && <Alert severity={check.status === 'closed' ? 'success' : 'info'}
         action={check.status === 'closed'
-          ? <Button color="inherit" size="small" onClick={() => { setRepayErr(''); setFixStaffId(''); setFixReason(''); setRepay(check.paymentMethod === 'cash' ? 'card' : 'cash'); }}>Сменить оплату</Button>
+          ? <Button color="inherit" size="small" onClick={() => { setRepayErr(''); setFixStaffId(''); setRepay(check.paymentMethod === 'cash' ? 'card' : 'cash'); }}>Сменить оплату</Button>
           : undefined}>{check.status === 'closed'
         ? `Счёт закрыт · ${check.paymentMethod === 'staff' ? `на сотрудника: ${check.staffName ?? '—'}${check.staffReason ? ` (${check.staffReason})` : ''} · в АТОЛ не отправлялся` : payLabel(check.paymentMethod)}`
         : 'Счёт отменён'}
@@ -962,11 +960,6 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
               <TextField select label="Сотрудник" value={staffUserId} onChange={e => setStaffUserId(Number(e.target.value))}>
                 {(staffInfo.staff ?? []).map(u => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
               </TextField>
-              <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-                {staffInfo.reasons.map(r => <Chip key={r} label={r} color={staffReason === r ? 'primary' : 'default'} onClick={() => setStaffReason(r)} />)}
-              </Box>
-              <TextField size="small" label="Причина (необязательно)" value={staffReason} onChange={e => setStaffReason(e.target.value)}
-                placeholder={staffInfo.reasons[0]} slotProps={{ htmlInput: { maxLength: 60 } }} />
             </>
           )}
           {method === 'cash' && (
@@ -1000,8 +993,6 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
               <TextField select label="Сотрудник" value={fixStaffId} onChange={e => setFixStaffId(Number(e.target.value))}>
                 {(repayStaff?.staff ?? []).map(u => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
               </TextField>
-              <TextField size="small" label="Причина (необязательно)" value={fixReason} onChange={e => setFixReason(e.target.value)}
-                placeholder={repayStaff?.reasons[0]} slotProps={{ htmlInput: { maxLength: 60 } }} />
             </>
           )}
           <Alert severity={repay === 'staff' ? 'warning' : 'info'}>
