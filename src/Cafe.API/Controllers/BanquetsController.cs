@@ -456,7 +456,7 @@ namespace Cafe.API.Controllers
             string? staffName = null, staffReason = null;
             if (method == CheckPayments.Staff && t.Due > 0)
             {
-                if (!(await _fiscalSettings.GetAsync()).StaffChecks) return BadRequest(new { message = "Закрытие на сотрудника выключено — включите его в «Настройке интеграций» → «Онлайн-касса»" });
+                if (!(await _fiscalSettings.GetAsync()).StaffChecks) return BadRequest(new { message = "Закрытие на заведение выключено — включите его в «Настройке интеграций» → «Онлайн-касса»" });
                 r.StaffUserId ??= User.GetUserId();
                 if (r.StaffUserId is not int staffId || !(await WaiterController.StaffListAsync(_context)).TryGetValue(staffId, out staffName))
                     return BadRequest(new { message = "Выберите сотрудника" });

@@ -372,7 +372,7 @@ const Ticket: React.FC<{
           </ToggleButtonGroup>
           <ToggleButtonGroup exclusive size="small" value={payment} onChange={(_, v) => v && setPayment(v)} sx={{ display: 'flex', '& .MuiToggleButton-root': { flex: 1 } }}>
             <ToggleButton value="card">Карта</ToggleButton>
-            <ToggleButton value="cash">Наличные</ToggleButton>
+            <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
         </Box>
 

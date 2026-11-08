@@ -158,7 +158,7 @@ export type CheckPayment = 'cash' | 'card' | 'staff';
 
 /** Способ оплаты счёта словами */
 export const payLabel = (m: string | null | undefined) =>
-  m === 'cash' ? 'наличные' : m === 'card' ? 'карта' : m === 'staff' ? 'на сотрудника' : m ?? '';
+  m === 'cash' ? 'наличные' : m === 'card' ? 'карта' : m === 'staff' ? 'на заведение' : m ?? '';
 
 export interface CloseCheckResult {
   total: number;
@@ -511,11 +511,11 @@ export const useCancelSiteOrder = () =>
     apiClient.post(`/api/site-orders/${id}/cancel`, { reason }).then(r => r.data));
 
 /** Что ушло в АТОЛ — одной строкой для уведомления */
-export const atolText = (fiscal: FiscalResult | null | undefined, skipped?: string | null, staff?: string | null) =>
+export const atolText = (fiscal: FiscalResult | null | undefined, skipped?: string | null, _staff?: string | null) =>
   fiscal
     ? fiscal.status === 'done' ? `Чек отправлен в АТОЛ и пробит${fiscal.fiscalDocumentNumber ? ` (ФД ${fiscal.fiscalDocumentNumber})` : ''}`
       : fiscal.status === 'processing' ? 'Чек отправлен в АТОЛ, касса ещё печатает'
       : `Чек в АТОЛ не пробит: ${fiscal.error ?? 'ошибка кассы'}`
-    : skipped === 'staff' ? `В АТОЛ не отправлялся — на сотрудника${staff ? `: ${staff}` : ''}`
+    : skipped === 'staff' ? 'В АТОЛ не отправлялся — на заведение'
     : skipped === 'yookassa' ? 'Оплачен онлайн — чек отправила ЮKassa'
     : 'В АТОЛ не отправлялся — онлайн-касса выключена';

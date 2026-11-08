@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
   Box, Typography, Paper, Button, TextField, Alert, CircularProgress, Chip, IconButton, Dialog, DialogTitle, DialogContent,
-  DialogActions, ToggleButtonGroup, ToggleButton, MenuItem, InputAdornment, Snackbar, ButtonBase, Divider,
+  DialogActions, ToggleButtonGroup, ToggleButton, InputAdornment, Snackbar, ButtonBase, Divider,
 } from '@mui/material';
 import {
   Add as AddIcon, Remove as RemoveIcon, ArrowBack as BackIcon, DeleteOutline as DeleteIcon, PrintOutlined as PrintIcon,
@@ -141,7 +141,7 @@ const PrepayDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t
           slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
         <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
           <ToggleButton value="card">Карта</ToggleButton>
-          <ToggleButton value="cash">Наличные</ToggleButton>
+          <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
         </ToggleButtonGroup>
         <Typography variant="caption" color="text.secondary">
           Предоплата только записывается, чек не печатается. При закрытии банкета вся сумма (предоплата и остаток) уйдёт в АТОЛ одним чеком.
@@ -161,13 +161,11 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
   const close = useCloseBanquet();
   const t = banquet.totals;
   const [method, setMethod] = React.useState<'cash' | 'card' | 'staff'>('card');
-  const [staffId, setStaffId] = React.useState<number | ''>(() => (banquet.me && banquet.staff?.some(u => u.id === banquet.me) ? banquet.me : ''));
-  const [reason, setReason] = React.useState('');
   const [err, setErr] = React.useState('');
   const submit = async () => {
     setErr('');
     try {
-      const r = await close.mutateAsync({ id: banquet.id, method, ...(method === 'staff' ? { staffUserId: staffId === '' ? null : staffId, staffReason: reason.trim() || null } : {}) });
+      const r = await close.mutateAsync({ id: banquet.id, method });
       onDone(`Банкет закрыт · ${money(r.total)}. ${atolText(r.fiscal, r.fiscalSkipped, r.staff)}`);
     } catch (e) { setErr(apiError(e)); }
   };
@@ -183,17 +181,13 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
         {t.due > 0 && (
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
-            <ToggleButton value="cash">Наличные</ToggleButton>
-            {banquet.staffAllowed && <ToggleButton value="staff">На сотрудника</ToggleButton>}
+            {banquet.staffAllowed && <ToggleButton value="staff">На заведение</ToggleButton>}
+            <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
         )}
         {t.due > 0 && method === 'staff' && (
           <>
-            <TextField select label="Сотрудник" value={staffId} onChange={e => setStaffId(Number(e.target.value))}>
-              {(banquet.staff ?? []).map(u => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
-            </TextField>
-            <TextField size="small" label="Причина (необязательно)" value={reason} onChange={e => setReason(e.target.value)} slotProps={{ htmlInput: { maxLength: 60 } }} />
-            <Alert severity="info">Остаток без оплаты — к удержанию с сотрудника, в выручку не входит и в чек не попадает.</Alert>
+            <Alert severity="info">Остаток без оплаты — за счёт заведения, в выручку не входит и в чек не попадает.</Alert>
           </>
         )}
         {banquet.fiscalEnabled && (
@@ -205,9 +199,9 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
         <Button onClick={onClose} disabled={close.isPending} sx={{ color: 'text.secondary' }}>Отмена</Button>
-        <Button variant="contained" color="secondary" onClick={submit} disabled={close.isPending || (method === 'staff' && t.due > 0 && staffId === '')}
+        <Button variant="contained" color="secondary" onClick={submit} disabled={close.isPending}
           startIcon={close.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}>
-          {t.due <= 0 ? 'Закрыть' : method === 'staff' ? 'Закрыть на сотрудника' : 'Оплачено'}
+          {t.due <= 0 ? 'Закрыть' : method === 'staff' ? 'Закрыть на заведение' : 'Оплачено'}
         </Button>
       </DialogActions>
     </Dialog>

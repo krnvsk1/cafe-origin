@@ -117,7 +117,7 @@ namespace Cafe.Tests
             await db.SaveChangesAsync();
             var ex = await Assert.ThrowsAsync<FiscalException>(() =>
                 scope.ServiceProvider.GetRequiredService<FiscalService>().PrintCheckAsync(9, FiscalKinds.Sell, null));
-            Assert.Contains("на сотрудника", ex.Message);
+            Assert.Contains("на заведение", ex.Message);
             Assert.Equal(0, atol.Posts);
             Assert.Empty(db.FiscalReceipts);
         }
