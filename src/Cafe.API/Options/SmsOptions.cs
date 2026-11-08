@@ -3,7 +3,7 @@ namespace Cafe.API.Options
     /// <summary>
     /// SMS-коды подтверждения телефона (секция "Sms").
     /// Provider: "smsaero" (SMS Aero: Login — email, ApiKey) или "smsru" (SMS.ru: ApiKey = api_id).
-    /// Не задан — SMS не отправляются, и подтверждение телефона перед доставкой не требуется.
+    /// Не задан — SMS не отправляются, и подтверждение телефона перед заказом не требуется.
     /// </summary>
     public class SmsOptions
     {

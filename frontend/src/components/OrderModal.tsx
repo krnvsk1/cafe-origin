@@ -146,10 +146,10 @@ const OrderModal: React.FC<OrderModalProps> = ({
 
   const finalTotal = Math.max(0, totalAmount - discountAmount - pointsDiscount) + deliveryPrice;
 
-  // Доставка — с подтверждённым по SMS телефоном (когда SMS-сервис подключён)
+  // Любой заказ — с подтверждённым по SMS телефоном (когда SMS-сервис подключён)
   const user = useAuthStore(s => s.user);
   const { data: phoneRule } = usePhoneRequired();
-  const needPhone = deliveryType === 'Доставка' && !!phoneRule?.required && !(user?.phoneVerified && user.phone);
+  const needPhone = !!phoneRule?.required && !(user?.phoneVerified && user.phone);
 
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
     setSnackbar({ open: true, message, severity });
@@ -161,7 +161,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
       return;
     }
     if (needPhone) {
-      showSnackbar(user ? 'Подтвердите телефон по SMS' : 'Для доставки войдите через Telegram', 'error');
+      showSnackbar(user ? 'Подтвердите телефон по SMS' : 'Чтобы оформить заказ, войдите через Telegram', 'error');
       return;
     }
     if (!phone.trim()) {
@@ -327,7 +327,7 @@ const OrderModal: React.FC<OrderModalProps> = ({
             {needPhone && !user ? (
               <Alert severity="info" sx={{ mt: 2, borderRadius: 3 }}
                 action={onLoginClick ? <Button color="inherit" size="small" onClick={onLoginClick}>Войти</Button> : undefined}>
-                Для доставки войдите через Telegram и подтвердите телефон.
+                Чтобы оформить заказ, войдите через Telegram и подтвердите телефон.
               </Alert>
             ) : needPhone ? (
               <PhoneVerify phone={phone} onPhoneChange={onPhoneChange} disabled={createOrder.isPending} />
@@ -337,12 +337,12 @@ const OrderModal: React.FC<OrderModalProps> = ({
                 label="Телефон "
                 type="tel"
                 inputProps={{ inputMode: 'decimal', autoComplete: 'tel' }}
-                value={deliveryType === 'Доставка' && phoneRule?.required ? user?.phone ?? phone : phone}
+                value={phoneRule?.required ? user?.phone ?? phone : phone}
                 onChange={(e) => onPhoneChange(e.target.value)}
                 margin="normal"
                 required
-                disabled={createOrder.isPending || (deliveryType === 'Доставка' && !!phoneRule?.required)}
-                helperText={deliveryType === 'Доставка' && phoneRule?.required ? 'Подтверждён по SMS' : undefined}
+                disabled={createOrder.isPending || !!phoneRule?.required}
+                helperText={phoneRule?.required ? 'Подтверждён по SMS' : undefined}
                 sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }}
               />
             )}

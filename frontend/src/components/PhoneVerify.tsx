@@ -5,7 +5,7 @@ import { apiError } from '../api/inventory';
 import { useAuthStore } from '../store/authStore';
 
 /**
- * Подтверждение телефона по SMS перед доставкой: номер → «Получить код» → код → телефон сохранён в профиле.
+ * Подтверждение телефона по SMS перед заказом: номер → «Получить код» → код → телефон сохранён в профиле.
  */
 const PhoneVerify: React.FC<{ phone: string; onPhoneChange: (v: string) => void; disabled?: boolean }> = ({ phone, onPhoneChange, disabled }) => {
   const setUser = useAuthStore(s => s.setUser);
@@ -47,7 +47,7 @@ const PhoneVerify: React.FC<{ phone: string; onPhoneChange: (v: string) => void;
     <Box sx={{ mt: 2, p: 2, borderRadius: 3, bgcolor: 'action.hover' }}>
       <Typography sx={{ fontWeight: 700 }}>Подтвердите телефон</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Для доставки пришлём SMS с кодом — один раз, дальше номер сохранится в профиле.
+        Пришлём SMS с кодом — один раз, дальше номер сохранится в профиле.
       </Typography>
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'flex-start' }}>
         <TextField size="small" label="Телефон" type="tel" value={phone} onChange={e => { onPhoneChange(e.target.value); setSentTo(''); }}

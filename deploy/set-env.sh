@@ -47,7 +47,7 @@ if [ "$1" = telegram ]; then
 		set_var TELEGRAM_WEBHOOK_SECRET "$(openssl rand -hex 16)"
 	fi
 elif [ "$1" = sms ]; then
-	echo "SMS-коды подтверждения телефона перед доставкой"
+	echo "SMS-коды подтверждения телефона перед заказом"
 	ask provider "Сервис: smsaero или smsru"
 	case "$provider" in smsaero|smsru) ;; *) echo "Нужно smsaero или smsru — ничего не меняю"; exit 1 ;; esac
 	login=""

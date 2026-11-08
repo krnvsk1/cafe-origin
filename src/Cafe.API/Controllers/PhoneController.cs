@@ -11,7 +11,7 @@ namespace Cafe.API.Controllers
 {
     /// <summary>
     /// Подтверждение телефона по SMS для вошедшего пользователя (вход — через Telegram).
-    /// Подтверждённый телефон обязателен для заказа доставки, когда SMS-сервис подключён.
+    /// Подтверждённый телефон обязателен для любого заказа с сайта, когда SMS-сервис подключён.
     /// </summary>
     [ApiController]
     [Route("api/auth/phone")]
@@ -37,10 +37,10 @@ namespace Cafe.API.Controllers
         public class SendRequest { public string Phone { get; set; } = string.Empty; }
         public class VerifyRequest { public string Phone { get; set; } = string.Empty; public string Code { get; set; } = string.Empty; }
 
-        /// <summary>Нужно ли подтверждать телефон перед доставкой (SMS-сервис подключён)</summary>
+        /// <summary>Нужно ли подтверждать телефон перед заказом (SMS-сервис подключён)</summary>
         public static bool Required(ISmsService sms) => sms.Enabled;
 
-        // GET: api/auth/phone — нужно ли подтверждение телефона для доставки
+        // GET: api/auth/phone — нужно ли подтверждение телефона для заказа
         [HttpGet]
         public IActionResult Info() => Ok(new { Required = Required(_sms) });
 

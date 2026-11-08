@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from './client';
 import type { User } from '../types';
 
-/** Нужно ли подтверждать телефон по SMS перед доставкой (SMS-сервис подключён) */
+/** Нужно ли подтверждать телефон по SMS перед заказом (SMS-сервис подключён) */
 export const usePhoneRequired = () =>
   useQuery<{ required: boolean }>({
     queryKey: ['auth-phone'],
