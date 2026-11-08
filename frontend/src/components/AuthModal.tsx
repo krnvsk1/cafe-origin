@@ -19,6 +19,9 @@ import { getStoredReferral, clearStoredReferral } from '../utils/referral';
 import { useAuthStore } from '../store/authStore';
 import TelegramLogin from './TelegramLogin';
 
+/** Вход через Telegram временно убран: сервер в России не может связаться с Telegram, и вход зависал. Вернуть — true. */
+const TELEGRAM_LOGIN = false;
+
 interface AuthModalProps {
   open: boolean;
   onClose: () => void;
@@ -304,8 +307,8 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
               {loading ? <CircularProgress size={24} color="inherit" /> : 'Получить код'}
             </Button>
 
-            {/* Вход через Telegram — без телефона и SMS; кнопки нет, если бот не подключён */}
-            <TelegramLogin
+            {/* Вход через Telegram — выключен флагом TELEGRAM_LOGIN */}
+            {TELEGRAM_LOGIN && <TelegramLogin
               divider
               onSuccess={r => {
                 if (r.user && r.accessToken) {
@@ -314,7 +317,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                 }
               }}
               onError={setError}
-            />
+            />}
           </Box>
         )}
 

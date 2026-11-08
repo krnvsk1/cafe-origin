@@ -21,10 +21,13 @@ import {
   FilterList as FilterIcon,
   Star as StarIcon,
   Shield as ShieldIcon,
+  Phone as PhoneIcon,
 } from '@mui/icons-material';
 import { useRoles, roleColor } from '../api/roles';
 import { useCan, P, isSupport } from '../auth/permissions';
 import { useAuthStore } from '../store/authStore';
+import { apiClient } from '../api/client';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiError } from '../api/inventory';
 import { useUsers, useAssignRole, useRemoveRole, useUserPointsBalance, useAdminGrantPoints } from '../api/hooks';
 import type { User, UserRole } from '../types';
@@ -54,6 +57,22 @@ const UsersPage: React.FC = () => {
   const [roleFilter, setRoleFilter] = React.useState<UserRole | ''>('');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  // Указать телефон: сотрудник, входивший через Telegram, войдёт по этому номеру и SMS-коду в свой аккаунт
+  const queryClient = useQueryClient();
+  const [phoneUser, setPhoneUser] = React.useState<User | null>(null);
+  const [phoneValue, setPhoneValue] = React.useState('');
+  const [phoneBusy, setPhoneBusy] = React.useState(false);
+  const [phoneError, setPhoneError] = React.useState('');
+  const savePhone = async () => {
+    if (!phoneUser) return;
+    setPhoneBusy(true); setPhoneError('');
+    try {
+      await apiClient.put(`/api/users/${phoneUser.id}/phone`, { phone: phoneValue });
+      await queryClient.invalidateQueries({ queryKey: ['users'] });
+      setPhoneUser(null);
+    } catch (e) { setPhoneError(apiError(e)); }
+    finally { setPhoneBusy(false); }
+  };
   const [selectedUser, setSelectedUser] = React.useState<User | null>(null);
   const [roleDialogOpen, setRoleDialogOpen] = React.useState(false);
   const [roleToAdd, setRoleToAdd] = React.useState<UserRole>('user');
@@ -505,6 +524,13 @@ const UsersPage: React.FC = () => {
           </>
         )}
 
+        {canAssign && selectedUser && (!selectedUser.roles.includes('support') || iAmSupport) && (
+          <MenuItem onClick={() => { setPhoneUser(selectedUser); setPhoneValue(selectedUser.phone || '+7'); setPhoneError(''); handleMenuClose(); }}>
+            <ListItemIcon><PhoneIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{selectedUser.phone ? 'Изменить телефон' : 'Указать телефон'}</ListItemText>
+          </MenuItem>
+        )}
+
         {canPoints && selectedUser && (
           <>
             <Typography variant="caption" color="text.secondary" sx={{ px: 2, pt: 1, display: 'block' }}>
@@ -525,6 +551,24 @@ const UsersPage: React.FC = () => {
           </>
         )}
       </Menu>
+
+            {/* Телефон пользователя */}
+            <Dialog open={!!phoneUser} onClose={() => !phoneBusy && setPhoneUser(null)} maxWidth="xs" fullWidth>
+              <DialogTitle>Телефон: {phoneUser ? getFullName(phoneUser) : ''}</DialogTitle>
+              <DialogContent>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Пользователь войдёт по этому номеру и коду из SMS — в этот же аккаунт, со своими ролями.
+                </Typography>
+                <TextField fullWidth autoFocus label="Телефон" type="tel" value={phoneValue} onChange={e => setPhoneValue(e.target.value)}
+                  placeholder="+7 999 123-45-67" slotProps={{ htmlInput: { inputMode: 'tel' } }}
+                  onKeyDown={e => { if (e.key === 'Enter') savePhone(); }} />
+                {phoneError && <Alert severity="error" sx={{ mt: 2 }}>{phoneError}</Alert>}
+              </DialogContent>
+              <DialogActions sx={{ px: 3, pb: 2 }}>
+                <Button onClick={() => setPhoneUser(null)} disabled={phoneBusy} sx={{ color: 'text.secondary' }}>Отмена</Button>
+                <Button variant="contained" color="secondary" onClick={savePhone} disabled={phoneBusy || phoneValue.replace(/\D/g, '').length < 11}>Сохранить</Button>
+              </DialogActions>
+            </Dialog>
 
             {/* Диалог подтверждения добавления роли */}
             <Dialog open={roleDialogOpen} onClose={() => setRoleDialogOpen(false)}>

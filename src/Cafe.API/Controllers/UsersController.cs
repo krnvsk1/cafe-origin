@@ -175,6 +175,40 @@ namespace Cafe.API.Controllers
             return Ok(new { message = "Роль назначена" });
         }
 
+        public class SetPhoneRequest { public string Phone { get; set; } = string.Empty; }
+
+        /// <summary>
+        /// Указать телефон пользователю (например, сотруднику, который входил через Telegram):
+        /// потом он входит по этому номеру и SMS-коду — в свой аккаунт, с теми же ролями
+        /// </summary>
+        [HttpPut("{id}/phone")]
+        [HasPermission(Permissions.UsersRoles)]
+        public async Task<IActionResult> SetPhone(int id, [FromBody] SetPhoneRequest request)
+        {
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null) return NotFound(new { Message = "Пользователь не найден" });
+
+            // Номер техподдержки меняет только техподдержка — иначе можно войти в её аккаунт
+            var roles = await _userManager.GetRolesAsync(user);
+            if (roles.Contains(AppRoles.Support) && !User.IsSupport())
+                return StatusCode(403, new { Message = "Телефон техподдержки может изменить только техподдержка" });
+
+            var phone = Cafe.API.Services.VerificationService.NormalizePhone(request.Phone ?? "");
+            if (!System.Text.RegularExpressions.Regex.IsMatch(phone, @"^\+7\d{10}$"))
+                return BadRequest(new { Message = "Укажите номер в формате +7 999 123-45-67" });
+            if (phone == user.PhoneNumber) return Ok(new { Phone = phone });
+
+            var other = await _userManager.Users.AsNoTracking().Where(u => u.Id != id && u.PhoneNumber == phone).Select(u => u.Id).FirstOrDefaultAsync();
+            if (other != 0)
+                return Conflict(new { Message = $"Этот номер уже у пользователя ID {other}" });
+
+            user.PhoneNumber = phone;
+            user.PhoneVerified = false;   // подтвердится при первом входе по SMS
+            user.UpdatedAt = DateTime.UtcNow;
+            await _userManager.UpdateAsync(user);
+            return Ok(new { Phone = phone });
+        }
+
         /// <summary>
         /// Удалить роль у пользователя (только для admin)
         /// </summary>
