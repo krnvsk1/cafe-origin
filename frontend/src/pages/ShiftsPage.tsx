@@ -163,7 +163,7 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
             {staffInfo?.allowed && <ToggleButton value="staff">На заведение</ToggleButton>}
-            <ToggleButton value="cash">Наличные</ToggleButton>
+            <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
         )}
         {err && <Alert severity="error">{err}</Alert>}

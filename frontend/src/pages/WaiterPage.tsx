@@ -944,7 +944,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
             {staffInfo?.allowed && <ToggleButton value="staff">На заведение</ToggleButton>}
-            <ToggleButton value="cash">Наличные</ToggleButton>
+            <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
           {method === 'cash' && (
             <TextField label="Получено" value={cash} onChange={e => setCash(e.target.value)}
@@ -970,7 +970,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           <ToggleButtonGroup exclusive fullWidth value={repay} onChange={(_, v) => v && setRepay(v)}>
             <ToggleButton value="card" disabled={check.paymentMethod === 'card'}>Карта</ToggleButton>
             {check.canFixToStaff && <ToggleButton value="staff">На заведение</ToggleButton>}
-            <ToggleButton value="cash" disabled={check.paymentMethod === 'cash'}>Наличные</ToggleButton>
+            <ToggleButton value="cash" disabled={check.paymentMethod === 'cash'}>Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
           <Alert severity={repay === 'staff' ? 'warning' : 'info'}>
             {repay === 'staff'
@@ -1190,7 +1190,7 @@ const MyChecksDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${data.summary.staff ? 4 : 3}, 1fr)`, gap: 1 }}>
               {[
                 ['Выручка', money(data.summary.revenue)],
-                ['Наличные', money(data.summary.cash)],
+                ['Наличные (АТОЛ)', money(data.summary.cash)],
                 ['Карта', money(data.summary.card)],
                 ...(data.summary.staff ? [['На сотрудн.', money(data.summary.staff)]] : []),
               ].map(([label, value]) => (

@@ -141,7 +141,7 @@ const PrepayDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t
           slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
         <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
           <ToggleButton value="card">Карта</ToggleButton>
-          <ToggleButton value="cash">Наличные</ToggleButton>
+          <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
         </ToggleButtonGroup>
         <Typography variant="caption" color="text.secondary">
           Предоплата только записывается, чек не печатается. При закрытии банкета вся сумма (предоплата и остаток) уйдёт в АТОЛ одним чеком.
@@ -182,7 +182,7 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
             {banquet.staffAllowed && <ToggleButton value="staff">На заведение</ToggleButton>}
-            <ToggleButton value="cash">Наличные</ToggleButton>
+            <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
         )}
         {t.due > 0 && method === 'staff' && (
