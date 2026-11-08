@@ -44,7 +44,7 @@ namespace Cafe.API.Services.Printing
         {
             var p = new EscPos(s.Width, s.CodeTable, s.Encoding);
             if (!string.IsNullOrWhiteSpace(d.Brand)) p.Line(d.Brand, EscPos.Align.Center, bold: true, big: true);
-            p.Line(d.Title ?? (d.Staff == null ? "СЧЁТ" : "СЧЁТ НА СОТРУДНИКА"), EscPos.Align.Center, bold: true);
+            p.Line(d.Title ?? (d.Staff == null ? "СЧЁТ" : "СЧЁТ НА ЗАВЕДЕНИЕ"), EscPos.Align.Center, bold: true);
             p.Line(string.IsNullOrWhiteSpace(d.Table) ? d.CheckLabel : $"{Cafe.API.Controllers.WaiterController.TableLabel(d.Table)} · {d.CheckLabel}", EscPos.Align.Center);
             foreach (var info in d.Info ?? Array.Empty<string>()) p.Line(info, EscPos.Align.Center);
             p.Separator();
@@ -53,8 +53,7 @@ namespace Cafe.API.Services.Printing
             if (!string.IsNullOrWhiteSpace(d.Waiter)) p.Line($"Официант: {d.Waiter}");
             if (d.Staff != null)
             {
-                p.Line($"Сотрудник: {d.Staff.Name}", bold: true);
-                p.Line($"Причина: {d.Staff.Reason}");
+                p.Line($"Закрыл: {d.Staff.Name}", bold: true);
             }
             p.Separator();
             foreach (var l in d.Lines)
@@ -77,14 +76,12 @@ namespace Cafe.API.Services.Printing
                     sum += adj.Where(a => a.IsPrepaid).Sum(a => a.Amount);
                 }
             }
-            p.Pair(d.Staff != null ? "К УДЕРЖАНИЮ" : adj.Any(a => a.IsPrepaid) ? "К ОПЛАТЕ" : "ИТОГО", Money(Math.Max(0, sum)), bold: true);
+            p.Pair(d.Staff != null ? "ЗА СЧЁТ ЗАВЕДЕНИЯ" : adj.Any(a => a.IsPrepaid) ? "К ОПЛАТЕ" : "ИТОГО", Money(Math.Max(0, sum)), bold: true);
             p.Separator('=');
             p.Line("Это не кассовый чек", EscPos.Align.Center);
             if (d.Staff != null)
             {
-                p.Line("Без оплаты — на сотрудника", EscPos.Align.Center);
-                p.Feed();
-                p.Pair("Подпись сотрудника", "________");
+                p.Line("Без оплаты — за счёт заведения", EscPos.Align.Center);
             }
             else if (!string.IsNullOrWhiteSpace(d.Footer)) p.Line(d.Footer!, EscPos.Align.Center);
             return p.Cut().ToArray();

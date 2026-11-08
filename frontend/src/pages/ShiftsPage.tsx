@@ -1,7 +1,7 @@
 import * as React from 'react';
 import {
   Box, Typography, TextField, Alert, CircularProgress, Chip, Paper, Collapse, ButtonBase, Button,
-  Dialog, DialogTitle, DialogContent, DialogActions, ToggleButtonGroup, ToggleButton, MenuItem, Snackbar,
+  Dialog, DialogTitle, DialogContent, DialogActions, ToggleButtonGroup, ToggleButton, Snackbar,
 } from '@mui/material';
 import { ExpandMore as ExpandIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
@@ -124,27 +124,22 @@ const SITE_STATUS_COLOR: Record<string, 'default' | 'success' | 'warning' | 'inf
   'Новый': 'info', 'Принят': 'info', 'Готовится': 'warning', 'Готов': 'success', 'В пути': 'warning', 'Доставлен': 'success', 'Выполнен': 'success', 'Отменён': 'default',
 };
 
-/** Закрыть заказ с сайта: способ оплаты → чек в АТОЛ, или на сотрудника без чека */
+/** Закрыть заказ с сайта: способ оплаты → чек в АТОЛ, или на заведение без чека */
 const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone: (text: string) => void }> = ({ order, onClose, onDone }) => {
   const close = useCloseSiteOrder();
   const online = order.paymentMethod === 'online';
   const [method, setMethod] = React.useState<string>(online ? 'online' : order.paymentMethod === 'card' ? 'card' : 'cash');
   const { data: staffInfo } = useStaffChecksInfo(!online);
-  const [staffId, setStaffId] = React.useState<number | ''>('');
   const [err, setErr] = React.useState('');
   const canDiscount = useCan()(P.Discounts) && !online;
   const [disc, setDisc] = React.useState<{ type: DiscountType; value: number } | null>(null);
   const [discOpen, setDiscOpen] = React.useState(false);
   const goods = Math.max(0, order.total - (order.deliveryPrice ?? 0));
   const discount = disc ? discountOf(disc.type, disc.value, goods) : 0;
-  React.useEffect(() => {
-    if (staffId === '' && staffInfo?.me && staffInfo.staff?.some(u => u.id === staffInfo.me)) setStaffId(staffInfo.me);
-  }, [staffInfo, staffId]);
   const submit = async () => {
     setErr('');
     try {
       const r = await close.mutateAsync({ id: order.id, paymentMethod: method,
-        ...(method === 'staff' ? { staffUserId: staffId === '' ? null : staffId } : {}),
         ...(disc ? { discountType: disc.type, discountValue: disc.value } : {}) });
       onDone(`Заказ #${order.id} закрыт · ${payLabel(method === 'online' ? 'онлайн' : method)}. ${atolText(r.fiscal, r.fiscalSkipped, r.staff)}`);
     } catch (e) { setErr(apiError(e)); }
@@ -167,16 +162,9 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
         ) : (
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
-            {staffInfo?.allowed && <ToggleButton value="staff">На сотрудника</ToggleButton>}
+            {staffInfo?.allowed && <ToggleButton value="staff">На заведение</ToggleButton>}
             <ToggleButton value="cash">Наличные</ToggleButton>
           </ToggleButtonGroup>
-        )}
-        {method === 'staff' && staffInfo?.allowed && (
-          <>
-            <TextField select label="Сотрудник" value={staffId} onChange={e => setStaffId(Number(e.target.value))}>
-              {(staffInfo.staff ?? []).map(u => <MenuItem key={u.id} value={u.id}>{u.name}</MenuItem>)}
-            </TextField>
-          </>
         )}
         {err && <Alert severity="error">{err}</Alert>}
       </DialogContent>
@@ -184,7 +172,7 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
         <Button onClick={onClose} disabled={close.isPending} sx={{ color: 'text.secondary' }}>Назад</Button>
         <Button variant="contained" color="secondary" onClick={submit} disabled={close.isPending}
           startIcon={close.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}>
-          {method === 'staff' ? 'Закрыть на сотрудника' : 'Закрыть'}
+          {method === 'staff' ? 'Закрыть на заведение' : 'Закрыть'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -303,7 +291,7 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
       )}
       {data.staff && data.staff.length > 0 && (
         <Box>
-          <Typography variant="overline" color="text.secondary">На сотрудников · к удержанию (не выручка, без чека)</Typography>
+          <Typography variant="overline" color="text.secondary">За счёт заведения · без оплаты и чека, не выручка · кто закрыл</Typography>
           {data.staff.map(st => (
             <Box key={st.userId} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', py: 0.25 }}>
               <Typography sx={{ fontWeight: 700, flex: 1 }}>{st.name}</Typography>
@@ -329,7 +317,7 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                   <Typography variant="body2" color="text.secondary" noWrap>
                     {c.waiter ?? '—'} · {time(c.openedAt)}{c.closedAt ? `–${time(c.closedAt)}` : ''}
                     {c.paymentMethod === 'staff'
-                      ? ` · на сотрудника: ${c.staffName ?? '—'}${c.staffReason ? ` (${c.staffReason})` : ''} · в АТОЛ не отправлялся`
+                      ? ` · на заведение${c.staffName ? `, закрыл ${c.staffName}` : ''}`
                       : c.paymentMethod ? ` · ${payLabel(c.paymentMethod)}` : ''}
                     {c.paymentWas && <Box component="span" sx={{ color: 'warning.main' }}> · исправлено с «{payLabel(c.paymentWas)}»{c.paymentChangedBy ? `, ${c.paymentChangedBy}` : ''}{c.paymentChangedAt ? ` ${time(c.paymentChangedAt)}` : ''}</Box>}
                     {ft && <Box component="span" sx={{ color: sold || returned ? 'text.secondary' : 'error.main' }}> · кассовый чек: {ft}</Box>}
@@ -368,7 +356,7 @@ const ShiftCard: React.FC<{ s: ShiftRow; open: boolean; onToggle: () => void }> 
       <Box sx={{ textAlign: 'right' }}>
         <Typography sx={{ fontWeight: 800 }}>{money(s.revenue)}</Typography>
         <Typography variant="body2" color="text.secondary">
-          {s.checks} сч. · нал {money(s.cash)} · карта {money(s.card)}{s.staff ? ` · на сотрудников ${money(s.staff)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
+          {s.checks} сч. · нал {money(s.cash)} · карта {money(s.card)}{s.staff ? ` · на заведение ${money(s.staff)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
         </Typography>
       </Box>
       <ExpandIcon sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />

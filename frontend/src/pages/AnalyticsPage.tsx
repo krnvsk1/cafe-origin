@@ -119,7 +119,7 @@ const AnalyticsPage: React.FC = () => {
         <>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
             <Kpi title="Выручка" value={rub(s.revenue)} change={s.revenueChange}
-              hint={s.staffTotal ? `ещё ${rub(s.staffTotal)} забрали сотрудники` : undefined} />
+              hint={s.staffTotal ? `ещё ${rub(s.staffTotal)} за счёт заведения` : undefined} />
             <Kpi title="Заказы" value={String(s.orders)} change={s.ordersChange} hint={s.cancelled ? `отменено: ${s.cancelled}` : undefined} />
             <Kpi title="Средний чек" value={rub(s.averageCheck)} change={s.averageCheckChange} />
             <Kpi title="Клиенты" value={String(s.customers)} hint={`новых: ${s.newCustomers} · повторных: ${s.repeatCustomers}`} />
@@ -226,17 +226,17 @@ const AnalyticsPage: React.FC = () => {
           {!!s.staffChecks && (
             <Paper sx={{ p: 2.5, mt: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, flexWrap: 'wrap', mb: 1 }}>
-                <Typography variant="h6" fontWeight={700} sx={{ flex: 1 }}>Забрали сотрудники · к удержанию</Typography>
+                <Typography variant="h6" fontWeight={700} sx={{ flex: 1 }}>За счёт заведения</Typography>
                 <Typography variant="h6" fontWeight={800}>{rub(s.staffTotal ?? 0)}</Typography>
                 {s.staffTotalChange != null && (
                   <Typography variant="body2" color="text.secondary">{s.staffTotalChange >= 0 ? '▲' : '▼'} {Math.abs(s.staffTotalChange)}% к прошлому периоду</Typography>
                 )}
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Счета, закрытые «на сотрудника»: без оплаты и без кассового чека, в выручку не входят. {s.staffChecks} сч.
+                Счета, закрытые «на заведение»: без оплаты и без кассового чека, в выручку не входят. {s.staffChecks} сч.
               </Typography>
               <Table size="small">
-                <TableHead><TableRow><TableCell>Сотрудник</TableCell><TableCell align="right">Счетов</TableCell><TableCell align="right">Сумма</TableCell></TableRow></TableHead>
+                <TableHead><TableRow><TableCell>Кто закрыл</TableCell><TableCell align="right">Счетов</TableCell><TableCell align="right">Сумма</TableCell></TableRow></TableHead>
                 <TableBody>
                   {(data.staffByPerson ?? []).map(p => (
                     <TableRow key={p.name}>
