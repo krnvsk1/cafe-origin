@@ -266,7 +266,7 @@ namespace Cafe.API.Controllers
                 .Where(x => openIds.Contains(x.Check)).GroupBy(x => x.Check).ToDictionary(g => g.Key, g => g.Sum(x => x.Sum));
         }
 
-        // GET: api/shifts?from&to — смены заведения за период (по Москве, до 92 дней)
+        // GET: api/shifts?from&to — смены заведения за период (по Москве), в том числе перенесённые из Interpos
         [HttpGet]
         [HasPermission(Permissions.ChecksAll)]
         public async Task<IActionResult> List([FromQuery] DateTime? from, [FromQuery] DateTime? to)
@@ -275,19 +275,33 @@ namespace Cafe.API.Controllers
             var f = (from ?? today.AddDays(-13)).Date;
             var t = (to ?? today).Date;
             if (t < f) (f, t) = (t, f);
-            if ((t - f).TotalDays > 92) return BadRequest(new { message = "Период — не больше 3 месяцев" });
 
             var shifts = await _context.VenueShifts.AsNoTracking().Where(s => s.BusinessDate >= f && s.BusinessDate <= t)
                 .OrderByDescending(s => s.OpenedAt).ToListAsync();
             var ids = shifts.Select(s => s.Id).ToList();
-            var checks = await _context.TableChecks.AsNoTracking().Where(c => c.VenueShiftId != null && ids.Contains(c.VenueShiftId.Value)).ToListAsync();
-            var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => ids.Contains(w.VenueShiftId) && w.ApprovedAt != null).ToListAsync();
+            // Итоги по чекам считает база — период может быть длинным (вся история)
+            var totals = await _context.TableChecks.AsNoTracking()
+                .Where(c => c.VenueShiftId != null && ids.Contains(c.VenueShiftId.Value))
+                .GroupBy(c => c.VenueShiftId!.Value)
+                .Select(g => new
+                {
+                    ShiftId = g.Key,
+                    Checks = g.Count(),
+                    Open = g.Count(c => c.Status == CheckStatuses.Open),
+                    Revenue = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff ? c.Total : 0m),
+                    Cash = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Cash ? c.Total : 0m),
+                    Card = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Card ? c.Total : 0m),
+                    Staff = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff ? c.Total : 0m),
+                })
+                .ToDictionaryAsync(x => x.ShiftId);
+            var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => ids.Contains(w.VenueShiftId) && w.ApprovedAt != null)
+                .GroupBy(w => w.VenueShiftId).Select(g => new { ShiftId = g.Key, Count = g.Select(w => w.UserId).Distinct().Count() })
+                .ToDictionaryAsync(x => x.ShiftId, x => x.Count);
             var names = await WaiterController.StaffNamesAsync(_context, shifts.SelectMany(s => new[] { s.OpenedByUserId, s.ClosedByUserId }));
 
             return Ok(shifts.Select(s =>
             {
-                var cs = checks.Where(c => c.VenueShiftId == s.Id).ToList();
-                var closed = cs.Where(c => c.Status == CheckStatuses.Closed).ToList();
+                var x = totals.GetValueOrDefault(s.Id);
                 return new
                 {
                     s.Id,
@@ -296,13 +310,13 @@ namespace Cafe.API.Controllers
                     s.ClosedAt,
                     openedBy = names.GetValueOrDefault(s.OpenedByUserId ?? 0),
                     closedBy = names.GetValueOrDefault(s.ClosedByUserId ?? 0),
-                    waiters = waiters.Where(w => w.VenueShiftId == s.Id).Select(w => w.UserId).Distinct().Count(),
-                    checks = cs.Count,
-                    openChecks = cs.Count(c => c.Status == CheckStatuses.Open),
-                    revenue = closed.Where(c => c.PaymentMethod != CheckPayments.Staff).Sum(c => c.Total),
-                    cash = closed.Where(c => c.PaymentMethod == CheckPayments.Cash).Sum(c => c.Total),
-                    card = closed.Where(c => c.PaymentMethod == CheckPayments.Card).Sum(c => c.Total),
-                    staff = closed.Where(c => c.PaymentMethod == CheckPayments.Staff).Sum(c => c.Total),
+                    waiters = waiters.GetValueOrDefault(s.Id),
+                    checks = x?.Checks ?? 0,
+                    openChecks = x?.Open ?? 0,
+                    revenue = x?.Revenue ?? 0,
+                    cash = x?.Cash ?? 0,
+                    card = x?.Card ?? 0,
+                    staff = x?.Staff ?? 0,
                 };
             }));
         }
