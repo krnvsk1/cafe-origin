@@ -13,19 +13,17 @@ namespace Cafe.API.Services
         Task<(bool Success, string? Message)> SendVerificationCodeAsync(string phone, string code);
     }
 
-    /// <summary>SMS-коды через SMS Aero или SMS.ru; без настроек — код только в журнал (разработка)</summary>
+    /// <summary>SMS-коды через SMS Aero или SMS.ru; без настроек — код только в лог сервера</summary>
     public class SmsService : ISmsService
     {
         private readonly SmsOptions _options;
         private readonly HttpClient _http;
-        private readonly IHostEnvironment _env;
         private readonly ILogger<SmsService> _logger;
 
-        public SmsService(IOptions<SmsOptions> options, HttpClient http, IHostEnvironment env, ILogger<SmsService> logger)
+        public SmsService(IOptions<SmsOptions> options, HttpClient http, ILogger<SmsService> logger)
         {
             _options = options.Value;
             _http = http;
-            _env = env;
             _logger = logger;
         }
 
@@ -36,8 +34,9 @@ namespace Cafe.API.Services
             var text = $"Код подтверждения: {code}";
             if (!_options.Enabled)
             {
-                if (!_env.IsDevelopment()) return (false, "Отправка SMS не настроена");
-                _logger.LogInformation("SMS-код для {Phone}: {Code} (SMS-сервис не настроен)", phone, code);
+                // SMS-сервис ещё не подключён: код только в лог сервера (docker compose logs api | grep SMS-код) —
+                // так владелец может войти, пока не подключил SMS. Посетителям код не придёт.
+                _logger.LogWarning("SMS-код для {Phone}: {Code} (SMS-сервис не подключён — код только в логе)", phone, code);
                 return (true, null);
             }
 
