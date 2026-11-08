@@ -40,16 +40,15 @@ namespace Cafe.Tests
         }
 
         [Fact]
-        public void Precheck_ForStaff_ShowsEmployeeAndAmountToWithhold()
+        public void Precheck_OnHouse_ShowsWhoClosedAndNoPayment()
         {
             var s = new PrintSettings { Width = 48, CodeTable = 17, Encoding = 866, Footer = "Спасибо!" };
             var data = new PrecheckData("Кафе", "5", "счёт №12", "Никита", null, DateTime.UtcNow, DateTime.UtcNow,
-                new[] { new PrecheckLine("Борщ", 1, 300, 300) }, s.Footer, new PrecheckStaff("Анна Петрова", "Питание персонала"));
+                new[] { new PrecheckLine("Борщ", 1, 300, 300) }, s.Footer, new PrecheckStaff("Анна Петрова", "За счёт заведения"));
             var text = Text(PrintService.Precheck(s, data));
-            Assert.Contains("НА СОТРУДНИКА", text);
-            Assert.Contains("Сотрудник: Анна Петрова", text);
-            Assert.Contains("Причина: Питание персонала", text);
-            Assert.Contains("К УДЕРЖАНИЮ", text);
+            Assert.Contains("НА ЗАВЕДЕНИЕ", text);
+            Assert.Contains("Закрыл: Анна Петрова", text);
+            Assert.Contains("ЗА СЧЁТ ЗАВЕДЕНИЯ", text);
             Assert.Contains("Это не кассовый чек", text);
             Assert.DoesNotContain("Спасибо!", text);
         }
