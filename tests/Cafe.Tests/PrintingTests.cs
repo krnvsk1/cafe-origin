@@ -48,7 +48,7 @@ namespace Cafe.Tests
             var text = Text(PrintService.Precheck(s, data));
             Assert.Contains("НА ЗАВЕДЕНИЕ", text);
             Assert.Contains("Закрыл: Анна Петрова", text);
-            Assert.Contains("ЗА СЧЁТ ЗАВЕДЕНИЯ", text);
+            Assert.Contains("ЗА СЧЕТ ЗАВЕДЕНИЯ", text);  // принтер печатает Ё как Е
             Assert.Contains("Это не кассовый чек", text);
             Assert.DoesNotContain("Спасибо!", text);
         }
