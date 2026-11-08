@@ -668,21 +668,8 @@ namespace Cafe.API.Controllers
 
             if (method == CheckPayments.Staff)
             {
-                // Без оплаты — чек ККТ не нужен; на принтер счетов — счёт на сотрудника с суммой к удержанию
-                int? printJobId = null;
-                string? printError = null;
-                var settings = await _print.SettingsAsync();
-                if (settings.Enabled)
-                {
-                    var waiter = (await NamesAsync(new[] { c.WaiterId })).GetValueOrDefault(c.WaiterId ?? 0);
-                    var label = string.IsNullOrWhiteSpace(c.Label) ? $"счёт №{c.Id}" : c.Label!;
-                    var data = new PrecheckData((await _brand.GetAsync()).DisplayName, c.Table!.Name, label, waiter, c.Guests,
-                        c.OpenedAt, now, PrecheckLines(lines), settings.Footer, new PrecheckStaff(staffName!, staffReason!));
-                    var job = await _print.EnqueueAsync("precheck", c.Id, "За счёт заведения", PrintService.Precheck(settings, data), User.GetUserId());
-                    printJobId = job.Id;
-                }
-                else printError = "Принтер счетов не настроен — счёт на заведение не напечатан";
-                return Ok(new { c.Id, total, change = (decimal?)null, orderIds, fiscal = (object?)null, fiscalSkipped = "staff", staff = staffName, printJobId, printError });
+                // Без оплаты — ни кассового чека, ни счёта на принтер: всё видно в «Сменах и счетах» и «Аналитике»
+                return Ok(new { c.Id, total, change = (decimal?)null, orderIds, fiscal = (object?)null, fiscalSkipped = "staff", staff = staffName, printJobId = (int?)null, printError = (string?)null });
             }
 
             // Онлайн-касса включена — сразу пробиваем чек на АТОЛ. Ошибка кассы не мешает закрытию: чек можно повторить

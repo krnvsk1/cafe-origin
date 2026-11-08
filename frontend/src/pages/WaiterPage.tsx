@@ -1004,7 +1004,6 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           {done && !done.fiscal && (done.fiscalSkipped === 'staff'
             ? <Alert severity="info" sx={{ mt: 2, textAlign: 'left' }}>
                 В АТОЛ не отправлялся — счёт закрыт на заведение.
-                {done.printError ? ` ${done.printError}.` : done.printJobId ? ' Счёт отправлен на принтер.' : ''}
               </Alert>
             : <Alert severity="warning" sx={{ mt: 2, textAlign: 'left' }}>В АТОЛ не отправлялся — онлайн-касса выключена в «Настройке интеграций»</Alert>)}
           {done?.fiscal && (done.fiscal.status === 'done'
