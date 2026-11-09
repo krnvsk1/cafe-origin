@@ -366,7 +366,9 @@ app.UseSerilogRequestLogging(o =>
 {
     o.MessageTemplate = "HTTP {RequestMethod} {RequestPath} → {StatusCode} за {Elapsed:0} мс";
     o.GetLevel = (ctx, elapsed, ex) =>
-        ex != null || ctx.Response.StatusCode >= 500 ? LogEventLevel.Error
+        // 499 — клиент сам закрыл запрос, пока сервер ждал (например, ответа кассы): не ошибка
+        ctx.Response.StatusCode == 499 && ctx.RequestAborted.IsCancellationRequested ? LogEventLevel.Debug
+        : ex != null || ctx.Response.StatusCode >= 500 ? LogEventLevel.Error
         // Живые подключения (они и должны длиться долго), проверки состояния и картинки — только в подробном режиме
         : ctx.Request.Path.StartsWithSegments("/api/events") || ctx.Request.Path.StartsWithSegments("/health")
           || ctx.Request.Path.StartsWithSegments("/metrics") || ctx.Request.Path.StartsWithSegments("/uploads")
@@ -388,6 +390,11 @@ app.Use(async (context, next) =>
     try
     {
         await next();
+    }
+    catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+    {
+        // Клиент сам закрыл запрос (ушёл со страницы, обновил её) — это не ошибка сервера
+        if (!context.Response.HasStarted) context.Response.StatusCode = 499;
     }
     catch (Exception ex) when (!context.RequestAborted.IsCancellationRequested)
     {
