@@ -104,7 +104,7 @@ namespace Cafe.API.Models
         [Column("payment_changed_at")]
         public DateTime? PaymentChangedAt { get; set; }
 
-        /// <summary>Возврат счёта «на заведение» (ошибся официант): без денег и без чека — не на заведение и не выручка</summary>
+        /// <summary>Возврат счёта «Наличные (Принтер)» (ошибся официант): без денег и без чека — не Наличные (Принтер) и </summary>
         [Column("refunded_at")]
         public DateTime? RefundedAt { get; set; }
 

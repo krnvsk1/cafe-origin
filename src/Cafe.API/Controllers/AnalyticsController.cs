@@ -51,14 +51,14 @@ namespace Cafe.API.Controllers
             var orders = await _context.Orders.AsNoTracking()
                 .Where(o => o.CreatedAt >= rangeStart && o.CreatedAt < rangeEnd)
                 .Where(o => o.PaymentMethod != "online" || o.PaymentStatus == "paid" || o.PaymentStatus == "refunded")
-                // Закрытые на сотрудника — не выручка (без оплаты, к удержанию с сотрудника)
+                // Закрытые на сотрудника —  (без оплаты, к удержанию с сотрудника)
                 .Where(o => o.PaymentMethod != "staff")
                 // Заказы кухни банкета — выручка считается по самим банкетам (с обслуживанием, скидкой и предоплатами)
                 .Where(o => o.Source != "banquet")
                 .Include(o => o.OrderItems)
                 .ToListAsync();
 
-            // Возвраты: деньги вернули гостю — не выручка; показываются отдельно
+            // Возвраты: деньги вернули гостю — ; показываются отдельно
             var refunds = await Cafe.API.Services.Refunds.LoadAsync(_context);
             orders = orders.Where(o => !refunds.IsRefunded(o)).ToList();
             var refundsNow = refunds.Between(periodStart, rangeEnd);
@@ -146,7 +146,7 @@ namespace Cafe.API.Controllers
                 .Select(r => r.Rating)
                 .ToListAsync();
 
-            // Закрыто на сотрудников (без оплаты и без чека): не выручка, сумма к удержанию с сотрудников
+            // Закрыто на сотрудников (без оплаты и без чека): , сумма к удержанию с сотрудников
             var staffChecks = await _context.TableChecks.AsNoTracking()
                 .Where(c => c.Status == Cafe.API.Models.CheckStatuses.Closed && c.PaymentMethod == Cafe.API.Models.CheckPayments.Staff
                             && c.RefundedAt == null && c.ClosedAt >= rangeStart && c.ClosedAt < rangeEnd)

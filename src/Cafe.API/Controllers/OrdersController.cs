@@ -723,7 +723,7 @@ namespace Cafe.API.Controllers
             var (todayFrom, todayTo) = PeriodUtc(null, null, 1)!.Value;
             try
             {
-                // Выручка — как в аналитике: без отменённых, неоплаченных онлайн, закрытых на заведение,
+                // Выручка — как в аналитике: без отменённых, неоплаченных онлайн, закрытых Наличные (Принтер),
                 // заказов кухни банкетов и возвращённых (деньги вернули гостю — они в «Возвратах»)
                 var refunds = await Refunds.LoadAsync(_context);
                 var refundedOrders = refunds.Orders.ToList();

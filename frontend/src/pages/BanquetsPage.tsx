@@ -181,13 +181,13 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
         {t.due > 0 && (
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
-            {banquet.staffAllowed && <ToggleButton value="staff">На заведение</ToggleButton>}
+            {banquet.staffAllowed && <ToggleButton value="staff">Наличные (Принтер)</ToggleButton>}
             <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
         )}
         {t.due > 0 && method === 'staff' && (
           <>
-            <Alert severity="info">Остаток без оплаты — за счёт заведения, в выручку не входит и в чек не попадает.</Alert>
+            <Alert severity="info">Остаток без оплаты — Наличные (Принтер), в выручку не входит и в чек не попадает.</Alert>
           </>
         )}
         {banquet.fiscalEnabled && (
@@ -201,7 +201,7 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
         <Button onClick={onClose} disabled={close.isPending} sx={{ color: 'text.secondary' }}>Отмена</Button>
         <Button variant="contained" color="secondary" onClick={submit} disabled={close.isPending}
           startIcon={close.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}>
-          {t.due <= 0 ? 'Закрыть' : method === 'staff' ? 'Закрыть на заведение' : 'Оплачено'}
+          {t.due <= 0 ? 'Закрыть' : method === 'staff' ? 'Закрыть Наличные (Принтер)' : 'Оплачено'}
         </Button>
       </DialogActions>
     </Dialog>

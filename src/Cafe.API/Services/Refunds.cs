@@ -9,7 +9,7 @@ namespace Cafe.API.Services
 
     /// <summary>
     /// Возвращённые счета и заказы: пробитых чеков возврата не меньше, чем продажи (смена оплаты — возврат и новая продажа — не возврат).
-    /// Их деньги не выручка: в дашборде, аналитике и сменах они идут отдельной строкой «Возвраты».
+    /// Их деньги : в дашборде, аналитике и сменах они идут отдельной строкой «Возвраты».
     /// </summary>
     public class Refunds
     {
@@ -37,7 +37,7 @@ namespace Cafe.API.Services
                 if (g.Key.Check is int c) result.Checks.Add(c); else if (g.Key.Order is int o) result.Orders.Add(o);
                 result.Entries.Add(new RefundEntry(g.Key.Check, g.Key.Order, last.CreatedAt, last.Total, last.PaymentMethod));
             }
-            // Счета «на заведение», по которым сделали возврат (без денег и чека)
+            // Счета «Наличные (Принтер)», по которым сделали возврат (без денег и чека)
             var house = await db.TableChecks.AsNoTracking().Where(c => c.RefundedAt != null)
                 .Select(c => new { c.Id, c.RefundedAt, c.Total, c.PaymentMethod }).ToListAsync(ct);
             foreach (var h in house)

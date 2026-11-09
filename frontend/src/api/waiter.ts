@@ -158,7 +158,7 @@ export type CheckPayment = 'cash' | 'card' | 'staff';
 
 /** Способ оплаты счёта словами */
 export const payLabel = (m: string | null | undefined) =>
-  m === 'cash' ? 'наличные' : m === 'card' ? 'карта' : m === 'staff' ? 'на заведение' : m ?? '';
+  m === 'cash' ? 'наличные' : m === 'card' ? 'карта' : m === 'staff' ? 'Наличные (Принтер)' : m ?? '';
 
 export interface CloseCheckResult {
   total: number;
@@ -360,9 +360,9 @@ export interface ShiftRow {
   revenue: number;
   cash: number;
   card: number;
-  /** За счёт заведения — не выручка */
+  /** Наличные (Принтер) —  */
   staff?: number;
-  /** Возвраты: деньги вернули гостю — не выручка */
+  /** Возвраты: деньги вернули гостю —  */
   refunds?: number;
 }
 
@@ -427,7 +427,7 @@ export const useCheckFiscal = () =>
 export interface FiscalResult { status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber?: number | null }
 
 /** Чек возврата по счёту стола (гость вернул деньги) — те же позиции и сумма, что в чеке продажи */
-/** Возврат счёта «на заведение» (официант ошибся): без денег и чека, только пометка */
+/** Возврат счёта «Наличные (Принтер)» (официант ошибся): без денег и чека, только пометка */
 export const useHouseRefund = () =>
   useWaiterMutation<number, { id: number; refundedAt: string }>(checkId => apiClient.post(`/api/waiter/checks/${checkId}/house-refund`).then(r => r.data));
 
@@ -543,6 +543,6 @@ export const atolText = (fiscal: FiscalResult | null | undefined, skipped?: stri
     ? fiscal.status === 'done' ? `Чек отправлен в АТОЛ и пробит${fiscal.fiscalDocumentNumber ? ` (ФД ${fiscal.fiscalDocumentNumber})` : ''}`
       : fiscal.status === 'processing' ? 'Чек отправлен в АТОЛ, касса ещё печатает'
       : `Чек в АТОЛ не пробит: ${fiscal.error ?? 'ошибка кассы'}`
-    : skipped === 'staff' ? 'В АТОЛ не отправлялся — на заведение'
+    : skipped === 'staff' ? 'В АТОЛ не отправлялся — Наличные (Принтер)'
     : skipped === 'yookassa' ? 'Оплачен онлайн — чек отправила ЮKassa'
     : 'В АТОЛ не отправлялся — онлайн-касса выключена';

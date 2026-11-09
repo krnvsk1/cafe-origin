@@ -180,7 +180,7 @@ namespace Cafe.API.Controllers
         }
 
         // POST: api/shifts/venue/close — закрыть смену заведения (открытых счетов быть не должно)
-        // GET: api/shifts/venue/report — итоги текущей смены перед закрытием: нал, безнал, на заведение, возвраты
+        // GET: api/shifts/venue/report — итоги текущей смены перед закрытием: нал, безнал, Наличные (Принтер), возвраты
         [HttpGet("venue/report")]
         [HasPermission(Permissions.Shift)]
         public async Task<IActionResult> VenueReport()
@@ -250,7 +250,7 @@ namespace Cafe.API.Controllers
                     online = site.online,
                     staff = hall.staff + site.staff + banquets.staff,
                     refunds = hall.refunds + site.refunds,
-                    revenue = cash + card + site.online,
+                    revenue = cash + card + site.online + hall.staff + site.staff + banquets.staff,
                 },
             });
         }
@@ -370,7 +370,7 @@ namespace Cafe.API.Controllers
             var shifts = await _context.VenueShifts.AsNoTracking().Where(s => s.BusinessDate >= f && s.BusinessDate <= t)
                 .OrderByDescending(s => s.OpenedAt).ToListAsync();
             var ids = shifts.Select(s => s.Id).ToList();
-            // Итоги по чекам считает база; возвращённые счета (деньги вернули гостю) — не выручка, отдельно «Возвраты»
+            // Итоги по чекам считает база; возвращённые счета (деньги вернули гостю) — , отдельно «Возвраты»
             var refunds = await Refunds.LoadAsync(_context);
             var refunded = refunds.Checks.ToList();
             var totals = await _context.TableChecks.AsNoTracking()
@@ -447,7 +447,7 @@ namespace Cafe.API.Controllers
                 var r = mine.LastOrDefault(x => x.Status == FiscalStatuses.Done) ?? mine.LastOrDefault();
                 return r == null ? null : new { r.Status, r.Error, r.FiscalDocumentNumber };
             }
-            // Возвращён: пробитых возвратов не меньше, чем продаж — деньги отдали гостю, это не выручка
+            // Возвращён: пробитых возвратов не меньше, чем продаж — деньги отдали гостю, это 
             bool Refunded(int checkId)
             {
                 if (checks.Any(c => c.Id == checkId && c.RefundedAt != null)) return true;
