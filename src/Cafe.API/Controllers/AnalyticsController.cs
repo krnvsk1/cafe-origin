@@ -149,7 +149,7 @@ namespace Cafe.API.Controllers
             // Закрыто на сотрудников (без оплаты и без чека): не выручка, сумма к удержанию с сотрудников
             var staffChecks = await _context.TableChecks.AsNoTracking()
                 .Where(c => c.Status == Cafe.API.Models.CheckStatuses.Closed && c.PaymentMethod == Cafe.API.Models.CheckPayments.Staff
-                            && c.ClosedAt >= rangeStart && c.ClosedAt < rangeEnd)
+                            && c.RefundedAt == null && c.ClosedAt >= rangeStart && c.ClosedAt < rangeEnd)
                 .Select(c => new { c.ClosedAt, c.Total, c.StaffUserId })
                 .ToListAsync();
             // и остаток банкетов, закрытый на сотрудника

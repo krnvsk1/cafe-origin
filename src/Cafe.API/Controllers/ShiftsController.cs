@@ -309,7 +309,7 @@ namespace Cafe.API.Controllers
                     Revenue = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff && !refunded.Contains(c.Id) ? c.Total : 0m),
                     Cash = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Cash && !refunded.Contains(c.Id) ? c.Total : 0m),
                     Card = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Card && !refunded.Contains(c.Id) ? c.Total : 0m),
-                    Staff = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff ? c.Total : 0m),
+                    Staff = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff && c.RefundedAt == null ? c.Total : 0m),
                     Refunds = g.Sum(c => c.Status == CheckStatuses.Closed && refunded.Contains(c.Id) ? c.Total : 0m),
                 })
                 .ToDictionaryAsync(x => x.ShiftId);
@@ -351,9 +351,9 @@ namespace Cafe.API.Controllers
             var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table).Where(c => c.VenueShiftId == id).OrderBy(c => c.OpenedAt).ToListAsync();
             var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == id && w.ApprovedAt != null).OrderBy(w => w.OpenedAt).ToListAsync();
             var names = await WaiterController.StaffNamesAsync(_context,
-                waiters.Select(w => (int?)w.UserId).Concat(waiters.Select(w => w.ApprovedBy)).Concat(checks.Select(c => c.WaiterId)).Concat(checks.Select(c => c.StaffUserId)).Concat(checks.Select(c => c.PaymentChangedBy))
+                waiters.Select(w => (int?)w.UserId).Concat(waiters.Select(w => w.ApprovedBy)).Concat(checks.Select(c => c.WaiterId)).Concat(checks.Select(c => c.StaffUserId)).Concat(checks.Select(c => c.PaymentChangedBy)).Concat(checks.Select(c => c.RefundedBy))
                     .Append(s.OpenedByUserId).Append(s.ClosedByUserId));
-            var staffChecks = checks.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff).ToList();
+            var staffChecks = checks.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff && c.RefundedAt == null).ToList();
             var openTotals = await OpenTotalsAsync(checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList());
             var ids = checks.Select(c => (int?)c.Id).ToList();
             var receipts = await _context.FiscalReceipts.AsNoTracking().Where(r => ids.Contains(r.CheckId)).OrderBy(r => r.Id).ToListAsync();
@@ -370,6 +370,7 @@ namespace Cafe.API.Controllers
             // Возвращён: пробитых возвратов не меньше, чем продаж — деньги отдали гостю, это не выручка
             bool Refunded(int checkId)
             {
+                if (checks.Any(c => c.Id == checkId && c.RefundedAt != null)) return true;
                 var done = receipts.Where(r => r.CheckId == checkId && r.Status == FiscalStatuses.Done).ToList();
                 var ret = done.Count(r => r.Kind == FiscalKinds.Return);
                 return ret > 0 && ret >= done.Count(r => r.Kind == FiscalKinds.Sell);
@@ -428,6 +429,8 @@ namespace Cafe.API.Controllers
                     fiscal = FiscalOf(c.Id, FiscalKinds.Sell),
                     fiscalReturn = FiscalOf(c.Id, FiscalKinds.Return),
                     refunded = c.Status == CheckStatuses.Closed && Refunded(c.Id),
+                    refundedBy = c.RefundedBy == null ? null : names.GetValueOrDefault(c.RefundedBy.Value),
+                    c.RefundedAt,
                 })
             });
         }

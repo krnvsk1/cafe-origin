@@ -371,6 +371,8 @@ export interface ShiftDetails {
     fiscalReturn: CheckFiscalState | null;
     /** Деньги вернули гостю (чек возврата пробит) — счёт не в выручке */
     refunded?: boolean;
+    refundedBy?: string | null;
+    refundedAt?: string | null;
   }[];
 }
 
@@ -408,6 +410,10 @@ export const useCheckFiscal = () =>
 export interface FiscalResult { status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber?: number | null }
 
 /** Чек возврата по счёту стола (гость вернул деньги) — те же позиции и сумма, что в чеке продажи */
+/** Возврат счёта «на заведение» (официант ошибся): без денег и чека, только пометка */
+export const useHouseRefund = () =>
+  useWaiterMutation<number, { id: number; refundedAt: string }>(checkId => apiClient.post(`/api/waiter/checks/${checkId}/house-refund`).then(r => r.data));
+
 export const useReturnCheckFiscal = () =>
   useWaiterMutation<number, FiscalResult>(checkId => apiClient.post(`/api/waiter/checks/${checkId}/fiscal/return`).then(r => r.data));
 

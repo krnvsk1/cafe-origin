@@ -212,7 +212,7 @@ const AnalyticsPage: React.FC = () => {
               <Typography variant="body2" sx={{ mb: 0.75 }}>Оплачено баллами: <b>{rub(s.pointsSpent)}</b></Typography>
               <Typography variant="body2" sx={{ mb: 0.75 }}>Начислено баллов: <b>{s.pointsEarned}</b></Typography>
               <Typography variant="body2" sx={{ mb: 0.75 }}>Выручка с доставки: <b>{rub(s.deliveryRevenue)}</b></Typography>
-              <Typography variant="body2" sx={{ mb: 0.75 }}>Возвраты гостям: <b>{rub(s.refundsTotal ?? 0)}</b>{s.refunds ? ` · ${s.refunds} шт.` : ''} — не в выручке</Typography>
+              <Typography variant="body2" sx={{ mb: 0.75 }}>Возвраты: <b>{rub(s.refundsTotal ?? 0)}</b>{s.refunds ? ` · ${s.refunds} шт.` : ''} — не в выручке</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
                 <Typography variant="body2">Оценка:</Typography>
                 {s.averageRating !== null ? (

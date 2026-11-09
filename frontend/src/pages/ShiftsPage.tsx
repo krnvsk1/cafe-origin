@@ -6,7 +6,7 @@ import {
 import { ExpandMore as ExpandIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import {
-  useShiftCurrent, useShifts, useShiftDetails, parseUtc, useUnfinishedReceipts, useRetryReceipt, useReturnCheckFiscal, payLabel,
+  useShiftCurrent, useShifts, useShiftDetails, parseUtc, useUnfinishedReceipts, useRetryReceipt, useReturnCheckFiscal, useHouseRefund, payLabel,
   useCancelCheckAll, useSiteOrders, useCloseSiteOrder, useSiteOrderFiscal, useCancelSiteOrder, useStaffChecksInfo, atolText,
   type ShiftRow, type ShiftDetails, type UnfinishedReceipt, type SiteOrder, type CancelAllResult,
 } from '../api/waiter';
@@ -255,6 +255,13 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
   const navigate = useNavigate();
   const { data, isLoading, error } = useShiftDetails(id);
   const giveBack = useReturnCheckFiscal();
+  const houseRefund = useHouseRefund();
+  const doHouseRefund = async (checkId: number, total: number) => {
+    if (!window.confirm(`Сделать возврат счёта «на заведение» на ${money(total)}? Денег и кассового чека не было — счёт просто перестанет считаться «на заведение». Если нужно, потом поменяйте способ оплаты.`)) return;
+    setNote(null);
+    try { await houseRefund.mutateAsync(checkId); setNote({ id: checkId, ok: true, text: 'Возврат сделан' }); }
+    catch (e) { setNote({ id: checkId, ok: false, text: apiError(e) }); }
+  };
   const [note, setNote] = React.useState<{ id: number; ok: boolean; text: string } | null>(null);
   const cancelCheck = useCancelCheckAll();
   const [cancelling, setCancelling] = React.useState<number | null>(null);
@@ -320,6 +327,7 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                       ? ` · на заведение${c.staffName ? `, закрыл ${c.staffName}` : ''}`
                       : c.paymentMethod ? ` · ${payLabel(c.paymentMethod)}` : ''}
                     {c.paymentWas && <Box component="span" sx={{ color: 'warning.main' }}> · исправлено с «{payLabel(c.paymentWas)}»{c.paymentChangedBy ? `, ${c.paymentChangedBy}` : ''}{c.paymentChangedAt ? ` ${time(c.paymentChangedAt)}` : ''}</Box>}
+                    {c.refunded && c.paymentMethod === 'staff' && <Box component="span" sx={{ color: 'warning.main' }}> · возврат{c.refundedBy ? `, ${c.refundedBy}` : ''}{c.refundedAt ? ` ${time(c.refundedAt)}` : ''}</Box>}
                     {ft && <Box component="span" sx={{ color: sold || returned ? 'text.secondary' : 'error.main' }}> · кассовый чек: {ft}</Box>}
                   </Typography>
                   {note?.id === c.id && <Typography variant="body2" color={note.ok ? 'success.main' : 'error.main'}>{note.text}</Typography>}
@@ -327,6 +335,11 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                 {c.refunded ? <Chip size="small" color="warning" label="Возврат" /> : <Chip size="small" color={STATUS[c.status].color} label={STATUS[c.status].text} />}
                 <Typography sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right', textDecoration: c.refunded ? 'line-through' : undefined, color: c.refunded ? 'text.secondary' : undefined }}>{money(c.total)}</Typography>
               </ButtonBase>
+              {c.status === 'closed' && c.paymentMethod === 'staff' && !c.refunded && (
+                <Button size="small" color="inherit" disabled={houseRefund.isPending} onClick={() => doHouseRefund(c.id, c.total)} sx={{ color: 'text.secondary', mr: 0.5 }}>
+                  Возврат
+                </Button>
+              )}
               {sold && !returned && (
                 <Button size="small" color="inherit" disabled={giveBack.isPending} onClick={() => doReturn(c.id, c.total)} sx={{ color: 'text.secondary', mr: 0.5 }}>
                   Возврат

@@ -2895,6 +2895,14 @@ namespace Cafe.API.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("printed_total");
 
+                    b.Property<DateTime?>("RefundedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("refunded_at");
+
+                    b.Property<int?>("RefundedBy")
+                        .HasColumnType("integer")
+                        .HasColumnName("refunded_by");
+
                     b.Property<string>("StaffReason")
                         .HasMaxLength(60)
                         .HasColumnType("character varying(60)")

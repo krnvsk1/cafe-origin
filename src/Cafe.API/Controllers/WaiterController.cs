@@ -783,6 +783,8 @@ namespace Cafe.API.Controllers
             // 2. Новый способ оплаты на счёте и в его заказах
             var was = c.PaymentMethod;
             c.PaymentMethod = method;
+            c.RefundedAt = null;   // поменяли оплату — счёт снова действующий
+            c.RefundedBy = null;
             c.StaffUserId = method == CheckPayments.Staff ? r.StaffUserId : null;
             c.StaffReason = method == CheckPayments.Staff ? staffReason : null;
             c.PaymentWas = was;
@@ -807,6 +809,24 @@ namespace Cafe.API.Controllers
                 return Ok(new { id, paymentMethod = method, returned, fiscal = (object?)null, fiscalSkipped = "staff", staff = staffName });
             object? fiscal = fiscalOn ? await FiscalAsync(id) : null;
             return Ok(new { id, paymentMethod = method, returned, fiscal, fiscalSkipped = fiscalOn ? null : "disabled" });
+        }
+
+        // POST: api/waiter/checks/{id}/house-refund — возврат счёта «на заведение» (официант ошибся):
+        // денег и кассового чека не было — просто помечаем, счёт больше не считается «на заведение»; видно, кто и когда
+        [HttpPost("checks/{id:int}/house-refund")]
+        [HasPermission(Permissions.ChecksAll)]
+        public async Task<IActionResult> HouseRefund(int id)
+        {
+            var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
+            if (c == null) return NotFound(new { message = "Счёт не найден" });
+            if (c.Status != CheckStatuses.Closed || c.PaymentMethod != CheckPayments.Staff)
+                return BadRequest(new { message = "Возврат без чека — только для счёта, закрытого на заведение" });
+            if (c.RefundedAt != null) return BadRequest(new { message = "Возврат уже сделан" });
+            c.RefundedAt = DateTime.UtcNow;
+            c.RefundedBy = User.GetUserId();
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("↩️ Счёт #{CheckId} на заведение — возврат ({Total} ₽), сделал {User}", id, c.Total, User.GetUserId());
+            return Ok(new { id, refundedAt = c.RefundedAt });
         }
 
         // POST: api/waiter/checks/{id}/fiscal/return — чек возврата по счёту (гость вернул деньги): зеркало чека продажи

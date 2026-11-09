@@ -37,6 +37,11 @@ namespace Cafe.API.Services
                 if (g.Key.Check is int c) result.Checks.Add(c); else if (g.Key.Order is int o) result.Orders.Add(o);
                 result.Entries.Add(new RefundEntry(g.Key.Check, g.Key.Order, last.CreatedAt, last.Total, last.PaymentMethod));
             }
+            // Счета «на заведение», по которым сделали возврат (без денег и чека)
+            var house = await db.TableChecks.AsNoTracking().Where(c => c.RefundedAt != null)
+                .Select(c => new { c.Id, c.RefundedAt, c.Total, c.PaymentMethod }).ToListAsync(ct);
+            foreach (var h in house)
+                if (result.Checks.Add(h.Id)) result.Entries.Add(new RefundEntry(h.Id, null, h.RefundedAt!.Value, h.Total, h.PaymentMethod));
             return result;
         }
 
