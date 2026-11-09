@@ -369,7 +369,9 @@ app.UseSerilogRequestLogging(o =>
         ex != null || ctx.Response.StatusCode >= 500 ? LogEventLevel.Error
         // Живые подключения (они и должны длиться долго), проверки состояния и картинки — только в подробном режиме
         : ctx.Request.Path.StartsWithSegments("/api/events") || ctx.Request.Path.StartsWithSegments("/health")
-          || ctx.Request.Path.StartsWithSegments("/metrics") || ctx.Request.Path.StartsWithSegments("/uploads") ? LogEventLevel.Debug
+          || ctx.Request.Path.StartsWithSegments("/metrics") || ctx.Request.Path.StartsWithSegments("/uploads")
+          // Агент печати ждёт задания до 20 секунд (long-poll) — долгий ответ здесь норма, не «внимание»
+          || (ctx.Request.Path.StartsWithSegments("/api/print-agent/jobs") && HttpMethods.IsGet(ctx.Request.Method)) ? LogEventLevel.Debug
         : elapsed > 3000 ? LogEventLevel.Warning
         : LogEventLevel.Information;
     o.EnrichDiagnosticContext = (diag, ctx) =>
