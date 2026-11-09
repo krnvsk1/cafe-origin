@@ -320,7 +320,9 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
               <ButtonBase onClick={() => navigate(`/waiter/${c.id}`, { state: { from: '/admin/shifts' } })}
                 sx={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 1, flex: 1, minWidth: 0, textAlign: 'left', alignItems: 'center', py: 0.75, px: 1, borderRadius: '10px' }}>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography sx={{ fontWeight: 700 }} noWrap>Стол {c.table}{c.label ? ` · ${c.label}` : ''}</Typography>
+                  <Typography sx={{ fontWeight: 700 }} noWrap>
+                    Стол {c.table}{c.orderIds?.length ? ` · ${c.orderIds.length > 1 ? 'Заказы' : 'Заказ'} ${c.orderIds.map(o => `#${o}`).join(', ')}` : c.label ? ` · ${c.label}` : ''}
+                  </Typography>
                   <Typography variant="body2" color="text.secondary" noWrap>
                     {c.waiter ?? '—'} · {time(c.openedAt)}{c.closedAt ? `–${time(c.closedAt)}` : ''}
                     {c.paymentMethod === 'staff'

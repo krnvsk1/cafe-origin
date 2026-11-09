@@ -357,6 +357,11 @@ namespace Cafe.API.Controllers
             var openTotals = await OpenTotalsAsync(checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList());
             var ids = checks.Select(c => (int?)c.Id).ToList();
             var receipts = await _context.FiscalReceipts.AsNoTracking().Where(r => ids.Contains(r.CheckId)).OrderBy(r => r.Id).ToListAsync();
+            // Номера заказов кухни по счёту — «Стол 5 · Заказ #8328»
+            var checkOrders = (await _context.OrderItems.AsNoTracking()
+                    .Where(i => ids.Contains(i.CheckId ?? i.Order!.CheckId))
+                    .Select(i => new { CheckId = i.CheckId ?? i.Order!.CheckId, i.OrderId }).Distinct().ToListAsync())
+                .GroupBy(x => x.CheckId!.Value).ToDictionary(g => g.Key, g => g.Select(x => x.OrderId).Distinct().OrderBy(x => x).ToList());
             // Продажа и возврат могут чередоваться (сменили оплату): показываем то, что после последнего пробитого чека другого вида
             object? FiscalOf(int checkId, string kind)
             {
@@ -413,6 +418,7 @@ namespace Cafe.API.Controllers
                     c.Id,
                     table = c.Table?.Name,
                     c.Label,
+                    orderIds = checkOrders.GetValueOrDefault(c.Id) ?? new List<int>(),
                     waiter = names.GetValueOrDefault(c.WaiterId ?? 0),
                     c.WaiterId,
                     c.Status,
