@@ -236,6 +236,57 @@ namespace Cafe.API.Controllers
             return Ok(new { order.Id, order.Status });
         }
 
+        public class RevertRequest
+        {
+            /// <summary>Кухня, чью часть вернуть; null — весь заказ</summary>
+            public int? StationId { get; set; }
+        }
+
+        // POST: api/kitchen/orders/{id}/revert — менеджер/администратор возвращает «Готово» назад в «Готовится»
+        // (повар нажал раньше времени). Блюда, уже отданные гостю, остаются отданными.
+        [HttpPost("orders/{id:int}/revert")]
+        [HasPermission(Permissions.ChecksAll, Permissions.OrdersManage)]
+        public async Task<IActionResult> Revert(int id, [FromBody] RevertRequest r, [FromServices] ILogger<KitchenController> logger)
+        {
+            var order = await _context.Orders.Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == id);
+            if (order == null) return NotFound(new { message = "Заказ не найден" });
+            if (order.Status is not (OrderStatuses.Accepted or OrderStatuses.Preparing or OrderStatuses.Ready))
+                return BadRequest(new { message = $"Заказ «{order.Status}» — вернуть на кухню нельзя" });
+
+            var stations = await StationsAsync();
+            var itemStations = await ItemStationsAsync(order.OrderItems.Select(i => i.DishId), stations[0].Id);
+            var items = r.StationId == null ? order.OrderItems.ToList()
+                : order.OrderItems.Where(i => itemStations.GetValueOrDefault(i.DishId, stations[0].Id) == r.StationId).ToList();
+            if (items.Count == 0) return BadRequest(new { message = "В заказе нет блюд для этой кухни" });
+
+            var rows = await _context.OrderStationStatuses.Where(x => x.OrderId == id).ToListAsync();
+            foreach (var row in rows.Where(x => r.StationId == null || x.StationId == r.StationId))
+            {
+                if (row.Status != OrderStatuses.Ready) continue;
+                row.Status = OrderStatuses.Preparing;
+                row.UpdatedAt = DateTime.UtcNow;
+                row.UpdatedByUserId = User.GetUserId();
+            }
+            // Готовность блюд — назад до отданного гостю
+            var states = await StatesAsync(items.Select(i => i.Id));
+            foreach (var i in items)
+                if (states.TryGetValue(i.Id, out var st) && st.ReadyQuantity > st.ServedQuantity)
+                {
+                    st.ReadyQuantity = st.ServedQuantity;
+                    st.UpdatedAt = DateTime.UtcNow;
+                }
+            await _context.SaveChangesAsync();
+
+            // Общий статус сам назад не идёт — возвращаем явно
+            if (order.Status == OrderStatuses.Ready)
+                await _statusService.ChangeStatusAsync(order, OrderStatuses.Preparing);
+            else
+                _events.Publish(new OrderEvent("updated", order.Id, order.UserId, order.Status, null, DateTime.UtcNow));
+            logger.LogInformation("↩️ Заказ #{OrderId}: «Готово» отменено{Station}, вернул {User}", id,
+                r.StationId == null ? "" : $" (кухня {stations.FirstOrDefault(s => s.Id == r.StationId)?.Name})", User.GetUserId());
+            return Ok(new { order.Id, order.Status });
+        }
+
         public class VoidDecision
         {
             /// <summary>writeoff — списать продукты, keep — без списания</summary>

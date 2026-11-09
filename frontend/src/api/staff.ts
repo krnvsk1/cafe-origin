@@ -184,6 +184,19 @@ export const useSetStationStatus = () => {
   });
 };
 
+/** Менеджер/администратор: вернуть «Готово» назад в «Готовится» (часть одной кухни или весь заказ) */
+export const useRevertKitchen = () => {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, Error, { orderId: number; stationId: number | null }>({
+    mutationFn: ({ orderId, stationId }) =>
+      apiClient.post(`/api/kitchen/orders/${orderId}/revert`, { stationId }).then(res => res.data),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['kitchen-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+};
+
 // ==================== КУРЬЕР ====================
 
 export interface CourierOrder {

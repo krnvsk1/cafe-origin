@@ -14,7 +14,8 @@ import {
   ZoomIn as ZoomInIcon,
   ZoomOut as ZoomOutIcon,
 } from '@mui/icons-material';
-import { useKitchenOrders, useSetOrderStatus, useKitchenStations, useSetStationStatus, useKitchenItem, useResolveVoid } from '../api/staff';
+import { useKitchenOrders, useSetOrderStatus, useKitchenStations, useSetStationStatus, useKitchenItem, useResolveVoid, useRevertKitchen } from '../api/staff';
+import { useCan, P } from '../auth/permissions';
 import type { KitchenOrder, KitchenOrderItem } from '../api/staff';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
 import {
@@ -70,6 +71,9 @@ const KitchenCard: React.FC<{
   const setStation = useSetStationStatus();
   const itemMark = useKitchenItem();
   const resolveVoid = useResolveVoid();
+  // Менеджер и администратор могут вернуть «Готово» назад, если повар нажал раньше времени
+  const canRevert = useCan()(P.ChecksAll);
+  const revert = useRevertKitchen();
   // Просьбы убрать блюда этой кухни (на общем экране — все)
   const voidRequests = (order.voidRequests ?? []).filter(v => stationId == null
     || order.items.some(i => i.id === v.orderItemId && i.stationId === stationId));
@@ -255,6 +259,12 @@ const KitchenCard: React.FC<{
         {next && (
           <Button variant="contained" size="large" disabled={busy} onClick={() => advance(next.status)}>
             {next.label}
+          </Button>
+        )}
+        {canRevert && status === 'Готов' && order.status !== 'Выполнен' && (
+          <Button size="small" color="inherit" disabled={busy || revert.isPending} sx={{ color: 'text.secondary' }}
+            onClick={() => { if (window.confirm(`Вернуть заказ #${order.id} в «Готовится»${stationId != null ? ' на этой кухне' : ''}?`)) revert.mutate({ orderId: order.id, stationId }); }}>
+            Вернуть в «Готовится»
           </Button>
         )}
         {!next && status === 'Готов' && waiting.length > 0 && (
