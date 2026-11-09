@@ -661,7 +661,11 @@ namespace Cafe.API.Controllers
                 o.PaidAt = now;
             }
             await _context.SaveChangesAsync();
+            // Гость рассчитался — готовые блюда считаются отданными, заказ уходит из «Готовы» на кухне
+            var completed = new HashSet<int>();
             foreach (var o in orders)
+                if (await ClosedCheckOrders.CompleteIfPaidAsync(_context, _statusService, o)) completed.Add(o.Id);
+            foreach (var o in orders.Where(o => !completed.Contains(o.Id)))
                 _events.Publish(new OrderEvent("updated", o.Id, o.UserId, o.Status, null, now));
             _logger.LogInformation("🍽 Счёт #{CheckId} закрыт: {Total} ₽ ({Method}{Staff})", c.Id, total, method,
                 staffName == null ? "" : $": {staffName}, {staffReason}");

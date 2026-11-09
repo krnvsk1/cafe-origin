@@ -431,6 +431,9 @@ namespace Cafe.API.Controllers
             var allServed = order.OrderItems.Count > 0 && order.OrderItems.All(i => (states.GetValueOrDefault(i.Id)?.ServedQuantity ?? 0) >= i.Quantity);
             if (allServed && order.Status == OrderStatuses.Ready && order.DeliveryType != "Доставка")
                 changed = await _statusService.ChangeStatusAsync(order, OrderStatuses.Completed) || changed;
+            // Счёт в зале уже закрыт (гость рассчитался), а кухня только сейчас отметила «Готово» — выполнен сразу
+            else if (order.Status == OrderStatuses.Ready)
+                changed = await ClosedCheckOrders.CompleteIfPaidAsync(_context, _statusService, order) || changed;
 
             if (!changed)
                 _events.Publish(new OrderEvent("updated", order.Id, order.UserId, order.Status, null, DateTime.UtcNow));

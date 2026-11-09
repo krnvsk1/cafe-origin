@@ -371,6 +371,8 @@ export interface ShiftDetails {
     fiscalReturn: CheckFiscalState | null;
     /** Деньги вернули гостю (чек возврата пробит) — счёт не в выручке */
     refunded?: boolean;
+    /** Заказы кухни по этому счёту */
+    orderIds?: number[];
     refundedBy?: string | null;
     refundedAt?: string | null;
   }[];
