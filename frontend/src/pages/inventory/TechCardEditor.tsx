@@ -255,6 +255,8 @@ const TechCardEditor: React.FC<Props> = ({ open, target, id, onClose }) => {
                 <Autocomplete
                   size="small"
                   options={sourceDishes}
+                  // Ключ — по id: у одноимённых позиций одинаковое название, и список путался
+                  getOptionKey={d => d.id}
                   groupBy={d => d.category || 'Без раздела'}
                   getOptionLabel={d => d.name}
                   onChange={(_, d) => d && copyFrom(d)}
@@ -300,6 +302,8 @@ const TechCardEditor: React.FC<Props> = ({ open, target, id, onClose }) => {
                       <Autocomplete<DishRow, false, false, false>
                         size="small"
                         options={dishOptions}
+                        // Ключ — по id: у одноимённых позиций одинаковое название, и список путался
+                        getOptionKey={d => d.id}
                         value={value}
                         groupBy={d => d.category || 'Без раздела'}
                         onChange={(_, d) => d && update(l.key, { subDishId: d.id, name: d.name })}
@@ -387,6 +391,8 @@ const TechCardEditor: React.FC<Props> = ({ open, target, id, onClose }) => {
                     <Autocomplete<ItemOption, false, false, false>
                       size="small"
                       options={options}
+                      // Ключ — по id: у одноимённых позиций одинаковое название, и список путался
+                      getOptionKey={o => (isCreate(o) ? `new:${o.inputValue}` : o.id)}
                       value={selected}
                       onChange={(_, v) => {
                         if (!v) return;

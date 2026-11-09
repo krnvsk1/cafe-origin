@@ -414,6 +414,8 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
           <Autocomplete<ItemOption, false, false, false>
             size="small"
             options={allItems}
+            // Ключ — по id: у одноимённых позиций одинаковое название, и список путался
+            getOptionKey={o => (isCreate(o) ? `new:${o.inputValue}` : o.id)}
             value={selected}
             onChange={(_, v) => {
               if (!v) return;
@@ -579,6 +581,8 @@ const DocumentEditor: React.FC<Props> = ({ open, type: initialType, documentId, 
                 {type === 'receipt' && (
                   <Autocomplete<Supplier | CreateOption, false, false, false>
                     options={suppliers}
+                    // Ключ — по id: у одноимённых позиций одинаковое название, и список путался
+                    getOptionKey={o => (isCreate(o) ? `new:${o.inputValue}` : o.id)}
                     value={supplier}
                     onChange={(_, v) => {
                       if (isCreate(v)) setNewSupplier(v.inputValue);
