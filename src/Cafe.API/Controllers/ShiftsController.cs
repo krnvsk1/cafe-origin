@@ -147,10 +147,26 @@ namespace Cafe.API.Controllers
                 var (state, _) = await _fiscal.ShiftStatusAsync(o, ct);
                 if (open)
                 {
-                    if (state == "opened") return new { ok = true, message = "Смена на кассе уже открыта" };
-                    if (state == "expired") await _fiscal.ShiftAsync("closeShift", User.GetUserId(), ct);
-                    await _fiscal.ShiftAsync("openShift", User.GetUserId(), ct);
-                    return new { ok = true, message = state == "expired" ? "Старая смена на кассе закрыта, новая открыта" : "Смена на кассе открыта" };
+                    string message;
+                    if (state == "opened") message = "Смена на кассе уже открыта";
+                    else
+                    {
+                        if (state == "expired") await _fiscal.ShiftAsync("closeShift", User.GetUserId(), ct);
+                        await _fiscal.ShiftAsync("openShift", User.GetUserId(), ct);
+                        message = state == "expired" ? "Старая смена на кассе закрыта, новая открыта" : "Смена на кассе открыта";
+                    }
+                    // Отчёт о состоянии счётчиков без гашения (X-отчёт): наличные в кассе на начало смены.
+                    // Не напечатался — смена всё равно открыта, отчёт можно снять на кассе (меню «Касса» → X-отчёт)
+                    try
+                    {
+                        await _fiscal.ShiftAsync("reportX", User.GetUserId(), ct);
+                        message += ", X-отчёт напечатан";
+                    }
+                    catch (FiscalException ex)
+                    {
+                        return new { ok = false, message = $"{message}, но X-отчёт не напечатан: {ex.Message}" };
+                    }
+                    return new { ok = true, message };
                 }
                 if (state == "closed") return new { ok = true, message = "Смена на кассе уже закрыта" };
                 await _fiscal.ShiftAsync("closeShift", User.GetUserId(), ct);
