@@ -2,7 +2,7 @@ import * as React from 'react';
 import {
   Box, Typography, Button, IconButton, Chip, TextField, InputAdornment, CircularProgress, Alert, Drawer,
   Dialog, DialogTitle, DialogContent, DialogActions, ToggleButtonGroup, ToggleButton, Switch, alpha, useTheme,
-  Menu, MenuItem, ListItemIcon, ListItemText, Snackbar,
+  Menu, MenuItem, ListItemIcon, ListItemText, Snackbar, Divider,
 } from '@mui/material';
 import {
   ArrowBack as BackIcon, Add as AddIcon, Remove as RemoveIcon, Search as SearchIcon, Close as CloseIcon,
@@ -18,7 +18,7 @@ import {
   useWaiterTables, useTableCheck, useOpenCheck, useAddRound, useCancelRound, useCloseCheck, useCancelCheck,
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
   useServeItem, useMyChecks, useSetItemWeight, usePrintCheck, fetchPrintJob, useCheckFiscal,
-  useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
+  useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useVenueReport, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
   useStaffChecksInfo, payLabel, useChangePayment, useApproveShift, useRejectShift, useCheckDiscount, type CheckPayment, type CloseCheckResult,
   type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
@@ -349,8 +349,9 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
       {myChecks && <MyChecksDialog onClose={() => setMyChecks(false)} />}
 
       <Dialog open={!!confirm} onClose={() => setConfirm(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>{confirm === 'venue' ? 'Закрыть смену заведения?' : 'Закончить смену?'}</DialogTitle>
+        <DialogTitle>{confirm === 'venue' ? 'Итоги смены' : 'Закончить смену?'}</DialogTitle>
         <DialogContent>
+          {confirm === 'venue' && <VenueReportView />}
           <Typography color="text.secondary">
             {confirm === 'venue'
               ? (shift.totalOpenChecks ? `Открытых счетов: ${shift.totalOpenChecks}. Их нужно закрыть или отменить.` : 'Смены официантов закроются вместе со сменой заведения.')
@@ -366,6 +367,45 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
           </Button>
         </DialogActions>
       </Dialog>
+    </Box>
+  );
+};
+
+/** Итоги смены заведения перед закрытием: сверить нал, безнал и «на заведение» */
+const VenueReportView: React.FC = () => {
+  const { data: r, isLoading, error } = useVenueReport(true);
+  if (isLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress size={28} /></Box>;
+  if (error || !r) return <Alert severity="warning" sx={{ mb: 2 }}>Не удалось загрузить итоги смены{error ? `: ${apiError(error)}` : ''}</Alert>;
+  const Row = ({ label, value, bold, muted }: { label: string; value: number; bold?: boolean; muted?: boolean }) => (
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 0.4, color: muted ? 'text.secondary' : undefined }}>
+      <Typography sx={{ fontWeight: bold ? 800 : 400 }}>{label}</Typography>
+      <Typography sx={{ fontWeight: bold ? 800 : 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{money(value)}</Typography>
+    </Box>
+  );
+  const parts = [
+    r.hall.checks ? `зал: ${r.hall.checks} сч.` : '',
+    r.site.orders ? `сайт: ${r.site.orders} зак.` : '',
+    r.banquets.payments ? `банкеты: ${r.banquets.payments} опл.` : '',
+  ].filter(Boolean).join(' · ');
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        С {timeOf(r.openedAt)}{parts ? ` · ${parts}` : ''}
+      </Typography>
+      <Row label="Наличные (АТОЛ)" value={r.totals.cash} />
+      <Row label="Безнал" value={r.totals.card} />
+      {r.totals.online > 0 && <Row label="Онлайн-оплата на сайте" value={r.totals.online} />}
+      <Divider sx={{ my: 0.75 }} />
+      <Row label="Выручка" value={r.totals.revenue} bold />
+      <Divider sx={{ my: 0.75 }} />
+      <Row label="На заведение (без оплаты)" value={r.totals.staff} muted />
+      {r.totals.refunds > 0 && <Row label="Возвраты" value={r.totals.refunds} muted />}
+      {r.hall.open > 0 && (
+        <Alert severity="warning" sx={{ mt: 1.5 }}>Открытых счетов: {r.hall.open} на {money(r.hall.openTotal)} — их нужно закрыть или отменить.</Alert>
+      )}
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+        Сверьте наличные в кассе и безнал по терминалу с этими суммами.
+      </Typography>
     </Box>
   );
 };
