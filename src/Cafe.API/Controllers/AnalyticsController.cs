@@ -58,6 +58,12 @@ namespace Cafe.API.Controllers
                 .Include(o => o.OrderItems)
                 .ToListAsync();
 
+            // Возвраты: деньги вернули гостю — не выручка; показываются отдельно
+            var refunds = await Cafe.API.Services.Refunds.LoadAsync(_context);
+            orders = orders.Where(o => !refunds.IsRefunded(o)).ToList();
+            var refundsNow = refunds.Between(periodStart, rangeEnd);
+            var refundsBefore = refunds.Between(rangeStart, periodStart);
+
             var current = orders.Where(o => o.CreatedAt.ToUniversalTime() >= periodStart).ToList();
             var previous = orders.Where(o => o.CreatedAt.ToUniversalTime() < periodStart).ToList();
 
@@ -196,7 +202,10 @@ namespace Cafe.API.Controllers
                     AverageRating = reviews.Count > 0 ? Math.Round(reviews.Average(), 2) : (double?)null,
                     StaffTotal = staffNow.Sum(c => c.Total),
                     StaffTotalChange = Change(staffNow.Sum(c => c.Total), staffBefore.Sum(c => c.Total)),
-                    StaffChecks = staffNow.Count
+                    StaffChecks = staffNow.Count,
+                    Refunds = refundsNow.Count,
+                    RefundsTotal = refundsNow.Sum(r => r.Amount),
+                    RefundsTotalChange = Change(refundsNow.Sum(r => r.Amount), refundsBefore.Sum(r => r.Amount))
                 },
                 StaffByPerson = staffByPerson,
                 ByDay = byDay,

@@ -345,8 +345,10 @@ export interface ShiftRow {
   revenue: number;
   cash: number;
   card: number;
-  /** На сотрудников — не выручка, к удержанию */
+  /** За счёт заведения — не выручка */
   staff?: number;
+  /** Возвраты: деньги вернули гостю — не выручка */
+  refunds?: number;
 }
 
 export interface ShiftDetails {
@@ -367,6 +369,8 @@ export interface ShiftDetails {
     paymentWas?: string | null; paymentChangedBy?: string | null; paymentChangedAt?: string | null;
     fiscal: CheckFiscalState | null;
     fiscalReturn: CheckFiscalState | null;
+    /** Деньги вернули гостю (чек возврата пробит) — счёт не в выручке */
+    refunded?: boolean;
   }[];
 }
 

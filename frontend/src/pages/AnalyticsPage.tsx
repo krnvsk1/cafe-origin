@@ -21,6 +21,7 @@ interface Analytics {
     reviewsCount: number; averageRating: number | null;
     /** Закрыто на сотрудников: без оплаты и без чека, не выручка — к удержанию */
     staffTotal?: number; staffTotalChange?: number | null; staffChecks?: number;
+    refunds?: number; refundsTotal?: number; refundsTotalChange?: number | null;
   };
   staffByPerson?: { name: string; checks: number; total: number }[];
   byDay: { date: string; revenue: number; orders: number }[];
@@ -119,7 +120,7 @@ const AnalyticsPage: React.FC = () => {
         <>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
             <Kpi title="Выручка" value={rub(s.revenue)} change={s.revenueChange}
-              hint={s.staffTotal ? `ещё ${rub(s.staffTotal)} за счёт заведения` : undefined} />
+              hint={[s.refundsTotal ? `возвраты ${rub(s.refundsTotal)} (${s.refunds})` : '', s.staffTotal ? `за счёт заведения ${rub(s.staffTotal)}` : ''].filter(Boolean).join(' · ') || undefined} />
             <Kpi title="Заказы" value={String(s.orders)} change={s.ordersChange} hint={s.cancelled ? `отменено: ${s.cancelled}` : undefined} />
             <Kpi title="Средний чек" value={rub(s.averageCheck)} change={s.averageCheckChange} />
             <Kpi title="Клиенты" value={String(s.customers)} hint={`новых: ${s.newCustomers} · повторных: ${s.repeatCustomers}`} />
@@ -211,6 +212,7 @@ const AnalyticsPage: React.FC = () => {
               <Typography variant="body2" sx={{ mb: 0.75 }}>Оплачено баллами: <b>{rub(s.pointsSpent)}</b></Typography>
               <Typography variant="body2" sx={{ mb: 0.75 }}>Начислено баллов: <b>{s.pointsEarned}</b></Typography>
               <Typography variant="body2" sx={{ mb: 0.75 }}>Выручка с доставки: <b>{rub(s.deliveryRevenue)}</b></Typography>
+              <Typography variant="body2" sx={{ mb: 0.75 }}>Возвраты гостям: <b>{rub(s.refundsTotal ?? 0)}</b>{s.refunds ? ` · ${s.refunds} шт.` : ''} — не в выручке</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
                 <Typography variant="body2">Оценка:</Typography>
                 {s.averageRating !== null ? (

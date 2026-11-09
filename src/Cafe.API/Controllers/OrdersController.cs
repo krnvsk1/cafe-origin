@@ -723,13 +723,23 @@ namespace Cafe.API.Controllers
             var (todayFrom, todayTo) = PeriodUtc(null, null, 1)!.Value;
             try
             {
-                var valid = _context.Orders.Where(o => o.Status != OrderStatuses.Cancelled);
+                // Выручка — как в аналитике: без отменённых, неоплаченных онлайн, закрытых на заведение,
+                // заказов кухни банкетов и возвращённых (деньги вернули гостю — они в «Возвратах»)
+                var refunds = await Refunds.LoadAsync(_context);
+                var refundedOrders = refunds.Orders.ToList();
+                var refundedChecks = refunds.Checks.ToList();
+                var valid = _context.Orders.Where(o => o.Status != OrderStatuses.Cancelled
+                    && (o.PaymentMethod != "online" || o.PaymentStatus == "paid" || o.PaymentStatus == "refunded")
+                    && o.PaymentMethod != CheckPayments.Staff && o.Source != BanquetService.Source
+                    && !refundedOrders.Contains(o.Id) && (o.CheckId == null || !refundedChecks.Contains(o.CheckId.Value)));
                 var inPeriod = valid.Where(o => o.CreatedAt >= fromUtc && o.CreatedAt < toUtc);
                 var totalOrders = await inPeriod.CountAsync();
                 var totalRevenue = await inPeriod.SumAsync(o => (decimal?)o.Total) ?? 0;
                 var today = valid.Where(o => o.CreatedAt >= todayFrom && o.CreatedAt < todayTo);
                 var todayOrders = await today.CountAsync();
                 var todayRevenue = await today.SumAsync(o => (decimal?)o.Total) ?? 0;
+                var periodRefunds = refunds.Between(fromUtc, toUtc);
+                var todayRefunds = refunds.Between(todayFrom, todayTo);
                 var activeOrders = await _context.Orders.CountAsync(o =>
                     o.Status != OrderStatuses.Delivered && o.Status != OrderStatuses.Completed && o.Status != OrderStatuses.Cancelled);
 
@@ -740,7 +750,11 @@ namespace Cafe.API.Controllers
                     TodayOrders = todayOrders,
                     TodayRevenue = todayRevenue,
                     ActiveOrders = activeOrders,
-                    AverageOrderValue = totalOrders > 0 ? Math.Round(totalRevenue / totalOrders, 2) : 0
+                    AverageOrderValue = totalOrders > 0 ? Math.Round(totalRevenue / totalOrders, 2) : 0,
+                    Refunds = periodRefunds.Count,
+                    RefundsTotal = periodRefunds.Sum(r => r.Amount),
+                    TodayRefunds = todayRefunds.Count,
+                    TodayRefundsTotal = todayRefunds.Sum(r => r.Amount)
                 });
             }
             catch (Exception ex)

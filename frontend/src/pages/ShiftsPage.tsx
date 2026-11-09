@@ -324,8 +324,8 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                   </Typography>
                   {note?.id === c.id && <Typography variant="body2" color={note.ok ? 'success.main' : 'error.main'}>{note.text}</Typography>}
                 </Box>
-                <Chip size="small" color={STATUS[c.status].color} label={STATUS[c.status].text} />
-                <Typography sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{money(c.total)}</Typography>
+                {c.refunded ? <Chip size="small" color="warning" label="Возврат" /> : <Chip size="small" color={STATUS[c.status].color} label={STATUS[c.status].text} />}
+                <Typography sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right', textDecoration: c.refunded ? 'line-through' : undefined, color: c.refunded ? 'text.secondary' : undefined }}>{money(c.total)}</Typography>
               </ButtonBase>
               {sold && !returned && (
                 <Button size="small" color="inherit" disabled={giveBack.isPending} onClick={() => doReturn(c.id, c.total)} sx={{ color: 'text.secondary', mr: 0.5 }}>
@@ -356,7 +356,7 @@ const ShiftCard: React.FC<{ s: ShiftRow; open: boolean; onToggle: () => void }> 
       <Box sx={{ textAlign: 'right' }}>
         <Typography sx={{ fontWeight: 800 }}>{money(s.revenue)}</Typography>
         <Typography variant="body2" color="text.secondary">
-          {s.checks} сч. · нал {money(s.cash)} · карта {money(s.card)}{s.staff ? ` · на заведение ${money(s.staff)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
+          {s.checks} сч. · нал {money(s.cash)} · карта {money(s.card)}{s.staff ? ` · на заведение ${money(s.staff)}` : ''}{s.refunds ? ` · возвраты ${money(s.refunds)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
         </Typography>
       </Box>
       <ExpandIcon sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />

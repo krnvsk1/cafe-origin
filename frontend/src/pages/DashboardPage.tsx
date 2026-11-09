@@ -217,6 +217,8 @@ const DashboardPage: React.FC = () => {
     const todayOrders = orderStats?.todayOrders ?? 0;
     const todayRevenue = orderStats?.todayRevenue ?? 0;
     const averageOrderValue = orderStats?.averageOrderValue ?? 0;
+    const refundsTotal = orderStats?.refundsTotal ?? 0;
+    const todayRefundsTotal = orderStats?.todayRefundsTotal ?? 0;
 
     return {
       totalDishes,
@@ -226,7 +228,9 @@ const DashboardPage: React.FC = () => {
       totalRevenue,
       todayOrders,
       todayRevenue,
-      averageOrderValue
+      averageOrderValue,
+      refundsTotal,
+      todayRefundsTotal
     };
   }, [dishes, orderStats]);
 
@@ -302,7 +306,7 @@ const DashboardPage: React.FC = () => {
             value={stats.todayOrders}
             icon={<ScheduleIcon />}
             color="#9c27b0"
-            subtitle={`На сумму ${Math.round(stats.todayRevenue).toLocaleString('ru-RU')} ₽`}
+            subtitle={`На сумму ${Math.round(stats.todayRevenue).toLocaleString('ru-RU')} ₽${stats.todayRefundsTotal ? ` · возвраты ${Math.round(stats.todayRefundsTotal).toLocaleString('ru-RU')} ₽` : ''}`}
             loading={loading}
           />
         </Grid>
@@ -312,7 +316,7 @@ const DashboardPage: React.FC = () => {
             value={`${Math.round(stats.totalRevenue).toLocaleString('ru-RU')} ₽`}
             icon={<MoneyIcon />}
             color="#2e7d32"
-            subtitle={`${stats.totalOrders} зак. · средний чек ${Math.round(stats.averageOrderValue).toLocaleString('ru-RU')} ₽`}
+            subtitle={`${stats.totalOrders} зак. · средний чек ${Math.round(stats.averageOrderValue).toLocaleString('ru-RU')} ₽${stats.refundsTotal ? ` · возвраты ${Math.round(stats.refundsTotal).toLocaleString('ru-RU')} ₽` : ''}`}
             loading={loading}
           />
         </Grid>

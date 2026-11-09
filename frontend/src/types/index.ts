@@ -188,6 +188,11 @@ export interface Dish {
     todayRevenue: number;
     activeOrders: number;
     averageOrderValue: number;
+    /** Возвраты гостям за период и сегодня — не в выручке */
+    refunds?: number;
+    refundsTotal?: number;
+    todayRefunds?: number;
+    todayRefundsTotal?: number;
   }
 
   // DTO для обновления заказа (PUT /api/orders/{id})

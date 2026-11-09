@@ -295,7 +295,9 @@ namespace Cafe.API.Controllers
             var shifts = await _context.VenueShifts.AsNoTracking().Where(s => s.BusinessDate >= f && s.BusinessDate <= t)
                 .OrderByDescending(s => s.OpenedAt).ToListAsync();
             var ids = shifts.Select(s => s.Id).ToList();
-            // Итоги по чекам считает база — период может быть длинным (вся история)
+            // Итоги по чекам считает база; возвращённые счета (деньги вернули гостю) — не выручка, отдельно «Возвраты»
+            var refunds = await Refunds.LoadAsync(_context);
+            var refunded = refunds.Checks.ToList();
             var totals = await _context.TableChecks.AsNoTracking()
                 .Where(c => c.VenueShiftId != null && ids.Contains(c.VenueShiftId.Value))
                 .GroupBy(c => c.VenueShiftId!.Value)
@@ -304,10 +306,11 @@ namespace Cafe.API.Controllers
                     ShiftId = g.Key,
                     Checks = g.Count(),
                     Open = g.Count(c => c.Status == CheckStatuses.Open),
-                    Revenue = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff ? c.Total : 0m),
-                    Cash = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Cash ? c.Total : 0m),
-                    Card = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Card ? c.Total : 0m),
+                    Revenue = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff && !refunded.Contains(c.Id) ? c.Total : 0m),
+                    Cash = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Cash && !refunded.Contains(c.Id) ? c.Total : 0m),
+                    Card = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Card && !refunded.Contains(c.Id) ? c.Total : 0m),
                     Staff = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff ? c.Total : 0m),
+                    Refunds = g.Sum(c => c.Status == CheckStatuses.Closed && refunded.Contains(c.Id) ? c.Total : 0m),
                 })
                 .ToDictionaryAsync(x => x.ShiftId);
             var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => ids.Contains(w.VenueShiftId) && w.ApprovedAt != null)
@@ -333,6 +336,7 @@ namespace Cafe.API.Controllers
                     cash = x?.Cash ?? 0,
                     card = x?.Card ?? 0,
                     staff = x?.Staff ?? 0,
+                    refunds = x?.Refunds ?? 0,
                 };
             }));
         }
@@ -363,6 +367,13 @@ namespace Cafe.API.Controllers
                 var r = mine.LastOrDefault(x => x.Status == FiscalStatuses.Done) ?? mine.LastOrDefault();
                 return r == null ? null : new { r.Status, r.Error, r.FiscalDocumentNumber };
             }
+            // Возвращён: пробитых возвратов не меньше, чем продаж — деньги отдали гостю, это не выручка
+            bool Refunded(int checkId)
+            {
+                var done = receipts.Where(r => r.CheckId == checkId && r.Status == FiscalStatuses.Done).ToList();
+                var ret = done.Count(r => r.Kind == FiscalKinds.Return);
+                return ret > 0 && ret >= done.Count(r => r.Kind == FiscalKinds.Sell);
+            }
             decimal Total(TableCheck c) => c.Status == CheckStatuses.Open ? WaiterController.Net(c, openTotals.GetValueOrDefault(c.Id)) : c.Status == CheckStatuses.Closed ? c.Total : 0;
 
             return Ok(new
@@ -385,7 +396,7 @@ namespace Cafe.API.Controllers
                         w.ClosedAt,
                         approvedBy = w.ApprovedBy == null || w.ApprovedBy == w.UserId ? null : names.GetValueOrDefault(w.ApprovedBy.Value),
                         checks = mine.Count,
-                        revenue = mine.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff).Sum(c => c.Total),
+                        revenue = mine.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff && !Refunded(c.Id)).Sum(c => c.Total),
                     };
                 }),
                 // На сотрудников: без оплаты и без чека — суммы к удержанию по людям
@@ -416,6 +427,7 @@ namespace Cafe.API.Controllers
                     total = Total(c),
                     fiscal = FiscalOf(c.Id, FiscalKinds.Sell),
                     fiscalReturn = FiscalOf(c.Id, FiscalKinds.Return),
+                    refunded = c.Status == CheckStatuses.Closed && Refunded(c.Id),
                 })
             });
         }
