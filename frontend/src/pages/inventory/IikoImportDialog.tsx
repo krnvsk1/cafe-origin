@@ -164,6 +164,8 @@ const IikoImportDialog: React.FC<Props> = ({ open, onClose }) => {
                         <Autocomplete<IikoTarget, false, false, false>
                           size="small"
                           options={preview.targets}
+                          // Ключ — по id: у одноимённых позиций одинаковое название, и список путался
+                          getOptionKey={o => `${o.kind}:${o.id}`}
                           groupBy={o => (o.kind === 'dish' ? 'Блюда' : 'Добавки')}
                           value={target}
                           onChange={(_, v) => {

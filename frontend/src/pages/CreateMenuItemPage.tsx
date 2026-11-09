@@ -611,6 +611,8 @@ const CreateMenuItemPage: React.FC = () => {
                 <Field label="Карточка" htmlFor="field-parentId" required>
                   <Autocomplete
                     options={parentCards}
+                    // Ключ — по id: у одноимённых позиций одинаковое название, и список путался
+                    getOptionKey={option => option.id}
                     value={parentCard}
                     onChange={(_e, value) => handleChange('parentId', value?.id ?? null)}
                     disabled={isPending}

@@ -159,6 +159,8 @@ const EgaisDocumentDialog: React.FC<{ id: number | null; onClose: () => void }> 
                       <Autocomplete<StockItem | CreateOption, false, false, false>
                         size="small"
                         options={items}
+                        // Ключ — по id: у одноимённых позиций одинаковое название, и список путался
+                        getOptionKey={o => (isCreate(o) ? `new:${o.inputValue}` : o.id)}
                         value={selected}
                         disabled={!editable || busy}
                         onChange={(_, v) => {
