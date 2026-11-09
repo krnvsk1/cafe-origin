@@ -180,6 +180,81 @@ namespace Cafe.API.Controllers
         }
 
         // POST: api/shifts/venue/close — закрыть смену заведения (открытых счетов быть не должно)
+        // GET: api/shifts/venue/report — итоги текущей смены перед закрытием: нал, безнал, на заведение, возвраты
+        [HttpGet("venue/report")]
+        [HasPermission(Permissions.Shift)]
+        public async Task<IActionResult> VenueReport()
+        {
+            var s = await _context.VenueShifts.AsNoTracking().Where(x => x.ClosedAt == null).OrderByDescending(x => x.OpenedAt).FirstOrDefaultAsync();
+            if (s == null) return NotFound(new { message = "Смена заведения не открыта" });
+            var from = s.OpenedAt;
+            var refunds = await Refunds.LoadAsync(_context);
+
+            // Зал: счета этой смены
+            var checks = await _context.TableChecks.AsNoTracking().Where(c => c.VenueShiftId == s.Id).ToListAsync();
+            var closed = checks.Where(c => c.Status == CheckStatuses.Closed).ToList();
+            var live = closed.Where(c => !refunds.Checks.Contains(c.Id)).ToList();
+            var open = checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList();
+            var openTotals = await OpenTotalsAsync(open);
+            var hall = new
+            {
+                checks = closed.Count,
+                cash = live.Where(c => c.PaymentMethod == CheckPayments.Cash).Sum(c => c.Total),
+                card = live.Where(c => c.PaymentMethod == CheckPayments.Card).Sum(c => c.Total),
+                staff = live.Where(c => c.PaymentMethod == CheckPayments.Staff).Sum(c => c.Total),
+                refunds = closed.Where(c => refunds.Checks.Contains(c.Id)).Sum(c => c.Total),
+                open = open.Count,
+                openTotal = openTotals.Values.Sum(),
+            };
+
+            // Заказы с сайта, закрытые за смену
+            var siteOrders = await _context.Orders.AsNoTracking()
+                .Where(o => o.Source == SiteOrdersController.Source && o.ClosedAt != null && o.ClosedAt >= from && o.Status != OrderStatuses.Cancelled)
+                .Select(o => new { o.Id, o.PaymentMethod, o.Total }).ToListAsync();
+            var siteLive = siteOrders.Where(o => !refunds.Orders.Contains(o.Id)).ToList();
+            var site = new
+            {
+                orders = siteOrders.Count,
+                cash = siteLive.Where(o => o.PaymentMethod == CheckPayments.Cash).Sum(o => o.Total),
+                card = siteLive.Where(o => o.PaymentMethod == CheckPayments.Card).Sum(o => o.Total),
+                online = siteLive.Where(o => o.PaymentMethod == "online").Sum(o => o.Total),
+                staff = siteLive.Where(o => o.PaymentMethod == CheckPayments.Staff).Sum(o => o.Total),
+                refunds = siteOrders.Where(o => refunds.Orders.Contains(o.Id)).Sum(o => o.Total),
+            };
+
+            // Банкеты: оплаты, внесённые за смену
+            var pays = await _context.BanquetPayments.AsNoTracking().Where(p => p.CreatedAt >= from && p.RefundedAt == null)
+                .Select(p => new { p.Method, p.Amount }).ToListAsync();
+            var banquets = new
+            {
+                payments = pays.Count,
+                cash = pays.Where(p => p.Method == CheckPayments.Cash).Sum(p => p.Amount),
+                card = pays.Where(p => p.Method == CheckPayments.Card).Sum(p => p.Amount),
+                staff = pays.Where(p => p.Method == CheckPayments.Staff).Sum(p => p.Amount),
+            };
+
+            var cash = hall.cash + site.cash + banquets.cash;
+            var card = hall.card + site.card + banquets.card;
+            return Ok(new
+            {
+                s.Id,
+                s.BusinessDate,
+                s.OpenedAt,
+                hall,
+                site,
+                banquets,
+                totals = new
+                {
+                    cash,
+                    card,
+                    online = site.online,
+                    staff = hall.staff + site.staff + banquets.staff,
+                    refunds = hall.refunds + site.refunds,
+                    revenue = cash + card + site.online,
+                },
+            });
+        }
+
         [HttpPost("venue/close")]
         [HasPermission(Permissions.Shift)]
         public async Task<IActionResult> CloseVenue()

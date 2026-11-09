@@ -324,6 +324,21 @@ export const useShiftCurrent = () =>
 export interface VenueShiftResult { id: number; fiscal: { ok: boolean; message: string } | null }
 export const useOpenVenueShift = () => useWaiterMutation<void, VenueShiftResult>(() => apiClient.post('/api/shifts/venue/open').then(r => r.data));
 export const useCloseVenueShift = () => useWaiterMutation<void, VenueShiftResult>(() => apiClient.post('/api/shifts/venue/close').then(r => r.data));
+/** Итоги текущей смены заведения — показываются перед закрытием */
+export interface VenueReport {
+  id: number; businessDate: string; openedAt: string;
+  hall: { checks: number; cash: number; card: number; staff: number; refunds: number; open: number; openTotal: number };
+  site: { orders: number; cash: number; card: number; online: number; staff: number; refunds: number };
+  banquets: { payments: number; cash: number; card: number; staff: number };
+  totals: { cash: number; card: number; online: number; staff: number; refunds: number; revenue: number };
+}
+export const useVenueReport = (enabled: boolean) =>
+  useQuery<VenueReport>({
+    queryKey: ['venue-report'],
+    queryFn: () => apiClient.get('/api/shifts/venue/report').then(r => r.data),
+    enabled,
+    staleTime: 0,
+  });
 export const useOpenMyShift = () => useWaiterMutation<void, { id: number; pending: boolean }>(() => apiClient.post('/api/shifts/mine/open').then(r => r.data));
 export const useApproveShift = () => useWaiterMutation<number>(id => apiClient.post(`/api/shifts/waiters/${id}/approve`).then(r => r.data));
 export const useRejectShift = () => useWaiterMutation<number>(id => apiClient.post(`/api/shifts/waiters/${id}/reject`).then(r => r.data));
