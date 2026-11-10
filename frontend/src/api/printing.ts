@@ -41,6 +41,17 @@ export const useSavePrinting = () => {
   });
 };
 
+/** Строка счёта для предпросмотра: align 0 — слева, 1 — по центру, 2 — справа */
+export interface PreviewLine { text: string; align: number; bold: boolean; big: boolean }
+export const usePrecheckPreview = (width: number, footer: string, enabled: boolean) =>
+  useQuery<{ width: number; lines: PreviewLine[] }>({
+    queryKey: ['printing-preview', width, footer],
+    queryFn: () => apiClient.post('/api/admin/printing/preview', { width, footer }).then(r => r.data),
+    enabled,
+    placeholderData: prev => prev,
+    staleTime: 60_000,
+  });
+
 export const useTestPrint = () => {
   const qc = useQueryClient();
   return useMutation<{ id: number }, Error, void>({

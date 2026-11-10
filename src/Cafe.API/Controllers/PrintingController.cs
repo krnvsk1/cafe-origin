@@ -208,6 +208,29 @@ namespace Cafe.API.Controllers
             return Ok(await StateAsync());
         }
 
+        public class PreviewRequest
+        {
+            public int Width { get; set; } = 48;
+            public string? Footer { get; set; }
+        }
+
+        // POST: api/admin/printing/preview — как выглядит счёт для гостя с этими настройками (пример)
+        [HttpPost("preview")]
+        public async Task<IActionResult> Preview([FromBody] PreviewRequest r, [FromServices] Cafe.API.Services.BrandSettingsProvider brand)
+        {
+            var s = new PrintSettings { Width = Math.Clamp(r.Width, 24, 64), CodeTable = 17, Encoding = 866, Footer = string.IsNullOrWhiteSpace(r.Footer) ? null : r.Footer.Trim() };
+            var now = DateTime.UtcNow;
+            var data = new PrecheckData((await brand.GetAsync()).DisplayName, "5", "счёт №1024", "Анна", 2, now.AddMinutes(-40), now,
+                new[]
+                {
+                    new PrecheckLine("Шаурма классическая", 2, 350, 700),
+                    new PrecheckLine("Шашлык из свиной шеи · 250 г", 1, 690, 690),
+                    new PrecheckLine("Морс клюквенный 0,5 л", 2, 150, 300),
+                },
+                s.Footer, Adjustments: new[] { new PrecheckAdjustment("Скидка 10%", -169) });
+            return Ok(new { width = s.Width, lines = PrintService.Preview(PrintService.Precheck(s, data), s.Encoding) });
+        }
+
         // POST: api/admin/printing/test — проверочная страница
         [HttpPost("test")]
         public async Task<IActionResult> Test()

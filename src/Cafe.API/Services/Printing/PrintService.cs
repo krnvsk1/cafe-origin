@@ -87,6 +87,50 @@ namespace Cafe.API.Services.Printing
             return p.Cut().ToArray();
         }
 
+        /// <summary>Строка документа для предпросмотра на экране</summary>
+        public record PreviewLine(string Text, int Align, bool Bold, bool Big);
+
+        /// <summary>
+        /// Предпросмотр: разбирает ESC/POS обратно в строки с выравниванием, жирным и крупным шрифтом —
+        /// так в настройках видно, как счёт выйдет на ленте
+        /// </summary>
+        public static List<PreviewLine> Preview(byte[] bytes, int encoding)
+        {
+            var enc = System.Text.Encoding.GetEncoding(encoding);
+            var lines = new List<PreviewLine>();
+            var buf = new List<byte>();
+            int align = 0; bool bold = false, big = false;
+            void Flush() { lines.Add(new PreviewLine(enc.GetString(buf.ToArray()), align, bold, big)); buf.Clear(); }
+            for (var i = 0; i < bytes.Length; i++)
+            {
+                var b = bytes[i];
+                if (b == 0x1B && i + 1 < bytes.Length)
+                {
+                    var cmd = bytes[++i];
+                    if (cmd == 0x40) continue;                                              // ESC @
+                    if (i + 1 >= bytes.Length) break;
+                    var n = bytes[++i];
+                    if (cmd == 0x61) align = n;                                             // ESC a
+                    else if (cmd == 0x45) bold = n != 0;                                    // ESC E
+                    else if (cmd == 0x64) for (var k = 0; k < n; k++) lines.Add(new PreviewLine("", 0, false, false)); // ESC d
+                    continue;                                                               // ESC t и прочие — с одним параметром
+                }
+                if (b == 0x1D && i + 1 < bytes.Length)
+                {
+                    var cmd = bytes[++i];
+                    if (cmd == 0x21 && i + 1 < bytes.Length) big = bytes[++i] != 0;          // GS !
+                    else if (cmd == 0x56) i += 2;                                           // GS V — обрезка
+                    continue;
+                }
+                if (b == 0x0A) { Flush(); continue; }
+                buf.Add(b);
+            }
+            if (buf.Count > 0) Flush();
+            // Отступ перед обрезкой на экране не нужен
+            while (lines.Count > 0 && lines[^1].Text.Length == 0) lines.RemoveAt(lines.Count - 1);
+            return lines;
+        }
+
         /// <summary>Проверочная страница: кириллица, ширина строки, обрезка</summary>
         public static byte[] TestPage(PrintSettings s)
         {

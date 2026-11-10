@@ -12,6 +12,19 @@ namespace Cafe.Tests
         private static string Text(byte[] bytes, int encoding = 866) => Encoding.GetEncoding(encoding).GetString(bytes);
 
         [Fact]
+        public void Preview_DecodesLines_WithAlignBoldBig()
+        {
+            var s = new PrintSettings { Width = 32, CodeTable = 17, Encoding = 866, PrinterName = "bar" };
+            var lines = PrintService.Preview(PrintService.TestPage(s), 866);
+            var title = Assert.Single(lines, l => l.Text == "ПРОВЕРКА ПЕЧАТИ");
+            Assert.True(title.Big);
+            Assert.True(title.Bold);
+            Assert.Equal(1, title.Align);
+            Assert.Contains(lines, l => l.Text == new string('1', 32) && !l.Big);
+            Assert.NotEqual("", lines[^1].Text);
+        }
+
+        [Fact]
         public void Wrap_SplitsByWords_AndLongWords()
         {
             Assert.Equal(new[] { "Свиная шея", "на мангале" }, EscPos.Wrap("Свиная шея на мангале", 12));
