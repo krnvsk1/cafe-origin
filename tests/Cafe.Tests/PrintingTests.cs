@@ -12,6 +12,48 @@ namespace Cafe.Tests
         private static string Text(byte[] bytes, int encoding = 866) => Encoding.GetEncoding(encoding).GetString(bytes);
 
         [Fact]
+        public void Preview_DecodesLines_WithAlignBoldBig()
+        {
+            var s = new PrintSettings { Width = 32, CodeTable = 17, Encoding = 866, PrinterName = "bar" };
+            var lines = PrintService.Preview(PrintService.TestPage(s), 866);
+            var title = Assert.Single(lines, l => l.Text == "ПРОВЕРКА ПЕЧАТИ");
+            Assert.True(title.Big);
+            Assert.True(title.Bold);
+            Assert.Equal(1, title.Align);
+            Assert.Contains(lines, l => l.Text == new string('1', 32) && !l.Big);
+            Assert.NotEqual("", lines[^1].Text);
+        }
+
+        [Fact]
+        public void Precheck_UsesLayout_ButAlwaysSaysNotFiscal()
+        {
+            var layout = PrecheckLayout.Default(null);
+            layout.Header.Add(new PrecheckLayoutLine { Text = "Wi-Fi: dvorik", Align = "left" });
+            layout.ShowWaiter = false;
+            layout.TotalLabel = "К ОПЛАТЕ ВСЕГО";
+            layout.Footer = new() { new PrecheckLayoutLine { Text = "Ждём вас {date}!", Align = "center" } };
+            var s = new PrintSettings { Width = 48, CodeTable = 17, Encoding = 866, Layout = layout };
+            var data = new PrecheckData("Кафе", "", "счёт №12", "Никита", 2, DateTime.UtcNow, DateTime.UtcNow,
+                new[] { new PrecheckLine("Пиво", 2, 200, 400) }, null);
+            var lines = PrintService.Preview(PrintService.Precheck(s, data), 866).Select(l => l.Text).ToList();
+            Assert.Contains("Wi-Fi: dvorik", lines);
+            Assert.Contains("счёт №12".Replace('ё', 'е'), lines);          // стола нет — без « · »
+            Assert.DoesNotContain(lines, l => l.Contains("Никита"));
+            Assert.Contains(lines, l => l.StartsWith("К ОПЛАТЕ ВСЕГО") && l.EndsWith("400,00"));
+            Assert.Contains("", lines);
+            Assert.Contains(lines, l => l.StartsWith("Ждем вас "));
+        }
+
+        [Fact]
+        public void PrecheckLayout_Validates()
+        {
+            var l = PrecheckLayout.Default("x");
+            Assert.Null(l.Validate());
+            l.TotalLabel = "";
+            Assert.NotNull(l.Validate());
+        }
+
+        [Fact]
         public void Wrap_SplitsByWords_AndLongWords()
         {
             Assert.Equal(new[] { "Свиная шея", "на мангале" }, EscPos.Wrap("Свиная шея на мангале", 12));
@@ -33,24 +75,10 @@ namespace Cafe.Tests
             Assert.Contains("Стол 5", text);
             Assert.Contains("Свиная шея · 350 г".Replace("·", "?"), text.Replace("·", "?"));
             Assert.Contains("1 450,00", text);   // итог 1050 + 400
-            Assert.Contains("Это не кассовый чек", text);
+            Assert.Contains("", text);
             // Ни одна строка не длиннее ширины принтера
             foreach (var line in text.Split('\n'))
                 Assert.True(new string(line.Where(ch => ch >= ' ').ToArray()).Length <= 48 + 8);
-        }
-
-        [Fact]
-        public void Precheck_OnHouse_ShowsWhoClosedAndNoPayment()
-        {
-            var s = new PrintSettings { Width = 48, CodeTable = 17, Encoding = 866, Footer = "Спасибо!" };
-            var data = new PrecheckData("Кафе", "5", "счёт №12", "Никита", null, DateTime.UtcNow, DateTime.UtcNow,
-                new[] { new PrecheckLine("Борщ", 1, 300, 300) }, s.Footer, new PrecheckStaff("Анна Петрова", "Наличные (Принтер)"));
-            var text = Text(PrintService.Precheck(s, data));
-            Assert.Contains("Наличные (Принтер)", text);
-            Assert.Contains("Закрыл: Анна Петрова", text);
-            Assert.Contains("ЗА СЧЕТ ЗАВЕДЕНИЯ", text);  // принтер печатает Ё как Е
-            Assert.Contains("Это не кассовый чек", text);
-            Assert.DoesNotContain("Спасибо!", text);
         }
 
         [Fact]

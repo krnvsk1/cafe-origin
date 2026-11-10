@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
@@ -167,6 +168,7 @@ namespace Cafe.API.Controllers
             return new
             {
                 s.Enabled, s.Mode, s.RelayDevices, s.AtolViaDriver, s.Host, s.Port, s.PrinterName, s.Width, s.CodeTable, s.Encoding, s.Footer,
+                layout = s.Layout ?? PrecheckLayout.Default(s.Footer),
                 agentSeenAt = PrintSettingsProvider.AgentSeenAt,
                 agentHost = PrintSettingsProvider.AgentHost,
                 recent
@@ -204,8 +206,67 @@ namespace Cafe.API.Controllers
                 Encoding = r.Encoding,
                 Footer = string.IsNullOrWhiteSpace(r.Footer) ? null : r.Footer.Trim()[..Math.Min(200, r.Footer.Trim().Length)],
                 AgentToken = s.AgentToken,
+                Layout = s.Layout,
             }, User.GetUserId());
             return Ok(await StateAsync());
+        }
+
+        public class PreviewRequest
+        {
+            public int Width { get; set; } = 48;
+            public PrecheckLayout? Layout { get; set; }
+        }
+
+        /// <summary>Пример счёта: стол, официант, три блюда, скидка</summary>
+        private static async Task<PrecheckData> SampleAsync(Cafe.API.Services.BrandSettingsProvider brand)
+        {
+            var now = DateTime.UtcNow;
+            return new PrecheckData((await brand.GetAsync()).DisplayName, "5", "счёт №1024", "Анна", 2, now.AddMinutes(-40), now,
+                new[]
+                {
+                    new PrecheckLine("Шаурма классическая", 2, 350, 700),
+                    new PrecheckLine("Шашлык из свиной шеи · 250 г", 1, 690, 690),
+                    new PrecheckLine("Морс клюквенный 0,5 л", 2, 150, 300),
+                },
+                null, Adjustments: new[] { new PrecheckAdjustment("Скидка 10%", -169) });
+        }
+
+        // POST: api/admin/printing/preview — как выглядит счёт для гостя с этим видом (пример)
+        [HttpPost("preview")]
+        public async Task<IActionResult> Preview([FromBody] PreviewRequest r, [FromServices] Cafe.API.Services.BrandSettingsProvider brand)
+        {
+            var cur = await _settings.GetAsync();
+            var layout = (r.Layout ?? cur.Layout ?? PrecheckLayout.Default(cur.Footer)).Normalized();
+            if (layout.Validate() is string err) return BadRequest(new { message = err });
+            var s = new PrintSettings { Width = Math.Clamp(r.Width, 24, 64), CodeTable = 17, Encoding = 866, Layout = layout };
+            return Ok(new { width = s.Width, lines = PrintService.Preview(PrintService.Precheck(s, await SampleAsync(brand)), s.Encoding) });
+        }
+
+        // PUT: api/admin/printing/layout — вид счёта для гостя
+        [HttpPut("layout")]
+        public async Task<IActionResult> SaveLayout([FromBody] PrecheckLayout layout)
+        {
+            var l = layout.Normalized();
+            if (l.Validate() is string err) return BadRequest(new { message = err });
+            var s = await _settings.GetAsync();
+            s.Layout = l;
+            s.Footer = string.Join(" ", l.Footer.Select(x => x.Text).Where(x => x.Length > 0)) is { Length: > 0 } f ? f[..Math.Min(200, f.Length)] : null;
+            await _settings.SaveAsync(s, User.GetUserId());
+            return Ok(await StateAsync());
+        }
+
+        // POST: api/admin/printing/layout/sample — напечатать пример счёта с этим видом
+        [HttpPost("layout/sample")]
+        public async Task<IActionResult> PrintSample([FromBody] PrecheckLayout layout, [FromServices] Cafe.API.Services.BrandSettingsProvider brand)
+        {
+            var s = await _settings.GetAsync();
+            if (!s.Enabled) return BadRequest(new { message = "Сначала включите принтер счетов и сохраните настройки" });
+            var l = layout.Normalized();
+            if (l.Validate() is string err) return BadRequest(new { message = err });
+            var copy = JsonSerializer.Deserialize<PrintSettings>(JsonSerializer.Serialize(s))!;
+            copy.Layout = l;
+            var job = await _print.EnqueueAsync("test", null, "Пример счёта", PrintService.Precheck(copy, await SampleAsync(brand)), User.GetUserId());
+            return Ok(new { job.Id });
         }
 
         // POST: api/admin/printing/test — проверочная страница

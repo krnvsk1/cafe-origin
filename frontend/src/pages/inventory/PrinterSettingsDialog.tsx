@@ -29,7 +29,6 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
   const [printerName, setPrinterName] = React.useState(state.printerName);
   const [width, setWidth] = React.useState(String(state.width));
   const [codePage, setCodePage] = React.useState(`${state.codeTable}-${state.encoding}`);
-  const [footer, setFooter] = React.useState(state.footer ?? '');
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null);
 
   React.useEffect(() => {
@@ -43,13 +42,12 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
     setPrinterName(state.printerName);
     setWidth(String(state.width));
     setCodePage(CODE_PAGES.some(c => c.key === `${state.codeTable}-${state.encoding}`) ? `${state.codeTable}-${state.encoding}` : '17-866');
-    setFooter(state.footer ?? '');
     setMsg(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const cp = CODE_PAGES.find(c => c.key === codePage) ?? CODE_PAGES[0];
-  const input = () => ({ enabled, mode, relayDevices: relay, atolViaDriver: relay && viaDriver, host: host.trim() || null, port: Number(port) || 9100, printerName: printerName.trim(), width: Number(width) || 48, codeTable: cp.codeTable, encoding: cp.encoding, footer: footer.trim() || null });
+  const input = () => ({ enabled, mode, relayDevices: relay, atolViaDriver: relay && viaDriver, host: host.trim() || null, port: Number(port) || 9100, printerName: printerName.trim(), width: Number(width) || 48, codeTable: cp.codeTable, encoding: cp.encoding, footer: state.footer });
 
   const handleSave = async (thenTest = false) => {
     setMsg(null);
@@ -94,7 +92,6 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
             {CODE_PAGES.map(c => <MenuItem key={c.key} value={c.key}>{c.label}</MenuItem>)}
           </TextField>
         </Box>
-        <TextField label="Текст внизу счёта" value={footer} onChange={e => setFooter(e.target.value)} inputProps={{ maxLength: 200 }} />
 
         <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2 }}>
           <Typography sx={{ fontWeight: 700, mb: 0.5 }}>

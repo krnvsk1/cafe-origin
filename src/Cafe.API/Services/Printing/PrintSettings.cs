@@ -41,6 +41,83 @@ namespace Cafe.API.Services.Printing
         public string? Footer { get; set; } = "Спасибо, что пришли к нам!";
         /// <summary>Ключ программы печати на кассовом ПК</summary>
         public string AgentToken { get; set; } = string.Empty;
+        /// <summary>Вид счёта для гостя; null — по умолчанию (с подвалом из Footer)</summary>
+        public PrecheckLayout? Layout { get; set; }
+    }
+
+    /// <summary>Строка шапки или подвала счёта</summary>
+    public class PrecheckLayoutLine
+    {
+        public string Text { get; set; } = string.Empty;
+        /// <summary>left, center, right</summary>
+        public string Align { get; set; } = "center";
+        public bool Bold { get; set; }
+        /// <summary>Крупный шрифт (двойная ширина и высота)</summary>
+        public bool Large { get; set; }
+    }
+
+    /// <summary>
+    /// Вид счёта для гостя (пречек). Блюда, суммы и строка «» печатаются всегда;
+    /// шапка, подвал, какие поля показывать и подписи — настраиваются. В тексте: {brand}, {title}, {table}, {check}, {waiter}, {guests}, {date}, {time}.
+    /// </summary>
+    public class PrecheckLayout
+    {
+        public const int MaxLines = 12;
+        public const int MaxText = 64;
+        public const int MaxLabel = 24;
+
+        public List<PrecheckLayoutLine> Header { get; set; } = new();
+        public bool ShowDate { get; set; } = true;
+        public bool ShowGuests { get; set; } = true;
+        public string GuestsLabel { get; set; } = "Гостей";
+        public bool ShowWaiter { get; set; } = true;
+        public string WaiterLabel { get; set; } = "Официант";
+        /// <summary>Количество и цена под названием блюда</summary>
+        public bool ShowPrices { get; set; } = true;
+        public string SubtotalLabel { get; set; } = "Сумма блюд";
+        public string TotalLabel { get; set; } = "ИТОГО";
+        public string DueLabel { get; set; } = "К ОПЛАТЕ";
+        public List<PrecheckLayoutLine> Footer { get; set; } = new();
+
+        public static PrecheckLayout Default(string? footer) => new()
+        {
+            Header = new()
+            {
+                new() { Text = "{brand}", Align = "center", Bold = true, Large = true },
+                new() { Text = "{title}", Align = "center", Bold = true },
+                new() { Text = "{table} · {check}", Align = "center" },
+            },
+            Footer = string.IsNullOrWhiteSpace(footer) ? new() : new() { new() { Text = footer.Trim(), Align = "center" } },
+        };
+
+        public static readonly string[] Aligns = { "left", "center", "right" };
+
+        public string? Validate()
+        {
+            if (Header.Count > MaxLines || Footer.Count > MaxLines) return $"Не больше {MaxLines} строк в шапке и внизу";
+            foreach (var l in Header.Concat(Footer))
+            {
+                if ((l.Text ?? "").Length > MaxText) return $"Строка длиннее {MaxText} символов";
+                if (!Aligns.Contains(l.Align)) return "Неизвестное выравнивание";
+            }
+            foreach (var label in new[] { GuestsLabel, WaiterLabel, SubtotalLabel, TotalLabel, DueLabel })
+                if ((label ?? "").Length > MaxLabel) return $"Подпись длиннее {MaxLabel} символов";
+            if (string.IsNullOrWhiteSpace(TotalLabel)) return "Подпись итога не может быть пустой";
+            return null;
+        }
+
+        public PrecheckLayout Normalized() => new()
+        {
+            Header = Header.Select(Clean).ToList(),
+            Footer = Footer.Select(Clean).ToList(),
+            ShowDate = ShowDate, ShowGuests = ShowGuests, ShowWaiter = ShowWaiter, ShowPrices = ShowPrices,
+            GuestsLabel = (GuestsLabel ?? "").Trim(), WaiterLabel = (WaiterLabel ?? "").Trim(),
+            SubtotalLabel = string.IsNullOrWhiteSpace(SubtotalLabel) ? "Сумма блюд" : SubtotalLabel.Trim(),
+            TotalLabel = (TotalLabel ?? "").Trim(),
+            DueLabel = string.IsNullOrWhiteSpace(DueLabel) ? "К ОПЛАТЕ" : DueLabel.Trim(),
+        };
+
+        private static PrecheckLayoutLine Clean(PrecheckLayoutLine l) => new() { Text = (l.Text ?? "").TrimEnd(), Align = l.Align, Bold = l.Bold, Large = l.Large };
     }
 
     public class PrintSettingsProvider

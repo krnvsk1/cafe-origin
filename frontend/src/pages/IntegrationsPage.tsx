@@ -21,6 +21,7 @@ import FiscalSettingsDialog from './inventory/FiscalSettingsDialog';
 import ReceiptLayoutDialog from './inventory/ReceiptLayoutDialog';
 import MercurySettingsDialog from './inventory/MercurySettingsDialog';
 import PrinterSettingsDialog from './inventory/PrinterSettingsDialog';
+import PrecheckLayoutDialog from './inventory/PrecheckLayoutDialog';
 import { usePrintingState, agentOnline } from '../api/printing';
 import { TitleWithHint } from '../components/Hint';
 
@@ -117,7 +118,7 @@ const IntegrationsPage: React.FC = () => {
   const { data: fiscal, isLoading: fiscalLoading } = useFiscalState(true);
   const { data: mercury, isLoading: mercuryLoading } = useMercuryState();
   const { data: printing, isLoading: printingLoading } = usePrintingState();
-  const [open, setOpen] = React.useState<'egais' | 'chz' | 'sbis' | 'mercury' | 'kkt' | 'layout' | 'printer' | null>(null);
+  const [open, setOpen] = React.useState<'egais' | 'chz' | 'sbis' | 'mercury' | 'kkt' | 'layout' | 'printer' | 'precheck' | null>(null);
 
   // Переход из вкладки склада: /admin/integrations#chz — прокручиваем к нужной карточке
   React.useEffect(() => {
@@ -256,6 +257,9 @@ const IntegrationsPage: React.FC = () => {
         ] : undefined}
         error={printing?.enabled && lastPrint?.status === 'error' ? lastPrint.error : null}
         onSetup={() => setOpen('printer')}
+        extra={printing && (
+          <Button variant="outlined" color="secondary" startIcon={<ReceiptIcon />} onClick={() => setOpen('precheck')}>Вид счёта</Button>
+        )}
       />
 
       <EgaisSettingsDialog open={open === 'egais'} onClose={() => setOpen(null)} />
@@ -265,6 +269,7 @@ const IntegrationsPage: React.FC = () => {
       {edo && <EdoSettingsDialog open={open === 'sbis'} state={edo} onClose={() => setOpen(null)} />}
       {mercury && <MercurySettingsDialog open={open === 'mercury'} state={mercury} onClose={() => setOpen(null)} />}
       {printing && <PrinterSettingsDialog open={open === 'printer'} state={printing} onClose={() => setOpen(null)} />}
+      {printing && <PrecheckLayoutDialog open={open === 'precheck'} state={printing} onClose={() => setOpen(null)} />}
     </Box>
   );
 };
