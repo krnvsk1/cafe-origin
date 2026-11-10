@@ -33,7 +33,7 @@ const Preview: React.FC<{ width: number; layout: PrecheckLayout }> = ({ width, l
             whiteSpace: 'pre', minHeight: '1.4em',
             textAlign: l.align === 1 ? 'center' : l.align === 2 ? 'right' : 'left',
             fontWeight: l.bold ? 700 : 400, fontSize: l.big ? '2em' : undefined, lineHeight: l.big ? 1.15 : undefined,
-            color: l.text === 'Это не кассовый чек' ? '#8a857c' : undefined,
+            color: l.text === '' ? '#8a857c' : undefined,
           }}>{l.text}</Box>
         ))}
     </Box>
@@ -131,7 +131,7 @@ const PrecheckLayoutDialog: React.FC<{ open: boolean; state: PrintingState; onCl
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth fullScreen={fullScreen}>
       <DialogTitle>
-        <TitleWithHint hint="Счёт, который официант печатает гостю перед оплатой. Блюда, суммы и строка «Это не кассовый чек» печатаются всегда; остальное — как настроите здесь. Ширина ленты — в настройках принтера.">
+        <TitleWithHint hint="Счёт, который официант печатает гостю перед оплатой. Блюда, суммы и строка «» печатаются всегда; остальное — как настроите здесь. Ширина ленты — в настройках принтера.">
           Вид счёта
         </TitleWithHint>
       </DialogTitle>

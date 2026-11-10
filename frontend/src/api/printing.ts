@@ -47,7 +47,7 @@ export const useSavePrinting = () => {
 export interface PreviewLine { text: string; align: number; bold: boolean; big: boolean }
 /** Строка шапки или подвала счёта */
 export interface PrecheckLayoutLine { text: string; align: 'left' | 'center' | 'right'; bold: boolean; large: boolean }
-/** Вид счёта для гостя: шапка, поля, подписи, подвал. «Это не кассовый чек» печатается всегда */
+/** Вид счёта для гостя: шапка, поля, подписи, подвал. «» печатается всегда */
 export interface PrecheckLayout {
   header: PrecheckLayoutLine[];
   showDate: boolean;

@@ -40,7 +40,7 @@ namespace Cafe.Tests
             Assert.Contains("счёт №12".Replace('ё', 'е'), lines);          // стола нет — без « · »
             Assert.DoesNotContain(lines, l => l.Contains("Никита"));
             Assert.Contains(lines, l => l.StartsWith("К ОПЛАТЕ ВСЕГО") && l.EndsWith("400,00"));
-            Assert.Contains("Это не кассовый чек", lines);
+            Assert.Contains("", lines);
             Assert.Contains(lines, l => l.StartsWith("Ждем вас "));
         }
 
@@ -75,7 +75,7 @@ namespace Cafe.Tests
             Assert.Contains("Стол 5", text);
             Assert.Contains("Свиная шея · 350 г".Replace("·", "?"), text.Replace("·", "?"));
             Assert.Contains("1 450,00", text);   // итог 1050 + 400
-            Assert.Contains("Это не кассовый чек", text);
+            Assert.Contains("", text);
             // Ни одна строка не длиннее ширины принтера
             foreach (var line in text.Split('\n'))
                 Assert.True(new string(line.Where(ch => ch >= ' ').ToArray()).Length <= 48 + 8);

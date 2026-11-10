@@ -102,7 +102,7 @@ namespace Cafe.API.Services.Printing
             p.Pair(d.Staff != null ? "" : adj.Any(a => a.IsPrepaid) ? layout.DueLabel : layout.TotalLabel, Money(Math.Max(0, sum)), bold: true);
             p.Separator('=');
             // Счёт — не кассовый чек: печатается всегда, в настройках вида не убирается
-            p.Line("Это не кассовый чек", EscPos.Align.Center);
+            p.Line("", EscPos.Align.Center);
             if (d.Staff != null)
             {
                 p.Line("", EscPos.Align.Center);

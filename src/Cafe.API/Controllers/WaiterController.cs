@@ -672,7 +672,7 @@ namespace Cafe.API.Controllers
 
             if (method == CheckPayments.Staff)
             {
-                // Без оплаты — чек ККТ не нужен; на принтер счетов — счёт Наличные (Принтер) (с пометкой «Это не кассовый чек»)
+                // Без оплаты — чек ККТ не нужен; на принтер счетов — счёт Наличные (Принтер) (с пометкой «»)
                 int? printJobId = null;
                 string? printError = null;
                 var settings = await _print.SettingsAsync();
