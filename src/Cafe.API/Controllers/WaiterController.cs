@@ -670,7 +670,7 @@ namespace Cafe.API.Controllers
             _logger.LogInformation("🍽 Счёт #{CheckId} закрыт: {Total} ₽ ({Method}{Staff})", c.Id, total, method,
                 staffName == null ? "" : $": {staffName}, {staffReason}");
 
-                if (method == CheckPayments.Staff)
+            if (method == CheckPayments.Staff)
             {
                 // Без оплаты — чек ККТ не нужен; на принтер счетов — счёт Наличные (Принтер) (с пометкой «Это не кассовый чек»)
                 int? printJobId = null;
@@ -678,10 +678,14 @@ namespace Cafe.API.Controllers
                 var settings = await _print.SettingsAsync();
                 if (settings.Enabled)
                 {
+                    var liness = PrecheckLines(await LinesAsync(new List<int> { id }));
                     var waiter = (await NamesAsync(new[] { c.WaiterId })).GetValueOrDefault(c.WaiterId ?? 0);
                     var label = string.IsNullOrWhiteSpace(c.Label) ? $"счёт №{c.Id}" : c.Label!;
+                    var full = liness.Sum(l => l.Amount);
+                    var disc = DiscountOf(c, full);
                     var data = new PrecheckData((await _brand.GetAsync()).DisplayName, c.Table!.Name, label, waiter, c.Guests,
-                        c.OpenedAt, now, PrecheckLines(lines), settings.Footer, new PrecheckStaff(staffName!, staffReason!));
+                        c.OpenedAt, now, liness, settings.Footer,
+                        Adjustments: disc > 0 ? new[] { new PrecheckAdjustment(DiscountLabel(c.DiscountType, c.DiscountValue), -disc) } : null);
                     var job = await _print.EnqueueAsync("precheck", c.Id, "", PrintService.Precheck(settings, data), User.GetUserId());
                     printJobId = job.Id;
                 }

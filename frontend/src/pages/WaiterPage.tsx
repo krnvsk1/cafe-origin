@@ -992,6 +992,12 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
               error={change !== null && change < 0}
               slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
           )}
+          {method === 'staff' && (
+            <TextField label="Получено" value={cash} onChange={e => setCash(e.target.value)}
+              helperText={change === null ? 'Можно не заполнять' : change < 0 ? `Не хватает ${money(-change)}` : `Сдача ${money(change)}`}
+              error={change !== null && change < 0}
+              slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
+          )}
           {err && <Alert severity="error">{err}</Alert>}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 3 }}>
