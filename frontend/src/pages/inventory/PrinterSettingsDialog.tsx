@@ -4,7 +4,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Typography, Alert, FormControlLabel, Switch, MenuItem,
 } from '@mui/material';
 import { DownloadOutlined as DownloadIcon, PrintOutlined as PrintIcon } from '@mui/icons-material';
-import { useSavePrinting, useTestPrint, useNewPrintToken, downloadPrintAgent, usePrecheckPreview, type PrintingState } from '../../api/printing';
+import { useSavePrinting, useTestPrint, useNewPrintToken, downloadPrintAgent, type PrintingState } from '../../api/printing';
 import { apiError } from '../../api/inventory';
 
 /** Кодировки, которые понимают чековые принтеры RONGTA/Xprinter: номер таблицы ESC t и кодировка текста */
@@ -15,37 +15,6 @@ const CODE_PAGES = [
   { key: '46-1251', label: 'Windows-1251 — таблица 46', codeTable: 46, encoding: 1251 as const },
   { key: '21-1251', label: 'Windows-1251 — таблица 21', codeTable: 21, encoding: 1251 as const },
 ];
-
-/** Как счёт выйдет на ленте: моноширинный шрифт, ширина в символах как у принтера */
-const PrecheckPreview: React.FC<{ width: number; footer: string }> = ({ width, footer }) => {
-  // Подвал — с задержкой, чтобы не дёргать сервер на каждую букву
-  const [debounced, setDebounced] = React.useState(footer);
-  React.useEffect(() => { const t = setTimeout(() => setDebounced(footer), 400); return () => clearTimeout(t); }, [footer]);
-  const { data, isLoading } = usePrecheckPreview(width, debounced.trim(), true);
-  return (
-    <Box>
-      <Typography sx={{ fontWeight: 700, mb: 1 }}>
-        <TitleWithHint hint="Пример счёта для гостя с выбранной шириной ленты и текстом внизу. Блюда и суммы — для примера; на бумаге шрифт принтера, но строки переносятся так же.">Вид счёта</TitleWithHint>
-      </Typography>
-      <Box sx={{ overflowX: 'auto', bgcolor: 'action.hover', borderRadius: 2, p: 2, display: 'flex', justifyContent: 'center' }}>
-        <Box sx={{
-          bgcolor: '#fffef8', color: '#222', boxShadow: 1, px: 1.5, py: 2,
-          fontFamily: '"JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace', fontSize: 12, lineHeight: 1.45,
-          width: `calc(${data?.width ?? width}ch + 24px)`, flexShrink: 0, minHeight: 120,
-        }}>
-          {isLoading && !data ? <Typography variant="body2" color="text.secondary">Загрузка…</Typography>
-            : (data?.lines ?? []).map((l, i) => (
-              <Box key={i} sx={{
-                whiteSpace: 'pre', textAlign: l.align === 1 ? 'center' : l.align === 2 ? 'right' : 'left',
-                fontWeight: l.bold ? 700 : 400, fontSize: l.big ? 24 : undefined, lineHeight: l.big ? 1.2 : undefined,
-                letterSpacing: l.big ? 0 : undefined, minHeight: '1.45em',
-              }}>{l.text}</Box>
-            ))}
-        </Box>
-      </Box>
-    </Box>
-  );
-};
 
 const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onClose: () => void }> = ({ open, state, onClose }) => {
   const save = useSavePrinting();
@@ -60,7 +29,6 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
   const [printerName, setPrinterName] = React.useState(state.printerName);
   const [width, setWidth] = React.useState(String(state.width));
   const [codePage, setCodePage] = React.useState(`${state.codeTable}-${state.encoding}`);
-  const [footer, setFooter] = React.useState(state.footer ?? '');
   const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null);
 
   React.useEffect(() => {
@@ -74,13 +42,12 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
     setPrinterName(state.printerName);
     setWidth(String(state.width));
     setCodePage(CODE_PAGES.some(c => c.key === `${state.codeTable}-${state.encoding}`) ? `${state.codeTable}-${state.encoding}` : '17-866');
-    setFooter(state.footer ?? '');
     setMsg(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const cp = CODE_PAGES.find(c => c.key === codePage) ?? CODE_PAGES[0];
-  const input = () => ({ enabled, mode, relayDevices: relay, atolViaDriver: relay && viaDriver, host: host.trim() || null, port: Number(port) || 9100, printerName: printerName.trim(), width: Number(width) || 48, codeTable: cp.codeTable, encoding: cp.encoding, footer: footer.trim() || null });
+  const input = () => ({ enabled, mode, relayDevices: relay, atolViaDriver: relay && viaDriver, host: host.trim() || null, port: Number(port) || 9100, printerName: printerName.trim(), width: Number(width) || 48, codeTable: cp.codeTable, encoding: cp.encoding, footer: state.footer });
 
   const handleSave = async (thenTest = false) => {
     setMsg(null);
@@ -125,8 +92,6 @@ const PrinterSettingsDialog: React.FC<{ open: boolean; state: PrintingState; onC
             {CODE_PAGES.map(c => <MenuItem key={c.key} value={c.key}>{c.label}</MenuItem>)}
           </TextField>
         </Box>
-        <TextField label="Текст внизу счёта" value={footer} onChange={e => setFooter(e.target.value)} inputProps={{ maxLength: 200 }} />
-        {open && <PrecheckPreview width={Number(width) || 48} footer={footer} />}
 
         <Box sx={{ bgcolor: 'action.hover', borderRadius: 2, p: 2 }}>
           <Typography sx={{ fontWeight: 700, mb: 0.5 }}>

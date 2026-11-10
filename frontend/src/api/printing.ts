@@ -17,6 +17,8 @@ export interface PrintingState {
   codeTable: number;
   encoding: 866 | 1251;
   footer: string | null;
+  /** Вид счёта для гостя */
+  layout: PrecheckLayout;
   agentSeenAt: string | null;
   agentHost: string | null;
   recent: { id: number; kind: string; title: string; status: 'pending' | 'taken' | 'done' | 'error'; error: string | null; createdAt: string; doneAt: string | null }[];
@@ -43,14 +45,52 @@ export const useSavePrinting = () => {
 
 /** Строка счёта для предпросмотра: align 0 — слева, 1 — по центру, 2 — справа */
 export interface PreviewLine { text: string; align: number; bold: boolean; big: boolean }
-export const usePrecheckPreview = (width: number, footer: string, enabled: boolean) =>
+/** Строка шапки или подвала счёта */
+export interface PrecheckLayoutLine { text: string; align: 'left' | 'center' | 'right'; bold: boolean; large: boolean }
+/** Вид счёта для гостя: шапка, поля, подписи, подвал. «Это не кассовый чек» печатается всегда */
+export interface PrecheckLayout {
+  header: PrecheckLayoutLine[];
+  showDate: boolean;
+  showGuests: boolean;
+  guestsLabel: string;
+  showWaiter: boolean;
+  waiterLabel: string;
+  showPrices: boolean;
+  subtotalLabel: string;
+  totalLabel: string;
+  dueLabel: string;
+  footer: PrecheckLayoutLine[];
+}
+export const PRECHECK_VARS = [
+  { key: '{brand}', label: 'название заведения' },
+  { key: '{title}', label: 'заголовок (СЧЁТ / БАНКЕТ)' },
+  { key: '{table}', label: 'стол' },
+  { key: '{check}', label: 'номер счёта' },
+  { key: '{waiter}', label: 'официант' },
+  { key: '{guests}', label: 'гостей' },
+  { key: '{date}', label: 'дата' },
+  { key: '{time}', label: 'время' },
+];
+
+export const usePrecheckPreview = (width: number, layout: PrecheckLayout | null, enabled: boolean) =>
   useQuery<{ width: number; lines: PreviewLine[] }>({
-    queryKey: ['printing-preview', width, footer],
-    queryFn: () => apiClient.post('/api/admin/printing/preview', { width, footer }).then(r => r.data),
+    queryKey: ['printing-preview', width, layout],
+    queryFn: () => apiClient.post('/api/admin/printing/preview', { width, layout }).then(r => r.data),
     enabled,
     placeholderData: prev => prev,
     staleTime: 60_000,
   });
+
+export const useSavePrecheckLayout = () => {
+  const qc = useQueryClient();
+  return useMutation<PrintingState, Error, PrecheckLayout>({
+    mutationFn: layout => apiClient.put('/api/admin/printing/layout', layout).then(r => r.data),
+    onSuccess: data => qc.setQueryData(KEY, data),
+  });
+};
+
+export const printPrecheckSample = (layout: PrecheckLayout) =>
+  apiClient.post('/api/admin/printing/layout/sample', layout).then(r => r.data);
 
 export const useTestPrint = () => {
   const qc = useQueryClient();
