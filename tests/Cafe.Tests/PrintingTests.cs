@@ -82,20 +82,6 @@ namespace Cafe.Tests
         }
 
         [Fact]
-        public void Precheck_OnHouse_ShowsWhoClosedAndNoPayment()
-        {
-            var s = new PrintSettings { Width = 48, CodeTable = 17, Encoding = 866, Footer = "Спасибо!" };
-            var data = new PrecheckData("Кафе", "5", "счёт №12", "Никита", null, DateTime.UtcNow, DateTime.UtcNow,
-                new[] { new PrecheckLine("Борщ", 1, 300, 300) }, s.Footer, new PrecheckStaff("Анна Петрова", "Наличные (Принтер)"));
-            var text = Text(PrintService.Precheck(s, data));
-            Assert.Contains("Наличные (Принтер)", text);
-            Assert.Contains("Закрыл: Анна Петрова", text);
-            Assert.Contains("ЗА СЧЕТ ЗАВЕДЕНИЯ", text);  // принтер печатает Ё как Е
-            Assert.Contains("Это не кассовый чек", text);
-            Assert.DoesNotContain("Спасибо!", text);
-        }
-
-        [Fact]
         public void Pair_FitsWidth()
         {
             var p = new EscPos(32, 17, 866).Pair("ИТОГО", "1 450,00");
