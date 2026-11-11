@@ -18,7 +18,8 @@ const FiscalSettingsDialog: React.FC<{ open: boolean; state: FiscalState; onClos
 
   React.useEffect(() => {
     if (!open) return;
-    setForm({ ...state, enabled: state.enabled || !state.url || state.url === 'http://127.0.0.1:16732' });
+    // Как сохранено: раньше при стандартном адресе окно само включало касса — выключить её было нельзя
+    setForm({ ...state });
     setResult(null);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 

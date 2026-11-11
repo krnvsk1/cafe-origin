@@ -88,6 +88,10 @@ namespace Cafe.API.Controllers
             var banquetPrevRevenue = banquets.Where(b => b.ClosedAt < periodStart).Sum(b => BanquetMoney(b.Id));
 
             var revenue = Revenue(valid) + banquetRevenue;
+            // Банкеты: часть «на заведение» (без оплаты) — к счетам на заведение
+            decimal BanquetHouse(IEnumerable<int> ids) => banquetPays.Where(p => ids.Contains(p.BanquetId) && p.Method == Cafe.API.Models.CheckPayments.Staff).Sum(p => p.Amount);
+            var banquetHouseNow = BanquetHouse(banquetNow.Select(b => b.Id));
+            var banquetHouseBefore = BanquetHouse(banquets.Where(b => b.ClosedAt < periodStart).Select(b => b.Id));
             var prevRevenue = Revenue(prevValid) + banquetPrevRevenue;
 
             // Клиенты: по пользователю, для гостей — по телефону
@@ -200,8 +204,8 @@ namespace Cafe.API.Controllers
                     PointsEarned = points.Where(p => p.Type is "earned" or "referral" or "admin_grant").Sum(p => p.Amount),
                     ReviewsCount = reviews.Count,
                     AverageRating = reviews.Count > 0 ? Math.Round(reviews.Average(), 2) : (double?)null,
-                    StaffTotal = staffNow.Sum(c => c.Total),
-                    StaffTotalChange = Change(staffNow.Sum(c => c.Total), staffBefore.Sum(c => c.Total)),
+                    StaffTotal = staffNow.Sum(c => c.Total) + banquetHouseNow,
+                    StaffTotalChange = Change(staffNow.Sum(c => c.Total) + banquetHouseNow, staffBefore.Sum(c => c.Total) + banquetHouseBefore),
                     StaffChecks = staffNow.Count,
                     Refunds = refundsNow.Count,
                     RefundsTotal = refundsNow.Sum(r => r.Amount),

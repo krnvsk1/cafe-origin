@@ -364,6 +364,9 @@ export interface ShiftRow {
   staff?: number;
   /** Возвраты: деньги вернули гостю —  */
   refunds?: number;
+  /** Банкетов закрыто за смену и деньги по банкетам (уже в нал/карте/выручке) */
+  banquets?: number;
+  banquetRevenue?: number;
 }
 
 export interface ShiftDetails {
@@ -376,6 +379,9 @@ export interface ShiftDetails {
   waiters: { id: number; userId: number; name: string | null; openedAt: string; closedAt: string | null; checks: number; revenue: number; approvedBy?: string | null }[];
   /** Закрыто на сотрудников: к удержанию по людям */
   staff?: { userId: number; name: string; checks: number; total: number }[];
+  /** Банкеты, закрытые в смену: расчёт (нал/карта), часть без оплаты и предоплата */
+  banquets?: { id: number; customerName: string; eventAt: string; total: number; closedAt: string | null; closedBy: string | null; cash: number; card: number; staff: number; prepaid: number }[];
+  banquetMoney?: { cash: number; card: number; staff: number };
   checks: {
     id: number; table: string | null; label: string | null; waiter: string | null; waiterId: number | null;
     status: 'open' | 'closed' | 'cancelled'; guests: number | null; openedAt: string; closedAt: string | null;

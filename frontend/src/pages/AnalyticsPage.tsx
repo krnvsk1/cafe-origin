@@ -22,6 +22,7 @@ interface Analytics {
     /** Закрыто на сотрудников: без оплаты и без чека,  — к удержанию */
     staffTotal?: number; staffTotalChange?: number | null; staffChecks?: number;
     refunds?: number; refundsTotal?: number; refundsTotalChange?: number | null;
+    banquetRevenue?: number; banquets?: number;
   };
   staffByPerson?: { name: string; checks: number; total: number }[];
   byDay: { date: string; revenue: number; orders: number }[];
@@ -120,7 +121,7 @@ const AnalyticsPage: React.FC = () => {
         <>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
             <Kpi title="Выручка" value={rub(s.revenue)} change={s.revenueChange}
-              hint={[s.refundsTotal ? `возвраты ${rub(s.refundsTotal)} (${s.refunds})` : '', s.staffTotal ? `Наличные (Принтер) ${rub(s.staffTotal)}` : ''].filter(Boolean).join(' · ') || undefined} />
+              hint={[s.banquetRevenue ? `в т.ч. банкеты ${rub(s.banquetRevenue)}${s.banquets ? ` (${s.banquets})` : ''}` : '', s.refundsTotal ? `возвраты ${rub(s.refundsTotal)} (${s.refunds})` : '', s.staffTotal ? `Наличные (Принтер) ${rub(s.staffTotal)}` : ''].filter(Boolean).join(' · ') || undefined} />
             <Kpi title="Заказы" value={String(s.orders)} change={s.ordersChange} hint={s.cancelled ? `отменено: ${s.cancelled}` : undefined} />
             <Kpi title="Средний чек" value={rub(s.averageCheck)} change={s.averageCheckChange} />
             <Kpi title="Клиенты" value={String(s.customers)} hint={`новых: ${s.newCustomers} · повторных: ${s.repeatCustomers}`} />

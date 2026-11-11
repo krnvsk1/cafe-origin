@@ -159,13 +159,22 @@ const PrepayDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t
 
 const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t: string) => void }> = ({ banquet, onClose, onDone }) => {
   const close = useCloseBanquet();
+  const print = usePrintBanquet();
   const t = banquet.totals;
   const [method, setMethod] = React.useState<'cash' | 'card' | 'staff'>('card');
+  const [cash, setCash] = React.useState('');
+  const received = Number(cash.replace(',', '.'));
+  const change = (method === 'cash' || method === 'staff') && cash.trim() !== '' && !Number.isNaN(received)
+  ? Math.round((received - t.due) * 100) / 100
+  : null;
   const [err, setErr] = React.useState('');
   const submit = async () => {
     setErr('');
     try {
       const r = await close.mutateAsync({ id: banquet.id, method });
+      if (method === 'staff') {
+        try { await print.mutateAsync(banquet.id); } catch { /* банкет уже закрыт — пред чек можно распечатать кнопкой */ }
+      }
       onDone(`Банкет закрыт · ${money(r.total)}. ${atolText(r.fiscal, r.fiscalSkipped, r.staff)}`);
     } catch (e) { setErr(apiError(e)); }
   };
@@ -179,21 +188,25 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
           <Row label="К оплате" value={money(t.due)} bold big />
         </Box>
         {t.due > 0 && (
+          <>
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
-            {banquet.staffAllowed && <ToggleButton value="staff">Наличные (Принтер)</ToggleButton>}
+            <ToggleButton value="staff">Наличные (Принтер)</ToggleButton>
             <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
-        )}
-        {t.due > 0 && method === 'staff' && (
-          <>
-            <Alert severity="info">Остаток без оплаты — Наличные (Принтер), в выручку не входит и в чек не попадает.</Alert>
-          </>
-        )}
-        {banquet.fiscalEnabled && (
-          <Typography variant="caption" color="text.secondary">
-            В АТОЛ уйдёт один чек на {money(t.prepaid + (method === 'staff' ? 0 : t.due))}: блюда{t.service > 0 ? ' и обслуживание' : ''}{t.prepaid > 0 ? ', оплата — предоплата и остаток, теми способами, которыми платили' : ''}.
-          </Typography>
+            {method === 'cash' && (
+              <TextField label="Получено" value={cash} onChange={e => setCash(e.target.value)}
+            helperText={change === null ? 'Можно не заполнять' : change < 0 ? `Не хватает ${money(-change)}` : `Сдача ${money(change)}`}
+            error={change !== null && change < 0}
+            slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
+            )}
+            {method === 'staff' && (
+            <TextField label="Получено" value={cash} onChange={e => setCash(e.target.value)}
+                helperText={change === null ? 'Можно не заполнять' : change < 0 ? `Не хватает ${money(-change)}` : `Сдача ${money(change)}`}
+                error={change !== null && change < 0}
+                slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
+            )}
+            </>
         )}
         {err && <Alert severity="error">{err}</Alert>}
       </DialogContent>
@@ -201,7 +214,7 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
         <Button onClick={onClose} disabled={close.isPending} sx={{ color: 'text.secondary' }}>Отмена</Button>
         <Button variant="contained" color="secondary" onClick={submit} disabled={close.isPending}
           startIcon={close.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}>
-          {t.due <= 0 ? 'Закрыть' : method === 'staff' ? 'Закрыть Наличные (Принтер)' : 'Оплачено'}
+          {t.due <= 0 ? 'Закрыть' : method === 'staff' ? 'Оплачено' : 'Оплачено'}
         </Button>
       </DialogActions>
     </Dialog>

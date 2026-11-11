@@ -308,6 +308,29 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
           ))}
         </Box>
       )}
+      {data.banquets && data.banquets.length > 0 && (
+        <Box>
+          <Typography variant="overline" color="text.secondary">Банкеты</Typography>
+          {data.banquets.map(b => (
+            <ButtonBase key={b.id} onClick={() => navigate(`/admin/banquets/${b.id}`)}
+              sx={{ display: 'flex', width: '100%', textAlign: 'left', gap: 1, alignItems: 'center', py: 0.75, borderTop: 1, borderColor: 'divider', flexWrap: 'wrap' }}>
+              <Box sx={{ flex: '1 1 220px', minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 700 }} noWrap>Банкет №{b.id} · {b.customerName}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {b.closedAt ? `закрыт ${time(b.closedAt)}` : ''}{b.closedBy ? `, ${b.closedBy}` : ''}
+                  {[b.prepaid ? `предоплата ${money(b.prepaid)}` : '', b.cash ? `нал ${money(b.cash)}` : '', b.card ? `карта ${money(b.card)}` : '', b.staff ? `без оплаты ${money(b.staff)}` : ''].filter(Boolean).map(x => ` · ${x}`).join('')}
+                </Typography>
+              </Box>
+              <Typography sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{money(b.total)}</Typography>
+            </ButtonBase>
+          ))}
+          {data.banquetMoney && (data.banquetMoney.cash > 0 || data.banquetMoney.card > 0) && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Деньги по банкетам за смену (с предоплатами): нал {money(data.banquetMoney.cash)} · карта {money(data.banquetMoney.card)} — уже в итогах смены
+            </Typography>
+          )}
+        </Box>
+      )}
       <Box>
         <Typography variant="overline" color="text.secondary">Счета</Typography>
         {data.checks.length === 0 && <Typography color="text.secondary">Счетов в эту смену не было</Typography>}
@@ -371,7 +394,7 @@ const ShiftCard: React.FC<{ s: ShiftRow; open: boolean; onToggle: () => void }> 
       <Box sx={{ textAlign: 'right' }}>
         <Typography sx={{ fontWeight: 800 }}>{money(s.revenue)}</Typography>
         <Typography variant="body2" color="text.secondary">
-          {s.checks} сч. · нал {money(s.cash)} · карта {money(s.card)}{s.staff ? ` · Наличные (Принтер) ${money(s.staff)}` : ''}{s.refunds ? ` · возвраты ${money(s.refunds)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
+          {s.checks} сч.{s.banquets ? ` · банкетов ${s.banquets}` : ''} · нал {money(s.cash)} · карта {money(s.card)}{s.staff ? ` · Наличные (Принтер) ${money(s.staff)}` : ''}{s.refunds ? ` · возвраты ${money(s.refunds)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
         </Typography>
       </Box>
       <ExpandIcon sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
