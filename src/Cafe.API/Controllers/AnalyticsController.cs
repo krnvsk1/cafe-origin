@@ -206,7 +206,6 @@ namespace Cafe.API.Controllers
                     AverageRating = reviews.Count > 0 ? Math.Round(reviews.Average(), 2) : (double?)null,
                     StaffTotal = staffNow.Sum(c => c.Total) + banquetHouseNow,
                     StaffTotalChange = Change(staffNow.Sum(c => c.Total) + banquetHouseNow, staffBefore.Sum(c => c.Total) + banquetHouseBefore),
-                    Banquets = banquetNow.Count,
                     StaffChecks = staffNow.Count,
                     Refunds = refundsNow.Count,
                     RefundsTotal = refundsNow.Sum(r => r.Amount),
