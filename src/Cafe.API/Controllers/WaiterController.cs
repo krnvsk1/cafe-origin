@@ -617,8 +617,6 @@ namespace Cafe.API.Controllers
                 if (fo.StaffChecksManagersOnly && !await SeesAllAsync()) return StatusCode(403, new { message = "Закрыть счёт Наличные (Принтер) может только менеджер" });
                 // «Наличные (Принтер)»: сотрудника не выбирают — записывается тот, кто закрыл
                 r.StaffUserId ??= User.GetUserId();
-                if (r.StaffUserId is not int staffId || !(await StaffAsync()).TryGetValue(staffId, out staffName))
-                    return BadRequest(new { message = "Выберите сотрудника" });
                 staffReason = r.StaffReason?.Trim();
                 if (string.IsNullOrEmpty(staffReason)) staffReason = StaffReasons[0];
                 if (staffReason.Length > 60) staffReason = staffReason[..60];

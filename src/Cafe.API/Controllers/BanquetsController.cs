@@ -458,8 +458,6 @@ namespace Cafe.API.Controllers
             {
                 if (!(await _fiscalSettings.GetAsync()).StaffChecks) return BadRequest(new { message = "Закрытие Наличные (Принтер) выключено — включите его в «Настройке интеграций» → «Онлайн-касса»" });
                 r.StaffUserId ??= User.GetUserId();
-                if (r.StaffUserId is not int staffId || !(await WaiterController.StaffListAsync(_context)).TryGetValue(staffId, out staffName))
-                    return BadRequest(new { message = "Выберите сотрудника" });
                 staffReason = string.IsNullOrWhiteSpace(r.StaffReason) ? WaiterController.StaffReasons[0] : r.StaffReason.Trim();
                 if (staffReason.Length > 60) staffReason = staffReason[..60];
             }
