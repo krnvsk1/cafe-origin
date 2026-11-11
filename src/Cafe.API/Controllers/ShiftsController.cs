@@ -180,6 +180,60 @@ namespace Cafe.API.Controllers
         }
 
         // POST: api/shifts/venue/close — закрыть смену заведения (открытых счетов быть не должно)
+        public record BanquetRow(int Id, string CustomerName, DateTime EventAt, decimal Total, DateTime? ClosedAt, string? ClosedBy,
+            decimal Cash, decimal Card, decimal Staff, decimal Prepaid);
+
+        public class BanquetTotals
+        {
+            public static readonly BanquetTotals Empty = new();
+            public decimal Cash, Card, Staff;
+            public int Closed;
+            public List<BanquetRow> List = new();
+        }
+
+        /// <summary>
+        /// Банкеты по сменам: деньги — по времени оплаты (как в кассе), список — банкеты, закрытые за время смены
+        /// </summary>
+        private async Task<Dictionary<int, BanquetTotals>> BanquetsInAsync(List<VenueShift> shifts)
+        {
+            var result = new Dictionary<int, BanquetTotals>();
+            if (shifts.Count == 0) return result;
+            var now = DateTime.UtcNow;
+            var from = shifts.Min(s => s.OpenedAt);
+            var to = shifts.Max(s => s.ClosedAt ?? now);
+            var pays = await _context.BanquetPayments.AsNoTracking()
+                .Where(p => p.RefundedAt == null && p.CreatedAt >= from && p.CreatedAt <= to).ToListAsync();
+            var closed = await _context.Banquets.AsNoTracking()
+                .Where(b => b.Status == BanquetStatuses.Closed && b.ClosedAt >= from && b.ClosedAt <= to).ToListAsync();
+            var closedIds = closed.Select(b => b.Id).ToList();
+            var closedPays = await _context.BanquetPayments.AsNoTracking()
+                .Where(p => closedIds.Contains(p.BanquetId) && p.RefundedAt == null).ToListAsync();
+            var names = await WaiterController.StaffNamesAsync(_context, closed.Select(b => b.ClosedBy));
+            foreach (var s in shifts)
+            {
+                var end = s.ClosedAt ?? now;
+                var t = new BanquetTotals();
+                foreach (var p in pays.Where(p => p.CreatedAt >= s.OpenedAt && p.CreatedAt <= end))
+                {
+                    if (p.Method == CheckPayments.Cash) t.Cash += p.Amount;
+                    else if (p.Method == CheckPayments.Card) t.Card += p.Amount;
+                    else if (p.Method == CheckPayments.Staff) t.Staff += p.Amount;
+                }
+                foreach (var b in closed.Where(b => b.ClosedAt >= s.OpenedAt && b.ClosedAt <= end).OrderBy(b => b.ClosedAt))
+                {
+                    var mine = closedPays.Where(p => p.BanquetId == b.Id).ToList();
+                    t.List.Add(new BanquetRow(b.Id, b.CustomerName, b.EventAt, b.Total, b.ClosedAt, b.ClosedBy == null ? null : names.GetValueOrDefault(b.ClosedBy.Value),
+                        mine.Where(p => p.Kind != BanquetPaymentKinds.Prepay && p.Method == CheckPayments.Cash).Sum(p => p.Amount),
+                        mine.Where(p => p.Kind != BanquetPaymentKinds.Prepay && p.Method == CheckPayments.Card).Sum(p => p.Amount),
+                        mine.Where(p => p.Method == CheckPayments.Staff).Sum(p => p.Amount),
+                        mine.Where(p => p.Kind == BanquetPaymentKinds.Prepay && p.Method != CheckPayments.Staff).Sum(p => p.Amount)));
+                }
+                t.Closed = t.List.Count;
+                if (t.Cash != 0 || t.Card != 0 || t.Staff != 0 || t.Closed > 0) result[s.Id] = t;
+            }
+            return result;
+        }
+
         // GET: api/shifts/venue/report — итоги текущей смены перед закрытием: нал, безнал, Наличные (Принтер), возвраты
         [HttpGet("venue/report")]
         [HasPermission(Permissions.Shift)]
@@ -388,6 +442,8 @@ namespace Cafe.API.Controllers
                     Refunds = g.Sum(c => c.Status == CheckStatuses.Closed && refunded.Contains(c.Id) ? c.Total : 0m),
                 })
                 .ToDictionaryAsync(x => x.ShiftId);
+            // Банкеты: оплаты (предоплата и расчёт), внесённые за время смены, и банкеты, закрытые в смену
+            var bq = await BanquetsInAsync(shifts);
             var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => ids.Contains(w.VenueShiftId) && w.ApprovedAt != null)
                 .GroupBy(w => w.VenueShiftId).Select(g => new { ShiftId = g.Key, Count = g.Select(w => w.UserId).Distinct().Count() })
                 .ToDictionaryAsync(x => x.ShiftId, x => x.Count);
@@ -396,6 +452,7 @@ namespace Cafe.API.Controllers
             return Ok(shifts.Select(s =>
             {
                 var x = totals.GetValueOrDefault(s.Id);
+                var b = bq.GetValueOrDefault(s.Id) ?? BanquetTotals.Empty;
                 return new
                 {
                     s.Id,
@@ -407,11 +464,13 @@ namespace Cafe.API.Controllers
                     waiters = waiters.GetValueOrDefault(s.Id),
                     checks = x?.Checks ?? 0,
                     openChecks = x?.Open ?? 0,
-                    revenue = x?.Revenue ?? 0,
-                    cash = x?.Cash ?? 0,
-                    card = x?.Card ?? 0,
-                    staff = x?.Staff ?? 0,
+                    revenue = (x?.Revenue ?? 0) + b.Cash + b.Card,
+                    cash = (x?.Cash ?? 0) + b.Cash,
+                    card = (x?.Card ?? 0) + b.Card,
+                    staff = (x?.Staff ?? 0) + b.Staff,
                     refunds = x?.Refunds ?? 0,
+                    banquets = b.Closed,
+                    banquetRevenue = b.Cash + b.Card,
                 };
             }));
         }
@@ -455,6 +514,7 @@ namespace Cafe.API.Controllers
                 var ret = done.Count(r => r.Kind == FiscalKinds.Return);
                 return ret > 0 && ret >= done.Count(r => r.Kind == FiscalKinds.Sell);
             }
+            var bq = (await BanquetsInAsync(new List<VenueShift> { s })).GetValueOrDefault(s.Id) ?? BanquetTotals.Empty;
             decimal Total(TableCheck c) => c.Status == CheckStatuses.Open ? WaiterController.Net(c, openTotals.GetValueOrDefault(c.Id)) : c.Status == CheckStatuses.Closed ? c.Total : 0;
 
             return Ok(new
@@ -488,6 +548,9 @@ namespace Cafe.API.Controllers
                     checks = g.Count(),
                     total = g.Sum(c => c.Total),
                 }).OrderByDescending(x => x.total),
+                // Банкеты, закрытые в эту смену, и деньги по банкетам, внесённые за смену
+                banquets = bq.List,
+                banquetMoney = new { cash = bq.Cash, card = bq.Card, staff = bq.Staff },
                 checks = checks.Select(c => new
                 {
                     c.Id,
