@@ -613,7 +613,6 @@ namespace Cafe.API.Controllers
             if (method == CheckPayments.Staff)
             {
                 var fo = await _fiscalSettings.GetAsync();
-                if (!fo.StaffChecks) return BadRequest(new { message = "Закрытие Наличные (Принтер) выключено — включите его в «Настройке интеграций» → «Онлайн-касса»" });
                 if (fo.StaffChecksManagersOnly && !await SeesAllAsync()) return StatusCode(403, new { message = "Закрыть счёт Наличные (Принтер) может только менеджер" });
                 // «Наличные (Принтер)»: сотрудника не выбирают — записывается тот, кто закрыл
                 r.StaffUserId ??= User.GetUserId();
@@ -762,7 +761,6 @@ namespace Cafe.API.Controllers
             string? staffName = null, staffReason = null;
             if (method == CheckPayments.Staff)
             {
-                if (!(await _fiscalSettings.GetAsync()).StaffChecks) return BadRequest(new { message = "Закрытие Наличные (Принтер) выключено в «Настройке интеграций»" });
                 if (!await SeesAllAsync()) return StatusCode(403, new { message = "Перевести счёт Наличные (Принтер) может только менеджер" });
                 var shiftOpen = c.VenueShiftId != null && await _context.VenueShifts.AnyAsync(v => v.Id == c.VenueShiftId && v.ClosedAt == null);
                 if (!shiftOpen) return BadRequest(new { message = "Смена уже закрыта — исправить счёт Наличные (Принтер) нельзя" });

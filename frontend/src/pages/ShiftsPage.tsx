@@ -298,7 +298,7 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
       )}
       {data.staff && data.staff.length > 0 && (
         <Box>
-          <Typography variant="overline" color="text.secondary">Наличные (Принтер)  · кто закрыл</Typography>
+          <Typography variant="overline" color="text.secondary">Наличные (Принтер) · кто закрыл</Typography>
           {data.staff.map(st => (
             <Box key={st.userId} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', py: 0.25 }}>
               <Typography sx={{ fontWeight: 700, flex: 1 }}>{st.name}</Typography>
@@ -318,7 +318,7 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                 <Typography sx={{ fontWeight: 700 }} noWrap>Банкет №{b.id} · {b.customerName}</Typography>
                 <Typography variant="caption" color="text.secondary">
                   {b.closedAt ? `закрыт ${time(b.closedAt)}` : ''}{b.closedBy ? `, ${b.closedBy}` : ''}
-                  {[b.prepaid ? `предоплата ${money(b.prepaid)}` : '', b.cash ? `нал ${money(b.cash)}` : '', b.card ? `карта ${money(b.card)}` : '', b.staff ? `без оплаты ${money(b.staff)}` : ''].filter(Boolean).map(x => ` · ${x}`).join('')}
+                  {[b.prepaid ? `предоплата ${money(b.prepaid)}` : '', b.cash ? `Наличные(АТОЛ) ${money(b.cash)}` : '', b.card ? `Карта ${money(b.card)}` : '', b.staff ? `Наличные(Принтер) ${money(b.staff)}` : ''].filter(Boolean).map(x => ` · ${x}`).join('')}
                 </Typography>
               </Box>
               <Typography sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{money(b.total)}</Typography>
@@ -394,7 +394,7 @@ const ShiftCard: React.FC<{ s: ShiftRow; open: boolean; onToggle: () => void }> 
       <Box sx={{ textAlign: 'right' }}>
         <Typography sx={{ fontWeight: 800 }}>{money(s.revenue)}</Typography>
         <Typography variant="body2" color="text.secondary">
-          {s.checks} сч.{s.banquets ? ` · банкетов ${s.banquets}` : ''} · нал {money(s.cash)} · карта {money(s.card)}{s.staff ? ` · Наличные (Принтер) ${money(s.staff)}` : ''}{s.refunds ? ` · возвраты ${money(s.refunds)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
+          {s.checks} сч.{s.banquets ? ` · банкетов ${s.banquets}` : ''} · Нал(А) {money(s.cash)} · карта {money(s.card)}{s.staff ? ` · Нал(П) ${money(s.staff)}` : ''}{s.refunds ? ` · возвраты ${money(s.refunds)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
         </Typography>
       </Box>
       <ExpandIcon sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
