@@ -738,6 +738,22 @@ namespace Cafe.API.Controllers
                 var today = valid.Where(o => o.CreatedAt >= todayFrom && o.CreatedAt < todayTo);
                 var todayOrders = await today.CountAsync();
                 var todayRevenue = await today.SumAsync(o => (decimal?)o.Total) ?? 0;
+                // Банкеты: деньги (предоплаты и расчёт наличными/картой) по банкетам, закрытым в периоде — как в аналитике
+                async Task<(int Count, decimal Sum)> BanquetsAsync(DateTime a, DateTime b)
+                {
+                   var ids = await _context.Banquets.AsNoTracking()
+                        .Where(x => x.Status == BanquetStatuses.Closed && x.ClosedAt >= a && x.ClosedAt < b)
+                        .Select(x => x.Id).ToListAsync();
+                    var sum = await _context.BanquetPayments.AsNoTracking()
+                        .Where(p => ids.Contains(p.BanquetId) && p.RefundedAt == null
+                                    && (p.Method == CheckPayments.Cash || p.Method == CheckPayments.Card || p.Method == CheckPayments.Staff))
+                        .SumAsync(p => (decimal?)p.Amount) ?? 0;
+                    return (ids.Count, sum);
+                }
+                var periodBanquets = await BanquetsAsync(fromUtc, toUtc);
+                var todayBanquets = await BanquetsAsync(todayFrom, todayTo);
+                totalRevenue += periodBanquets.Sum;
+                todayRevenue += todayBanquets.Sum;
                 var periodRefunds = refunds.Between(fromUtc, toUtc);
                 var todayRefunds = refunds.Between(todayFrom, todayTo);
                 var activeOrders = await _context.Orders.CountAsync(o =>

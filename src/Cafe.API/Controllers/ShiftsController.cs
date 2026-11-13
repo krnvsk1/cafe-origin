@@ -435,7 +435,7 @@ namespace Cafe.API.Controllers
                     ShiftId = g.Key,
                     Checks = g.Count(),
                     Open = g.Count(c => c.Status == CheckStatuses.Open),
-                    Revenue = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff && !refunded.Contains(c.Id) ? c.Total : 0m),
+                    Revenue = g.Sum(c => c.Status == CheckStatuses.Closed && !refunded.Contains(c.Id) ? c.Total : 0m),
                     Cash = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Cash && !refunded.Contains(c.Id) ? c.Total : 0m),
                     Card = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Card && !refunded.Contains(c.Id) ? c.Total : 0m),
                     Staff = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff && c.RefundedAt == null ? c.Total : 0m),
@@ -464,13 +464,13 @@ namespace Cafe.API.Controllers
                     waiters = waiters.GetValueOrDefault(s.Id),
                     checks = x?.Checks ?? 0,
                     openChecks = x?.Open ?? 0,
-                    revenue = (x?.Revenue ?? 0) + b.Cash + b.Card,
+                    revenue = (x?.Revenue ?? 0) + b.Cash + b.Card + b.Staff,
                     cash = (x?.Cash ?? 0) + b.Cash,
                     card = (x?.Card ?? 0) + b.Card,
                     staff = (x?.Staff ?? 0) + b.Staff,
                     refunds = x?.Refunds ?? 0,
                     banquets = b.Closed,
-                    banquetRevenue = b.Cash + b.Card,
+                    banquetRevenue = b.Cash + b.Card + b.Staff,
                 };
             }));
         }

@@ -454,13 +454,6 @@ namespace Cafe.API.Controllers
             var method = r.Method?.Trim().ToLowerInvariant();
             if (method is not (CheckPayments.Cash or CheckPayments.Card or CheckPayments.Staff)) return BadRequest(new { message = "Выберите способ оплаты" });
             string? staffName = null, staffReason = null;
-            if (method == CheckPayments.Staff && t.Due > 0)
-            {
-                if (!(await _fiscalSettings.GetAsync()).StaffChecks) return BadRequest(new { message = "Закрытие Наличные (Принтер) выключено — включите его в «Настройке интеграций» → «Онлайн-касса»" });
-                r.StaffUserId ??= User.GetUserId();
-                staffReason = string.IsNullOrWhiteSpace(r.StaffReason) ? WaiterController.StaffReasons[0] : r.StaffReason.Trim();
-                if (staffReason.Length > 60) staffReason = staffReason[..60];
-            }
 
             var final = new BanquetPayment
             {
