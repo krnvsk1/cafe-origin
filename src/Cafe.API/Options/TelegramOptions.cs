@@ -20,7 +20,7 @@ namespace Cafe.API.Options
         /// <summary>Публичный адрес API, например https://api.cafe.example (для установки вебхука)</summary>
         public string? PublicApiUrl { get; set; }
 
-        /// <summary>Адрес сайта для мини-приложения, например https://kumashaurma-frontend.vercel.app</summary>
+        /// <summary>Адрес сайта для мини-приложения, например https://example.ru</summary>
         public string? WebAppUrl { get; set; }
 
         /// <summary>Чат персонала для уведомлений о новых заказах (ID группы или пользователя)</summary>

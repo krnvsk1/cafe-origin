@@ -10,7 +10,7 @@ namespace Cafe.API.Options
         public string? ShopId { get; set; }
         public string? SecretKey { get; set; }
 
-        /// <summary>Адрес сайта для возврата после оплаты, например https://kumashaurma-frontend.vercel.app</summary>
+        /// <summary>Адрес сайта для возврата после оплаты, например https://example.ru</summary>
         public string? ReturnUrl { get; set; }
 
         /// <summary>Передавать чек (54-ФЗ) через ЮKassa</summary>

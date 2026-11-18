@@ -91,6 +91,32 @@ cafe/
 └── tests/                    # Тесты
 ```
 
+## 🔀 Связь с основным репозиторием cafe
+
+Этот репозиторий — отдельная версия сервиса, сделанная из [krnvsk1/cafe](https://github.com/krnvsk1/cafe) со всей историей.
+Свой функционал делаем здесь, а общие исправления подтягиваем из `cafe`.
+
+Один раз, в своём клоне:
+```bash
+git remote add upstream https://github.com/krnvsk1/cafe.git
+```
+
+Подтянуть изменения из cafe (в отдельной ветке, затем PR в main):
+```bash
+git fetch upstream
+git checkout -b merge/upstream origin/main
+git merge upstream/main        # конфликты — только там, где обе версии меняли одно место
+git push -u origin merge/upstream
+```
+
+Где чаще всего будут конфликты:
+- `src/Cafe.API/Migrations/ApplicationDbContextModelSnapshot.cs` — если обе версии добавляли миграции: оставить обе части, свойства по алфавиту;
+- меню и маршруты админки (`frontend/src/App.tsx`, `frontend/src/pages/inventory/sections.ts`);
+- места, где здесь поведение специально другое.
+
+Миграции: новые миграции здесь называйте с датой позже последней миграции cafe, чтобы порядок применения не путался.
+Отдельная установка — свой сервер/домен, своя база и свой `.env` (`deploy/set-env.sh`); данные с cafe не общие.
+
 ## 🛠 Технологии
 
 | Компонент | Технологии |
