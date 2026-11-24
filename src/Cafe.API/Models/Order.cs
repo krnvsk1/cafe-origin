@@ -136,14 +136,14 @@ namespace Cafe.API.Models
         [Column("manual_discount_by")]
         public int? ManualDiscountBy { get; set; }
 
-        /// <summary>Заказ с сайта закрыт менеджером: выбран способ оплаты, пробит чек (или на сотрудника)</summary>
+        /// <summary>Заказ с сайта закрыт менеджером: выбран способ оплаты и пробит чек</summary>
         [Column("closed_at")]
         public DateTime? ClosedAt { get; set; }
 
         [Column("closed_by")]
         public int? ClosedBy { get; set; }
 
-        /// <summary>Закрыт на сотрудника (без оплаты и без чека): кто и почему</summary>
+        /// <summary>Исторические данные: закрытие заказа на сотрудника убрано, новые записи не создаются</summary>
         [Column("staff_user_id")]
         public int? StaffUserId { get; set; }
 

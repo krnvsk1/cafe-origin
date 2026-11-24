@@ -231,7 +231,6 @@ const IntegrationsPage: React.FC = () => {
           `АТОЛ Web Server: ${fiscal.url}`,
           `${TAXATION_TYPES.find(t => t.value === fiscal.taxationType)?.label ?? fiscal.taxationType} · ${VAT_TYPES.find(t => t.value === fiscal.vat)?.label ?? fiscal.vat}`,
           `Электронный чек гостю: ${fiscal.sendToCustomer ? 'на телефон, если указан' : 'не отправляется'}`,
-          fiscal.staffChecks && `Закрытие Наличные (Принтер): включено${fiscal.staffChecksManagersOnly ? ', только менеджер' : ''}`,
           fiscal.failedReceipts > 0 && `Не пробито чеков за 2 дня: ${fiscal.failedReceipts} — повторите в «Кассе» → «Заказы смены»`,
         ] : undefined}
         error={fiscal?.enabled ? fiscal.shiftError : null}

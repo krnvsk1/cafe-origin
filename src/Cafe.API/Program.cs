@@ -333,6 +333,7 @@ builder.Services.AddCors(options =>
 
 // ========== App ==========
 
+Directory.CreateDirectory(builder.Environment.WebRootPath ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot"));
 var app = builder.Build();
 
 // Номер запроса: приходит от клиента в X-Request-Id или создаётся; есть в каждой строке лога и в ответе

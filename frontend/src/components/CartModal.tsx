@@ -33,6 +33,7 @@ import {
 import { useCartStore, useTotalItems, useTotalPrice } from '../store/cartStore';
 import type { DeliveryType } from '../store/orderFlowStore';
 import { useValidatePromoCode, usePointsBalance, useRedeemPoints } from '../api/hooks';
+import { apiError } from '../api/inventory';
 import type { PromoCodeValidation } from '../types';
 import { useAuthStore } from '../store/authStore';
 import { resolveMediaUrl } from '../utils/media';
@@ -120,8 +121,8 @@ const CartModal: React.FC<CartModalProps> = ({
       setAppliedPointsDiscount(result.discountAmount);
       setPointsError('');
       onPointsApplied?.(result.discountAmount);
-    } catch (err: any) {
-      setPointsError(err?.response?.data?.message || err?.message || 'Ошибка списания баллов');
+    } catch (err: unknown) {
+      setPointsError(apiError(err, 'Ошибка списания баллов'));
     }
   };
 
@@ -493,7 +494,7 @@ const CartModal: React.FC<CartModalProps> = ({
           )}
           {!appliedPromo && validatePromo.isError && (
             <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
-              {(validatePromo.error as any)?.response?.data?.message || validatePromo.error?.message || 'Промокод не найден'}
+              {apiError(validatePromo.error, 'Промокод не найден')}
             </Typography>
           )}
         </Paper>

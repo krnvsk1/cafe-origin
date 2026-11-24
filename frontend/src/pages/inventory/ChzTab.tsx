@@ -23,7 +23,7 @@ const CERT_KEY = 'chz-certificate';
 const readCert = (): string | null => { try { return localStorage.getItem(CERT_KEY); } catch { return null; } };
 /** Сессия ЧЗ истекла (сервер отвечает 409 needSignIn) */
 const needsSignIn = (e: unknown) => !!(e as { response?: { data?: { needSignIn?: boolean } } })?.response?.data?.needSignIn;
-const writeCert = (v: string | null) => { try { v ? localStorage.setItem(CERT_KEY, v) : localStorage.removeItem(CERT_KEY); } catch { /* ignore */ } };
+const writeCert = (v: string | null) => { try { if (v) localStorage.setItem(CERT_KEY, v); else localStorage.removeItem(CERT_KEY); } catch { /* ignore */ } };
 
 // ============ Сертификат и вход ============
 
@@ -582,7 +582,7 @@ const ChzTab: React.FC = () => {
           {codes.length > 0 && (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.5, maxHeight: 160, overflowY: 'auto' }}>
               {codes.map(c => (
-                <Chip key={c} size="small" label={c.replace(/\u001d.*/, '').slice(0, 31)} onDelete={() => setCodes(codes.filter(x => x !== c))}
+                <Chip key={c} size="small" label={c.split(String.fromCharCode(29), 1)[0].slice(0, 31)} onDelete={() => setCodes(codes.filter(x => x !== c))}
                   sx={{ fontFamily: 'monospace' }} />
               ))}
             </Box>

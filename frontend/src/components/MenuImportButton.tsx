@@ -6,6 +6,7 @@ import {
 import { CloudDownloadOutlined as ImportIcon } from '@mui/icons-material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
+import { apiError } from '../api/inventory';
 import { useCan, P } from '../auth/permissions';
 
 interface ImportResult {
@@ -29,7 +30,7 @@ const MenuImportButton: React.FC<{ compact?: boolean }> = ({ compact = false }) 
   const [downloadImages, setDownloadImages] = React.useState(true);
   const [sourceUrl, setSourceUrl] = React.useState(() => { try { return localStorage.getItem(URL_KEY) ?? ''; } catch { return ''; } });
 
-  const importMenu = useMutation<ImportResult, any>({
+  const importMenu = useMutation<ImportResult, unknown>({
     mutationFn: () => apiClient
       .post('/api/admin/menu-import', { sourceUrl: sourceUrl.trim(), downloadImages }, { timeout: 5 * 60 * 1000 })
       .then(res => res.data),
@@ -85,7 +86,7 @@ const MenuImportButton: React.FC<{ compact?: boolean }> = ({ compact = false }) 
           )}
           {importMenu.isError && (
             <Alert severity="error" sx={{ mt: 2 }}>
-              {importMenu.error?.response?.data?.message || 'Не удалось импортировать меню'}
+              {apiError(importMenu.error, 'Не удалось импортировать меню')}
             </Alert>
           )}
           {result && (

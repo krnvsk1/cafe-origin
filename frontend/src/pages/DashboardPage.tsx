@@ -14,7 +14,8 @@ import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import PeriodPicker, { lastDays, type Period } from '../components/PeriodPicker';
+import PeriodPicker from '../components/PeriodPicker';
+import { lastDays, type Period } from '../utils/period';
 import { useDishes, useOrders, useOrderStats } from '../api/hooks';
 import { getStatusColor } from '../utils/statusColors';
 import type { Order, Dish } from '../types';

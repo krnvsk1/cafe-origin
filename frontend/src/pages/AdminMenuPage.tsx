@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { plural } from '../components/CartPanel';
+import { plural } from '../utils/plural';
 import AddonGroupsTab from '../components/AddonGroupsTab';
 import {
   Container,
@@ -38,8 +38,10 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import { useDishes, useDeleteDish, useUpdateDishAvailability, useUpdateDishOrder } from '../api/hooks';
+import { apiError } from '../api/inventory';
 import MenuDishRow from '../components/MenuDishRow';
-import MenuSectionsBoard, { buildSections, toReorderItems, type MenuSection } from '../components/MenuSectionsBoard';
+import MenuSectionsBoard from '../components/MenuSectionsBoard';
+import { buildSections, toReorderItems, type MenuSection } from '../utils/menuSections';
 import { KitchenStationsButton } from '../components/KitchenStationControls';
 import { useKitchenStations } from '../api/staff';
 import { 
@@ -191,7 +193,7 @@ const AdminMenuPage: React.FC = () => {
         showMessage('Категория добавок обновлена', 'success');
       }
       setCategoryDialog({ open: false, mode: 'create' });
-    } catch (error) {
+    } catch {
       showMessage('Ошибка при сохранении категории', 'error');
     }
   };
@@ -202,7 +204,7 @@ const AdminMenuPage: React.FC = () => {
       try {
         await deleteCategory.mutateAsync(categoryId);
         showMessage('Категория удалена', 'success');
-      } catch (error) {
+      } catch {
         showMessage('Ошибка при удалении категории', 'error');
       }
     }
@@ -234,7 +236,7 @@ const AdminMenuPage: React.FC = () => {
         setAddonDialog({ open: false, mode: 'create' });
       } else if (addonDialog.mode === 'edit' && addonDialog.addon?.id) {
         // Для редактирования отправляем только изменяемые поля
-        const updateData: any = {
+        const updateData: Partial<Addon> & { id: number } = {
           id: addonDialog.addon.id
         };
         
@@ -247,16 +249,9 @@ const AdminMenuPage: React.FC = () => {
         showMessage('Добавка обновлена', 'success');
         setAddonDialog({ open: false, mode: 'create' });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ ===== ОШИБКА =====');
-      console.error('❌ Статус:', error.response?.status);
-      console.error('❌ Данные ответа:', error.response?.data);
-      
-      if (error.response?.data?.message) {
-        showMessage(error.response.data.message, 'error');
-      } else {
-        showMessage('Ошибка при сохранении добавки', 'error');
-      }
+      showMessage(apiError(error, 'Ошибка при сохранении добавки'), 'error');
     }
   };
 
@@ -280,7 +275,7 @@ const AdminMenuPage: React.FC = () => {
       
       showMessage(`Группа "${category.name}" привязана к товару`, 'success');
       setLinkCategoryDialog({ open: false });
-    } catch (error) {
+    } catch {
       showMessage('Ошибка при привязке группы', 'error');
     }
   };
@@ -290,7 +285,7 @@ const AdminMenuPage: React.FC = () => {
       try {
         await deleteAddon.mutateAsync(addonId);
         showMessage('Добавка удалена', 'success');
-      } catch (error) {
+      } catch {
         showMessage('Ошибка при удалении добавки', 'error');
       }
     }

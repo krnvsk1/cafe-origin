@@ -40,7 +40,7 @@ namespace Cafe.API.Services.Fiscal
 
             var order = await _context.Orders.FirstOrDefaultAsync(x => x.Id == orderId, ct)
                         ?? throw new FiscalException("Заказ не найден");
-            if (order.PaymentMethod == CheckPayments.Staff) throw new FiscalException("Заказ закрыт Наличные (Принтер) без оплаты — кассовый чек не нужен");
+            if (order.PaymentMethod == CheckPayments.LegacyStaff) throw new FiscalException("Заказ закрыт без оплаты — кассовый чек не нужен");
             var payment = order.PaymentMethod == "online" && onlineViaAtol && order.PaymentStatus is "paid" or "refunded" ? "card" : order.PaymentMethod;
             if (payment is not ("cash" or "card"))
                 throw new FiscalException("Чек на кассе пробивается только при оплате наличными или картой; онлайн-оплату фискализирует ЮKassa");
@@ -68,7 +68,7 @@ namespace Cafe.API.Services.Fiscal
             var check = await _context.TableChecks.AsNoTracking().FirstOrDefaultAsync(c => c.Id == checkId, ct)
                         ?? throw new FiscalException("Счёт не найден");
             if (check.Status != CheckStatuses.Closed) throw new FiscalException("Чек пробивается после оплаты счёта");
-            if (check.PaymentMethod == CheckPayments.Staff) throw new FiscalException("Счёт закрыт Наличные (Принтер) без оплаты — кассовый чек не нужен");
+            if (check.PaymentMethod == CheckPayments.LegacyStaff) throw new FiscalException("Счёт закрыт без оплаты — кассовый чек не нужен");
             if (check.PaymentMethod is not ("cash" or "card")) throw new FiscalException("Не указан способ оплаты счёта");
             if (check.Total <= 0) throw new FiscalException("Сумма счёта — 0 ₽, чек не нужен");
 

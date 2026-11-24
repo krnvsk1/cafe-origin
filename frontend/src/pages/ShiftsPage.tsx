@@ -6,15 +6,16 @@ import {
 import { ExpandMore as ExpandIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import {
-  useShiftCurrent, useShifts, useShiftDetails, parseUtc, useUnfinishedReceipts, useRetryReceipt, useReturnCheckFiscal, useHouseRefund, payLabel,
-  useCancelCheckAll, useSiteOrders, useCloseSiteOrder, useSiteOrderFiscal, useCancelSiteOrder, useStaffChecksInfo, atolText,
+  useShiftCurrent, useShifts, useShiftDetails, parseUtc, useUnfinishedReceipts, useRetryReceipt, useReturnCheckFiscal, payLabel,
+  useCancelCheckAll, useSiteOrders, useCloseSiteOrder, useSiteOrderFiscal, useCancelSiteOrder, atolText,
   type ShiftRow, type ShiftDetails, type UnfinishedReceipt, type SiteOrder, type CancelAllResult,
 } from '../api/waiter';
 import { apiError } from '../api/inventory';
 import { todayMsk } from '../api/haccp';
 import { useCan, P } from '../auth/permissions';
 import { ShiftBar, PushButton } from './WaiterPage';
-import DiscountDialog, { discountOf, type DiscountType } from '../components/DiscountDialog';
+import DiscountDialog from '../components/DiscountDialog';
+import { discountOf, type DiscountType } from '../utils/discount';
 
 const money = (v: number) => `${Math.round(v).toLocaleString('ru-RU')} ₽`;
 const time = (iso: string) => parseUtc(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -124,12 +125,11 @@ const SITE_STATUS_COLOR: Record<string, 'default' | 'success' | 'warning' | 'inf
   'Новый': 'info', 'Принят': 'info', 'Готовится': 'warning', 'Готов': 'success', 'В пути': 'warning', 'Доставлен': 'success', 'Выполнен': 'success', 'Отменён': 'default',
 };
 
-/** Закрыть заказ с сайта: способ оплаты → чек в АТОЛ, или Наличные (Принтер) без чека */
+/** Закрыть заказ с сайта: способ оплаты → чек в АТОЛ */
 const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone: (text: string) => void }> = ({ order, onClose, onDone }) => {
   const close = useCloseSiteOrder();
   const online = order.paymentMethod === 'online';
   const [method, setMethod] = React.useState<string>(online ? 'online' : order.paymentMethod === 'card' ? 'card' : 'cash');
-  const { data: staffInfo } = useStaffChecksInfo(!online);
   const [err, setErr] = React.useState('');
   const canDiscount = useCan()(P.Discounts) && !online;
   const [disc, setDisc] = React.useState<{ type: DiscountType; value: number } | null>(null);
@@ -141,7 +141,7 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
     try {
       const r = await close.mutateAsync({ id: order.id, paymentMethod: method,
         ...(disc ? { discountType: disc.type, discountValue: disc.value } : {}) });
-      onDone(`Заказ #${order.id} закрыт · ${payLabel(method === 'online' ? 'онлайн' : method)}. ${atolText(r.fiscal, r.fiscalSkipped, r.staff)}`);
+      onDone(`Заказ #${order.id} закрыт · ${payLabel(method === 'online' ? 'онлайн' : method)}. ${atolText(r.fiscal, r.fiscalSkipped)}`);
     } catch (e) { setErr(apiError(e)); }
   };
   return (
@@ -162,7 +162,6 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
         ) : (
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
-            {staffInfo?.allowed && <ToggleButton value="staff">Наличные (Принтер)</ToggleButton>}
             <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
         )}
@@ -172,7 +171,7 @@ const CloseSiteDialog: React.FC<{ order: SiteOrder; onClose: () => void; onDone:
         <Button onClick={onClose} disabled={close.isPending} sx={{ color: 'text.secondary' }}>Назад</Button>
         <Button variant="contained" color="secondary" onClick={submit} disabled={close.isPending}
           startIcon={close.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}>
-          {method === 'staff' ? 'Закрыть Наличные (Принтер)' : 'Закрыть'}
+          Закрыть
         </Button>
       </DialogActions>
     </Dialog>
@@ -211,7 +210,7 @@ const SiteOrdersPanel: React.FC = () => {
       {rows.length === 0 && <Typography color="text.secondary">Все заказы закрыты</Typography>}
       {rows.map(o => {
         const isCancelled = o.status === 'Отменён';
-        const fiscalBad = !!o.closedAt && !isCancelled && o.paymentMethod !== 'staff' && o.fiscal && o.fiscal.status !== 'done';
+        const fiscalBad = !!o.closedAt && !isCancelled && o.fiscal && o.fiscal.status !== 'done';
         return (
           <Box key={o.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', py: 0.75, borderTop: 1, borderColor: 'divider', flexWrap: 'wrap', opacity: isCancelled ? 0.6 : 1 }}>
             <Box sx={{ flex: 1, minWidth: 220 }}>
@@ -221,9 +220,8 @@ const SiteOrdersPanel: React.FC = () => {
               <Typography variant="body2" color="text.secondary">
                 {time(o.createdAt)} · {o.customerName}
                 {o.paymentMethod === 'online' ? ' · оплачен онлайн' : o.closedAt ? ` · ${payLabel(o.paymentMethod)}` : ''}
-                {o.staffName ? ` (${o.staffName})` : ''}
                 {o.closedAt ? ` · закрыл ${o.closedBy ?? '—'} в ${time(o.closedAt)}` : ''}
-                {o.closedAt && o.paymentMethod !== 'staff' && o.fiscal?.status === 'done' && o.fiscal.kind === 'sell' ? ` · чек ФД ${o.fiscal.fiscalDocumentNumber ?? '—'}` : ''}
+                {o.closedAt && o.fiscal?.status === 'done' && o.fiscal.kind === 'sell' ? ` · чек ФД ${o.fiscal.fiscalDocumentNumber ?? '—'}` : ''}
               </Typography>
               {o.pendingVoids > 0 && <Typography variant="body2" color="warning.main">Отмена ждёт подтверждения кухни: {o.pendingVoids}</Typography>}
               {fiscalBad && <Typography variant="body2" color="error.main">Чек не пробит: {o.fiscal?.error ?? 'касса не ответила'}</Typography>}
@@ -255,13 +253,6 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
   const navigate = useNavigate();
   const { data, isLoading, error } = useShiftDetails(id);
   const giveBack = useReturnCheckFiscal();
-  const houseRefund = useHouseRefund();
-  const doHouseRefund = async (checkId: number, total: number) => {
-    if (!window.confirm(`Сделать возврат счёта «Наличные (Принтер)» на ${money(total)}? Денег и кассового чека не было — счёт просто перестанет считаться «Наличные (Принтер)». Если нужно, потом поменяйте способ оплаты.`)) return;
-    setNote(null);
-    try { await houseRefund.mutateAsync(checkId); setNote({ id: checkId, ok: true, text: 'Возврат сделан' }); }
-    catch (e) { setNote({ id: checkId, ok: false, text: apiError(e) }); }
-  };
   const [note, setNote] = React.useState<{ id: number; ok: boolean; text: string } | null>(null);
   const cancelCheck = useCancelCheckAll();
   const [cancelling, setCancelling] = React.useState<number | null>(null);
@@ -296,18 +287,6 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
           ))}
         </Box>
       )}
-      {data.staff && data.staff.length > 0 && (
-        <Box>
-          <Typography variant="overline" color="text.secondary">Наличные (Принтер) · кто закрыл</Typography>
-          {data.staff.map(st => (
-            <Box key={st.userId} sx={{ display: 'flex', gap: 1, alignItems: 'baseline', py: 0.25 }}>
-              <Typography sx={{ fontWeight: 700, flex: 1 }}>{st.name}</Typography>
-              <Typography variant="body2" color="text.secondary">{st.checks} сч.</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{money(st.total)}</Typography>
-            </Box>
-          ))}
-        </Box>
-      )}
       {data.banquets && data.banquets.length > 0 && (
         <Box>
           <Typography variant="overline" color="text.secondary">Банкеты</Typography>
@@ -318,7 +297,7 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                 <Typography sx={{ fontWeight: 700 }} noWrap>Банкет №{b.id} · {b.customerName}</Typography>
                 <Typography variant="caption" color="text.secondary">
                   {b.closedAt ? `закрыт ${time(b.closedAt)}` : ''}{b.closedBy ? `, ${b.closedBy}` : ''}
-                  {[b.prepaid ? `предоплата ${money(b.prepaid)}` : '', b.cash ? `Наличные(АТОЛ) ${money(b.cash)}` : '', b.card ? `Карта ${money(b.card)}` : '', b.staff ? `Наличные(Принтер) ${money(b.staff)}` : ''].filter(Boolean).map(x => ` · ${x}`).join('')}
+                  {[b.prepaid ? `предоплата ${money(b.prepaid)}` : '', b.cash ? `Наличные(АТОЛ) ${money(b.cash)}` : '', b.card ? `Карта ${money(b.card)}` : ''].filter(Boolean).map(x => ` · ${x}`).join('')}
                 </Typography>
               </Box>
               <Typography sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right' }}>{money(b.total)}</Typography>
@@ -348,11 +327,9 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                   </Typography>
                   <Typography variant="body2" color="text.secondary" noWrap>
                     {c.waiter ?? '—'} · {time(c.openedAt)}{c.closedAt ? `–${time(c.closedAt)}` : ''}
-                    {c.paymentMethod === 'staff'
-                      ? ` · Наличные (Принтер)${c.staffName ? `, закрыл ${c.staffName}` : ''}`
-                      : c.paymentMethod ? ` · ${payLabel(c.paymentMethod)}` : ''}
+                    {c.paymentMethod ? ` · ${payLabel(c.paymentMethod)}` : ''}
                     {c.paymentWas && <Box component="span" sx={{ color: 'warning.main' }}> · исправлено с «{payLabel(c.paymentWas)}»{c.paymentChangedBy ? `, ${c.paymentChangedBy}` : ''}{c.paymentChangedAt ? ` ${time(c.paymentChangedAt)}` : ''}</Box>}
-                    {c.refunded && c.paymentMethod === 'staff' && <Box component="span" sx={{ color: 'warning.main' }}> · возврат{c.refundedBy ? `, ${c.refundedBy}` : ''}{c.refundedAt ? ` ${time(c.refundedAt)}` : ''}</Box>}
+                    {c.refunded && <Box component="span" sx={{ color: 'warning.main' }}> · возврат{c.refundedBy ? `, ${c.refundedBy}` : ''}{c.refundedAt ? ` ${time(c.refundedAt)}` : ''}</Box>}
                     {ft && <Box component="span" sx={{ color: sold || returned ? 'text.secondary' : 'error.main' }}> · кассовый чек: {ft}</Box>}
                   </Typography>
                   {note?.id === c.id && <Typography variant="body2" color={note.ok ? 'success.main' : 'error.main'}>{note.text}</Typography>}
@@ -360,11 +337,6 @@ const ShiftDetailsView: React.FC<{ id: number }> = ({ id }) => {
                 {c.refunded ? <Chip size="small" color="warning" label="Возврат" /> : <Chip size="small" color={STATUS[c.status].color} label={STATUS[c.status].text} />}
                 <Typography sx={{ fontWeight: 700, minWidth: 80, textAlign: 'right', textDecoration: c.refunded ? 'line-through' : undefined, color: c.refunded ? 'text.secondary' : undefined }}>{money(c.total)}</Typography>
               </ButtonBase>
-              {c.status === 'closed' && c.paymentMethod === 'staff' && !c.refunded && (
-                <Button size="small" color="inherit" disabled={houseRefund.isPending} onClick={() => doHouseRefund(c.id, c.total)} sx={{ color: 'text.secondary', mr: 0.5 }}>
-                  Возврат
-                </Button>
-              )}
               {sold && !returned && (
                 <Button size="small" color="inherit" disabled={giveBack.isPending} onClick={() => doReturn(c.id, c.total)} sx={{ color: 'text.secondary', mr: 0.5 }}>
                   Возврат
@@ -394,7 +366,7 @@ const ShiftCard: React.FC<{ s: ShiftRow; open: boolean; onToggle: () => void }> 
       <Box sx={{ textAlign: 'right' }}>
         <Typography sx={{ fontWeight: 800 }}>{money(s.revenue)}</Typography>
         <Typography variant="body2" color="text.secondary">
-          {s.checks} сч.{s.banquets ? ` · банкетов ${s.banquets}` : ''} · Нал(А) {money(s.cash)} · карта {money(s.card)}{s.staff ? ` · Нал(П) ${money(s.staff)}` : ''}{s.refunds ? ` · возвраты ${money(s.refunds)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
+          {s.checks} сч.{s.banquets ? ` · банкетов ${s.banquets}` : ''} · Нал(А) {money(s.cash)} · карта {money(s.card)}{s.refunds ? ` · возвраты ${money(s.refunds)}` : ''}{s.openChecks ? ` · открыто ${s.openChecks}` : ''}
         </Typography>
       </Box>
       <ExpandIcon sx={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />

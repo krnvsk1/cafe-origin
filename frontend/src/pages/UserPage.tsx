@@ -211,10 +211,10 @@ const UsersPage: React.FC = () => {
         severity: 'success',
       });
       refetchPoints();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSnackbar({
         open: true,
-        message: err?.response?.data?.message || 'Ошибка при операции с баллами',
+        message: apiError(err, 'Ошибка при операции с баллами'),
         severity: 'error',
       });
     }

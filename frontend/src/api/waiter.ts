@@ -85,15 +85,10 @@ export interface TableCheck {
   openedAt: string;
   closedAt: string | null;
   paymentMethod: string | null;
-  /** Счёт закрыт на сотрудника (без оплаты и без чека) */
-  staffName?: string | null;
-  staffReason?: string | null;
   /** Оплату меняли после закрытия: какая была, кто и когда */
   paymentWas?: string | null;
   paymentChangedBy?: string | null;
   paymentChangedAt?: string | null;
-  /** Менеджер может исправить оплаченный счёт на сотрудника (смена открыта) */
-  canFixToStaff?: boolean;
   /** Скидка: сумма блюд, скидка, тип и значение, можно ли давать */
   subtotal?: number;
   discount?: number;
@@ -154,25 +149,22 @@ export const useCancelRound = () =>
   useWaiterMutation<{ checkId: number; orderId: number }>(({ checkId, orderId }) =>
     apiClient.post(`/api/waiter/checks/${checkId}/orders/${orderId}/cancel`).then(r => r.data));
 
-export type CheckPayment = 'cash' | 'card' | 'staff';
+export type CheckPayment = 'cash' | 'card';
 
 /** Способ оплаты счёта словами */
 export const payLabel = (m: string | null | undefined) =>
-  m === 'cash' ? 'наличные' : m === 'card' ? 'карта' : m === 'staff' ? 'Наличные (Принтер)' : m ?? '';
+  m === 'cash' ? 'наличные' : m === 'card' ? 'карта' : m === 'staff' ? 'без оплаты' : m ?? '';
 
 export interface CloseCheckResult {
   total: number;
   change: number | null;
   fiscal: FiscalResult | null;
-  /** Почему чек в АТОЛ не отправлялся: staff — закрыт на сотрудника, disabled — онлайн-касса выключена */
-  fiscalSkipped?: 'staff' | 'disabled' | null;
-  staff?: string | null;
-  printJobId?: number | null;
-  printError?: string | null;
+  /** Почему чек в АТОЛ не отправлялся: disabled — онлайн-касса выключена */
+  fiscalSkipped?: 'disabled' | null;
 }
 
 export const useCloseCheck = () =>
-  useWaiterMutation<{ checkId: number; paymentMethod: CheckPayment; cashReceived: number | null; staffUserId?: number | null; staffReason?: string | null }, CloseCheckResult>(
+  useWaiterMutation<{ checkId: number; paymentMethod: CheckPayment; cashReceived: number | null }, CloseCheckResult>(
     ({ checkId, ...body }) => apiClient.post(`/api/waiter/checks/${checkId}/close`, body).then(r => r.data));
 
 /** Сменить способ оплаты закрытого счёта: если чек уже в АТОЛ — возврат и новый чек */
@@ -182,30 +174,11 @@ export interface ChangePaymentResult {
   returned: FiscalResult | null;
   /** Новый чек продажи */
   fiscal: FiscalResult | null;
-  fiscalSkipped?: 'disabled' | 'staff' | null;
-  staff?: string | null;
+  fiscalSkipped?: 'disabled' | null;
 }
 export const useChangePayment = () =>
-  useWaiterMutation<{ checkId: number; paymentMethod: CheckPayment; staffUserId?: number | null; staffReason?: string | null }, ChangePaymentResult>(({ checkId, ...body }) =>
+  useWaiterMutation<{ checkId: number; paymentMethod: CheckPayment }, ChangePaymentResult>(({ checkId, ...body }) =>
     apiClient.post(`/api/waiter/checks/${checkId}/payment`, body).then(r => r.data));
-
-/** Закрытие на сотрудника: включено ли, можно ли мне, кого выбрать */
-export interface StaffChecksInfo {
-  enabled: boolean;
-  allowed: boolean;
-  managersOnly: boolean;
-  staff: { id: number; name: string }[] | null;
-  reasons: string[];
-  /** Кто закрывает — сотрудник по умолчанию */
-  me: number | null;
-}
-export const useStaffChecksInfo = (enabled: boolean) =>
-  useQuery<StaffChecksInfo>({
-    queryKey: [KEY, 'staff-checks'],
-    queryFn: () => apiClient.get('/api/waiter/staff-checks').then(r => r.data),
-    enabled,
-    staleTime: 60_000,
-  });
 
 export const useCheckDiscount = () =>
   useWaiterMutation<{ checkId: number; type: string | null; value: number | null }>(({ checkId, type, value }) =>
@@ -327,10 +300,10 @@ export const useCloseVenueShift = () => useWaiterMutation<void, VenueShiftResult
 /** Итоги текущей смены заведения — показываются перед закрытием */
 export interface VenueReport {
   id: number; businessDate: string; openedAt: string;
-  hall: { checks: number; cash: number; card: number; staff: number; refunds: number; open: number; openTotal: number };
-  site: { orders: number; cash: number; card: number; online: number; staff: number; refunds: number };
-  banquets: { payments: number; cash: number; card: number; staff: number };
-  totals: { cash: number; card: number; online: number; staff: number; refunds: number; revenue: number };
+  hall: { checks: number; cash: number; card: number; refunds: number; open: number; openTotal: number };
+  site: { orders: number; cash: number; card: number; online: number; refunds: number };
+  banquets: { payments: number; cash: number; card: number };
+  totals: { cash: number; card: number; online: number; refunds: number; revenue: number };
 }
 export const useVenueReport = (enabled: boolean) =>
   useQuery<VenueReport>({
@@ -360,9 +333,7 @@ export interface ShiftRow {
   revenue: number;
   cash: number;
   card: number;
-  /** Наличные (Принтер) —  */
-  staff?: number;
-  /** Возвраты: деньги вернули гостю —  */
+  /** Возвраты: деньги вернули гостю */
   refunds?: number;
   /** Банкетов закрыто за смену и деньги по банкетам (уже в нал/карте/выручке) */
   banquets?: number;
@@ -377,16 +348,13 @@ export interface ShiftDetails {
   openedBy: string | null;
   closedBy: string | null;
   waiters: { id: number; userId: number; name: string | null; openedAt: string; closedAt: string | null; checks: number; revenue: number; approvedBy?: string | null }[];
-  /** Закрыто на сотрудников: к удержанию по людям */
-  staff?: { userId: number; name: string; checks: number; total: number }[];
-  /** Банкеты, закрытые в смену: расчёт (нал/карта), часть без оплаты и предоплата */
-  banquets?: { id: number; customerName: string; eventAt: string; total: number; closedAt: string | null; closedBy: string | null; cash: number; card: number; staff: number; prepaid: number }[];
-  banquetMoney?: { cash: number; card: number; staff: number };
+  /** Банкеты, закрытые в смену: расчёт (нал/карта) и предоплата */
+  banquets?: { id: number; customerName: string; eventAt: string; total: number; closedAt: string | null; closedBy: string | null; cash: number; card: number; prepaid: number }[];
+  banquetMoney?: { cash: number; card: number };
   checks: {
     id: number; table: string | null; label: string | null; waiter: string | null; waiterId: number | null;
     status: 'open' | 'closed' | 'cancelled'; guests: number | null; openedAt: string; closedAt: string | null;
     paymentMethod: string | null; total: number;
-    staffName?: string | null; staffReason?: string | null;
     paymentWas?: string | null; paymentChangedBy?: string | null; paymentChangedAt?: string | null;
     fiscal: CheckFiscalState | null;
     fiscalReturn: CheckFiscalState | null;
@@ -433,10 +401,6 @@ export const useCheckFiscal = () =>
 export interface FiscalResult { status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber?: number | null }
 
 /** Чек возврата по счёту стола (гость вернул деньги) — те же позиции и сумма, что в чеке продажи */
-/** Возврат счёта «Наличные (Принтер)» (официант ошибся): без денег и чека, только пометка */
-export const useHouseRefund = () =>
-  useWaiterMutation<number, { id: number; refundedAt: string }>(checkId => apiClient.post(`/api/waiter/checks/${checkId}/house-refund`).then(r => r.data));
-
 export const useReturnCheckFiscal = () =>
   useWaiterMutation<number, FiscalResult>(checkId => apiClient.post(`/api/waiter/checks/${checkId}/fiscal/return`).then(r => r.data));
 
@@ -478,7 +442,7 @@ export const useSetItemWeight = () =>
 
 export interface MyChecks {
   shift: { id: number; openedAt: string; closedAt: string | null } | null;
-  summary: { closed: number; revenue: number; cash: number; card: number; staff?: number; open: number };
+  summary: { closed: number; revenue: number; cash: number; card: number; open: number };
   checks: {
     id: number; table: string | null; label: string | null; status: 'open' | 'closed' | 'cancelled'; guests: number | null;
     openedAt: string; closedAt: string | null; paymentMethod: string | null; total: number;
@@ -515,8 +479,6 @@ export interface SiteOrder {
   deliveryPrice?: number;
   closedAt: string | null;
   closedBy: string | null;
-  staffName: string | null;
-  staffReason: string | null;
   pendingVoids: number;
   canClose: boolean;
   fiscal: { kind: 'sell' | 'return'; status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber: number | null; sold: boolean } | null;
@@ -530,10 +492,10 @@ export const useSiteOrders = (enabled: boolean) =>
     refetchInterval: 30_000,
   });
 
-export interface SiteCloseResult { fiscal: FiscalResult | null; fiscalSkipped?: 'staff' | 'disabled' | 'yookassa' | null; staff?: string | null }
+export interface SiteCloseResult { fiscal: FiscalResult | null; fiscalSkipped?: 'disabled' | 'yookassa' | null }
 
 export const useCloseSiteOrder = () =>
-  useWaiterMutation<{ id: number; paymentMethod: string; staffUserId?: number | null; staffReason?: string | null; discountType?: string | null; discountValue?: number | null }, SiteCloseResult>(({ id, ...body }) =>
+  useWaiterMutation<{ id: number; paymentMethod: string; discountType?: string | null; discountValue?: number | null }, SiteCloseResult>(({ id, ...body }) =>
     apiClient.post(`/api/site-orders/${id}/close`, body).then(r => r.data));
 
 export const useSiteOrderFiscal = () =>
@@ -544,11 +506,11 @@ export const useCancelSiteOrder = () =>
     apiClient.post(`/api/site-orders/${id}/cancel`, { reason }).then(r => r.data));
 
 /** Что ушло в АТОЛ — одной строкой для уведомления */
-export const atolText = (fiscal: FiscalResult | null | undefined, skipped?: string | null, _staff?: string | null) =>
+export const atolText = (fiscal: FiscalResult | null | undefined, skipped?: string | null) =>
   fiscal
     ? fiscal.status === 'done' ? `Чек отправлен в АТОЛ и пробит${fiscal.fiscalDocumentNumber ? ` (ФД ${fiscal.fiscalDocumentNumber})` : ''}`
       : fiscal.status === 'processing' ? 'Чек отправлен в АТОЛ, касса ещё печатает'
       : `Чек в АТОЛ не пробит: ${fiscal.error ?? 'ошибка кассы'}`
-    : skipped === 'staff' ? 'В АТОЛ не отправлялся — Наличные (Принтер)'
     : skipped === 'yookassa' ? 'Оплачен онлайн — чек отправила ЮKassa'
+    : skipped === 'empty' ? 'Чек не нужен — к оплате 0 ₽'
     : 'В АТОЛ не отправлялся — онлайн-касса выключена';

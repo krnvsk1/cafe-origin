@@ -22,10 +22,6 @@ namespace Cafe.API.Services.Fiscal
         public string? CashierInn { get; set; }
         /// <summary>Отправлять копию чека на телефон гостя, если он указан</summary>
         public bool SendToCustomer { get; set; } = true;
-        /// <summary>Можно закрыть счёт «на сотрудника»: без оплаты и без чека ККТ, сумма — к удержанию с сотрудника</summary>
-        public bool StaffChecks { get; set; }
-        /// <summary>Закрывать на сотрудника может только менеджер (право «Все счета»), а не любой официант</summary>
-        public bool StaffChecksManagersOnly { get; set; } = true;
         /// <summary>Свой текст сверху и снизу чека, QR-код</summary>
         public ReceiptLayout Layout { get; set; } = ReceiptLayout.Default();
     }

@@ -113,7 +113,7 @@ namespace Cafe.API.Services
 
         /// <summary>
         /// Позиции чека расчёта: блюда и обслуживание, суммы приведены к fiscalSum
-        /// (итог минус часть «на сотрудника» — она без оплаты и в чек не идёт)
+        /// (скидка, обслуживание и зачёт предоплаты меняют итог чека)
         /// </summary>
         public static List<ReceiptLine> FinalLines(IEnumerable<BanquetItem> items, BanquetTotals t, decimal fiscalSum)
         {

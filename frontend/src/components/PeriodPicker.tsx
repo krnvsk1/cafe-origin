@@ -1,19 +1,9 @@
 import * as React from 'react';
 import { Box, TextField, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { lastDays, type Period } from '../utils/period';
 import { todayMsk } from '../api/haccp';
 
 /** Период в днях по Москве, обе даты включительно (yyyy-MM-dd) */
-export interface Period {
-  from: string;
-  to: string;
-}
-
-const addDays = (d: string, n: number) => {
-  const x = new Date(d + 'T12:00:00Z');
-  x.setUTCDate(x.getUTCDate() + n);
-  return x.toISOString().slice(0, 10);
-};
-
 const PRESETS = [
   { key: 'today', label: 'Сегодня', days: 1 },
   { key: '7', label: '7 дней', days: 7 },
@@ -21,10 +11,10 @@ const PRESETS = [
   { key: '90', label: '3 месяца', days: 90 },
 ] as const;
 
-/** Последние n дней, считая сегодня */
-export const lastDays = (days: number): Period => {
-  const to = todayMsk();
-  return { from: addDays(to, -(days - 1)), to };
+const addDays = (date: string, days: number) => {
+  const result = new Date(`${date}T12:00:00Z`);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result.toISOString().slice(0, 10);
 };
 
 const presetOf = (p: Period) => {

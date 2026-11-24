@@ -14,7 +14,7 @@ import {
 import type { Dish } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import { KitchenStationSelect } from './KitchenStationControls';
-import { plural } from './CartPanel';
+import { plural } from '../utils/plural';
 
 const rub = (v: number) => `${v.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`;
 const priceOf = (d: Dish, card: Dish) => `${rub(d.price)}${d.isWeighted || card.isWeighted ? ' / 100 г' : ''}`;

@@ -29,12 +29,10 @@ export interface BanquetItem {
 export interface BanquetPayment {
   id: number;
   kind: 'prepay' | 'final';
-  method: 'cash' | 'card' | 'staff' | 'prepaid';
+  method: 'cash' | 'card' | 'prepaid';
   amount: number;
   createdAt: string;
   refundedAt: string | null;
-  staffName: string | null;
-  staffReason: string | null;
   createdBy: string | null;
   fiscal: { id: number; kind: 'sell' | 'return'; status: 'processing' | 'done' | 'error'; error: string | null; fiscalDocumentNumber: number | null; sold: boolean } | null;
 }
@@ -63,9 +61,6 @@ export interface Banquet {
   items: BanquetItem[];
   payments: BanquetPayment[];
   canDiscount: boolean;
-  staffAllowed: boolean;
-  staff: { id: number; name: string }[] | null;
-  me: number | null;
   fiscalEnabled: boolean;
   printEnabled: boolean;
 }
@@ -128,13 +123,13 @@ export const useRemoveBanquetItem = () =>
 export const useSendBanquetToKitchen = () => useBanquetMutation<number>(id => apiClient.post(`/api/banquets/${id}/kitchen`).then(r => r.data));
 export const usePrintBanquet = () => useBanquetMutation<number, { jobId: number }>(id => apiClient.post(`/api/banquets/${id}/print`).then(r => r.data));
 
-export interface BanquetFiscalResult { fiscal: FiscalResult | null; fiscalSkipped?: 'staff' | 'disabled' | 'recorded' | null; staff?: string | null }
+export interface BanquetFiscalResult { fiscal: FiscalResult | null; fiscalSkipped?: 'disabled' | 'recorded' | 'empty' | null }
 export const usePrepayBanquet = () =>
   useBanquetMutation<{ id: number; amount: number; method: 'cash' | 'card' }, BanquetFiscalResult>(({ id, ...b }) => apiClient.post(`/api/banquets/${id}/prepay`, b).then(r => r.data));
 export const useRefundBanquetPayment = () =>
   useBanquetMutation<{ id: number; paymentId: number }, { returned: FiscalResult | null }>(({ id, paymentId }) => apiClient.post(`/api/banquets/${id}/payments/${paymentId}/refund`).then(r => r.data));
 export const useCloseBanquet = () =>
-  useBanquetMutation<{ id: number; method: 'cash' | 'card' | 'staff'; staffUserId?: number | null; staffReason?: string | null }, BanquetFiscalResult & { total: number; prepaid: number; due: number }>(
+  useBanquetMutation<{ id: number; method: 'cash' | 'card' }, BanquetFiscalResult & { total: number; prepaid: number; due: number }>(
     ({ id, ...b }) => apiClient.post(`/api/banquets/${id}/close`, b).then(r => r.data));
 export const useCancelBanquet = () =>
   useBanquetMutation<{ id: number; reason: string }, { returned: number; done: number; pending: number }>(({ id, reason }) => apiClient.post(`/api/banquets/${id}/cancel`, { reason }).then(r => r.data));

@@ -51,8 +51,8 @@ namespace Cafe.API.Controllers
             var orders = await _context.Orders.AsNoTracking()
                 .Where(o => o.CreatedAt >= rangeStart && o.CreatedAt < rangeEnd)
                 .Where(o => o.PaymentMethod != "online" || o.PaymentStatus == "paid" || o.PaymentStatus == "refunded")
-                // Закрытые на сотрудника —  (без оплаты, к удержанию с сотрудника)
-                .Where(o => o.PaymentMethod != "staff")
+                // Старые заказы, закрытые без оплаты, — не выручка
+                .Where(o => o.PaymentMethod != Cafe.API.Models.CheckPayments.LegacyStaff)
                 // Заказы кухни банкета — выручка считается по самим банкетам (с обслуживанием, скидкой и предоплатами)
                 .Where(o => o.Source != "banquet")
                 .Include(o => o.OrderItems)
@@ -88,10 +88,6 @@ namespace Cafe.API.Controllers
             var banquetPrevRevenue = banquets.Where(b => b.ClosedAt < periodStart).Sum(b => BanquetMoney(b.Id));
 
             var revenue = Revenue(valid) + banquetRevenue;
-            // Банкеты: часть «на заведение» (без оплаты) — к счетам на заведение
-            decimal BanquetHouse(IEnumerable<int> ids) => banquetPays.Where(p => ids.Contains(p.BanquetId) && p.Method == Cafe.API.Models.CheckPayments.Staff).Sum(p => p.Amount);
-            var banquetHouseNow = BanquetHouse(banquetNow.Select(b => b.Id));
-            var banquetHouseBefore = BanquetHouse(banquets.Where(b => b.ClosedAt < periodStart).Select(b => b.Id));
             var prevRevenue = Revenue(prevValid) + banquetPrevRevenue;
 
             // Клиенты: по пользователю, для гостей — по телефону
@@ -150,31 +146,6 @@ namespace Cafe.API.Controllers
                 .Select(r => r.Rating)
                 .ToListAsync();
 
-            // Закрыто на сотрудников (без оплаты и без чека): , сумма к удержанию с сотрудников
-            var staffChecks = await _context.TableChecks.AsNoTracking()
-                .Where(c => c.Status == Cafe.API.Models.CheckStatuses.Closed && c.PaymentMethod == Cafe.API.Models.CheckPayments.Staff
-                            && c.RefundedAt == null && c.ClosedAt >= rangeStart && c.ClosedAt < rangeEnd)
-                .Select(c => new { c.ClosedAt, c.Total, c.StaffUserId })
-                .ToListAsync();
-            // и остаток банкетов, закрытый на сотрудника
-            staffChecks.AddRange(await _context.BanquetPayments.AsNoTracking()
-                .Where(p => p.Method == "staff" && p.RefundedAt == null && p.CreatedAt >= rangeStart && p.CreatedAt < rangeEnd)
-                .Select(p => new { ClosedAt = (DateTime?)p.CreatedAt, Total = p.Amount, p.StaffUserId })
-                .ToListAsync());
-            // и заказы с сайта, закрытые на сотрудника
-            staffChecks.AddRange(await _context.Orders.AsNoTracking()
-                .Where(o => o.PaymentMethod == Cafe.API.Models.CheckPayments.Staff && o.CheckId == null && o.Status != OrderStatuses.Cancelled
-                            && o.ClosedAt >= rangeStart && o.ClosedAt < rangeEnd)
-                .Select(o => new { o.ClosedAt, o.Total, o.StaffUserId })
-                .ToListAsync());
-            var staffNow = staffChecks.Where(c => c.ClosedAt >= periodStart).ToList();
-            var staffBefore = staffChecks.Where(c => c.ClosedAt < periodStart).ToList();
-            var staffNames = await WaiterController.StaffNamesAsync(_context, staffNow.Select(c => c.StaffUserId));
-            var staffByPerson = staffNow.GroupBy(c => c.StaffUserId ?? 0)
-                .Select(g => new { Name = staffNames.GetValueOrDefault(g.Key) ?? "—", Checks = g.Count(), Total = g.Sum(c => c.Total) })
-                .OrderByDescending(x => x.Total)
-                .ToList();
-
             double? Change(decimal now, decimal before) => before == 0 ? null : (double)Math.Round((now - before) / before * 100, 1);
 
             return Ok(new
@@ -204,14 +175,10 @@ namespace Cafe.API.Controllers
                     PointsEarned = points.Where(p => p.Type is "earned" or "referral" or "admin_grant").Sum(p => p.Amount),
                     ReviewsCount = reviews.Count,
                     AverageRating = reviews.Count > 0 ? Math.Round(reviews.Average(), 2) : (double?)null,
-                    StaffTotal = staffNow.Sum(c => c.Total) + banquetHouseNow,
-                    StaffTotalChange = Change(staffNow.Sum(c => c.Total) + banquetHouseNow, staffBefore.Sum(c => c.Total) + banquetHouseBefore),
-                    StaffChecks = staffNow.Count,
                     Refunds = refundsNow.Count,
                     RefundsTotal = refundsNow.Sum(r => r.Amount),
                     RefundsTotalChange = Change(refundsNow.Sum(r => r.Amount), refundsBefore.Sum(r => r.Amount))
                 },
-                StaffByPerson = staffByPerson,
                 ByDay = byDay,
                 ByHour = byHour,
                 TopItems = topItems,

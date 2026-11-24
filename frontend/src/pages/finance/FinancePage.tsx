@@ -4,7 +4,7 @@ import { ChevronRight as ChevronRightIcon, PaymentsOutlined as PaymentsIcon, Cal
 import { useFinancePayments, type PaymentFilter, type BucketSum } from '../../api/finance';
 import { fmtMoney, fmtDate, apiError } from '../../api/inventory';
 import { Panel, StatTile, ListRow, EmptyState } from '../inventory/ui';
-import { plural } from '../../components/CartPanel';
+import { plural } from '../../utils/plural';
 import { DueLabel } from './DueLabel';
 import PaymentDialog from './PaymentDialog';
 import SuppliersView from './SuppliersView';

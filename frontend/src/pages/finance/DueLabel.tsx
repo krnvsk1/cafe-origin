@@ -2,7 +2,7 @@ import * as React from 'react';
 import { alpha } from '@mui/material';
 import { Pill } from '../inventory/ui';
 import { tokens } from '../../theme';
-import { plural } from '../../components/CartPanel';
+import { plural } from '../../utils/plural';
 
 const DAY_FORMS: [string, string, string] = ['день', 'дня', 'дней'];
 const WARNING_COLOR = '#C77700';

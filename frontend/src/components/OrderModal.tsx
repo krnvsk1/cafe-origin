@@ -43,6 +43,7 @@ import { isMapsConfigured } from '../utils/yandexMaps';
 import type { CreateOrderDto, PromoCodeValidation, PaymentMethod } from '../types';
 import { useCartStore } from '../store/cartStore';
 import type { DeliveryType } from '../store/orderFlowStore';
+import { apiError } from '../api/inventory';
 import { resolveMediaUrl } from '../utils/media';
 
 const Transition = React.forwardRef<unknown, SlideProps>(function Transition(props, ref) {
@@ -243,8 +244,8 @@ const OrderModal: React.FC<OrderModalProps> = ({
         return;
       }
       navigate(`/order/${result.id}/success`);
-    } catch (error: any) {
-      showSnackbar(error?.response?.data?.message || error.message || 'Ошибка при создании заказа', 'error');
+    } catch (error: unknown) {
+      showSnackbar(apiError(error, 'Ошибка при создании заказа'), 'error');
     }
   };
 

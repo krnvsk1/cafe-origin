@@ -13,12 +13,9 @@ namespace Cafe.API.Services.Printing
     /// <summary>Строка счёта: название (с добавками), количество, цена, сумма</summary>
     public record PrecheckLine(string Name, int Quantity, decimal Price, decimal Amount);
 
-    /// <summary>Счёт закрыт на сотрудника: кто и почему — сумма к удержанию</summary>
-    public record PrecheckStaff(string Name, string Reason);
-
     public record PrecheckData(
         string Brand, string Table, string CheckLabel, string? Waiter, int? Guests,
-        DateTime OpenedUtc, DateTime PrintedUtc, IReadOnlyList<PrecheckLine> Lines, string? Footer, PrecheckStaff? Staff = null,
+        DateTime OpenedUtc, DateTime PrintedUtc, IReadOnlyList<PrecheckLine> Lines, string? Footer,
         string? Title = null, IReadOnlyList<PrecheckAdjustment>? Adjustments = null, IReadOnlyList<string>? Info = null);
 
     /// <summary>Строка после блюд: скидка (минус), обслуживание (плюс), предоплата (минус — итог «к оплате»)</summary>
@@ -48,7 +45,7 @@ namespace Cafe.API.Services.Printing
             var vars = new Dictionary<string, string>
             {
                 ["brand"] = d.Brand ?? "",
-                ["title"] = d.Title ?? (d.Staff == null ? "СЧЁТ" : "СЧЁТ"),
+                ["title"] = d.Title ?? "СЧЁТ",
                 ["table"] = string.IsNullOrWhiteSpace(d.Table) ? "" : Cafe.API.Controllers.WaiterController.TableLabel(d.Table),
                 ["check"] = d.CheckLabel ?? "",
                 ["waiter"] = d.Waiter ?? "",
@@ -70,10 +67,6 @@ namespace Cafe.API.Services.Printing
             var guests = layout.ShowGuests && d.Guests is > 0 ? $"{(layout.GuestsLabel.Length > 0 ? layout.GuestsLabel + ": " : "")}{d.Guests}" : "";
             if (layout.ShowDate || guests.Length > 0) p.Pair(layout.ShowDate ? msk.ToString("dd.MM.yyyy HH:mm") : "", guests);
             if (layout.ShowWaiter && !string.IsNullOrWhiteSpace(d.Waiter)) p.Line($"{(layout.WaiterLabel.Length > 0 ? layout.WaiterLabel + ": " : "")}{d.Waiter}");
-            if (d.Staff != null)
-            {
-                p.Line($"Закрыл: {d.Staff.Name}", bold: true);
-            }
             p.Separator();
             foreach (var l in d.Lines)
             {
@@ -99,15 +92,11 @@ namespace Cafe.API.Services.Printing
                     sum += adj.Where(a => a.IsPrepaid).Sum(a => a.Amount);
                 }
             }
-            p.Pair(d.Staff != null ? "" : adj.Any(a => a.IsPrepaid) ? layout.DueLabel : layout.TotalLabel, Money(Math.Max(0, sum)), bold: true);
+            p.Pair(adj.Any(a => a.IsPrepaid) ? layout.DueLabel : layout.TotalLabel, Money(Math.Max(0, sum)), bold: true);
             p.Separator('=');
             // Счёт — не кассовый чек: печатается всегда, в настройках вида не убирается
             p.Line("", EscPos.Align.Center);
-            if (d.Staff != null)
-            {
-                p.Line("", EscPos.Align.Center);
-            }
-            else foreach (var l in layout.Footer) Own(l);
+            foreach (var l in layout.Footer) Own(l);
             return p.Cut().ToArray();
         }
 

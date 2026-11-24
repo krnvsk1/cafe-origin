@@ -8,6 +8,7 @@ import {
 import type { Dish } from '../types';
 import { resolveMediaUrl } from '../utils/media';
 import { tokens } from '../theme';
+import { BADGES } from '../utils/menuBadges';
 import { allowedOrderTypes, describeOrderTypes } from '../utils/orderTypes';
 
 interface MenuItemCardProps {
@@ -176,13 +177,6 @@ const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, onOpen, onAdd, isFavo
       </Box>
     </Box>
   );
-};
-
-export const BADGES: Record<string, { label: string; color: string }> = {
-  hit: { label: 'Хит', color: tokens.chili },
-  new: { label: 'Новинка', color: tokens.herb },
-  promo: { label: 'Акция', color: '#7A4DFF' },
-  lean: { label: 'Постное', color: '#4E7D2E' },
 };
 
 const Tag: React.FC<{ label: string; color: string; solid?: boolean }> = ({ label, color, solid }) => (
