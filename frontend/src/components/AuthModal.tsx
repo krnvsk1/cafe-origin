@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon, Phone as PhoneIcon, Sms as SmsIcon, Person as PersonIcon } from '@mui/icons-material';
 import { apiClient } from '../api/client';
+import { apiError } from '../api/inventory';
 import { getStoredReferral, clearStoredReferral } from '../utils/referral';
 import { useAuthStore } from '../store/authStore';
 import TelegramLogin from './TelegramLogin';
@@ -135,8 +136,8 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
       } else {
         setError(response.data.message || "Ошибка отправки кода");
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || err.message || "Ошибка отправки кода");
+    } catch (err: unknown) {
+      setError(apiError(err, 'Ошибка отправки кода'));
     } finally {
       setLoading(false);
     }
@@ -168,8 +169,8 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
       } else {
         setError(response.data.message || "Неверный код");
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || err.message || "Ошибка проверки кода");
+    } catch (err: unknown) {
+      setError(apiError(err, 'Ошибка проверки кода'));
     } finally {
       setLoading(false);
     }
@@ -201,8 +202,8 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
       } else {
         setError(response.data.message || "Ошибка регистрации");
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || err.message || "Ошибка регистрации");
+    } catch (err: unknown) {
+      setError(apiError(err, 'Ошибка регистрации'));
     } finally {
       setLoading(false);
     }

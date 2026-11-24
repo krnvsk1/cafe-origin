@@ -41,14 +41,15 @@ import {
   Replay as ReplayIcon
 } from '@mui/icons-material';
 import { Link } from 'react-router-dom';
-import PeriodPicker, { lastDays, type Period } from '../components/PeriodPicker';
+import PeriodPicker from '../components/PeriodPicker';
+import { lastDays, type Period } from '../utils/period';
 import { useOrders, useMyOrders, useUpdateOrderStatus, useDeleteOrder, useUpdateOrder } from '../api/hooks';
 import { formatScheduled } from '../utils/schedule';
 import { useRepeatOrder, describeRepeatResult } from '../api/reorder';
 import OrderReviewBlock from '../components/OrderReviewBlock';
 import { useAuthStore } from '../store/authStore';
 import type { Order, OrderItem, OrderStatus, OrderItemAddon, UpdateOrderDto } from '../types';
-import { plural } from '../components/CartPanel';
+import { plural } from '../utils/plural';
 import { getStatusColor } from '../utils/statusColors';
 import { useCan, P } from '../auth/permissions';
 
@@ -538,7 +539,7 @@ const OrdersPage: React.FC = () => {
       try {
         await deleteOrder.mutateAsync(id);
         setSnackbar({ open: true, message: 'Заказ удалён', severity: 'success' });
-      } catch (error) {
+      } catch {
         setSnackbar({ open: true, message: 'Ошибка при удалении заказа', severity: 'error' });
       }
     }
@@ -553,7 +554,7 @@ const OrdersPage: React.FC = () => {
       await updateOrder.mutateAsync({ id, data });
       setSnackbar({ open: true, message: 'Заказ обновлён', severity: 'success' });
       setEditDialog({ open: false, order: null });
-    } catch (error) {
+    } catch {
       setSnackbar({ open: true, message: 'Ошибка при обновлении заказа', severity: 'error' });
     }
   };

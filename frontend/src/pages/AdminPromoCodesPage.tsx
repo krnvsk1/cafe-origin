@@ -34,6 +34,7 @@ import {
   alpha,
   LinearProgress,
 } from '@mui/material';
+import type { ChipProps } from '@mui/material';
 import type { Theme } from '@mui/material';
 import {
   Add as AddIcon,
@@ -51,6 +52,7 @@ import {
   useUpdatePromoCode,
   useDeletePromoCode,
 } from '../api/hooks';
+import { apiError } from '../api/inventory';
 import type { PromoCode } from '../types';
 
 // ==================== Form data interface ====================
@@ -191,9 +193,8 @@ const AdminPromoCodesPage: React.FC = () => {
         showMessage('Промокод создан', 'success');
       }
       setEditDialogOpen(false);
-    } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Ошибка при сохранении';
-      showMessage(msg, 'error');
+    } catch (err: unknown) {
+      showMessage(apiError(err, 'Ошибка при сохранении'), 'error');
     }
   };
 
@@ -436,7 +437,7 @@ const PromoCodeTableRow: React.FC<{
     : expired
       ? 'Истёк'
       : 'Активен';
-  const statusColor = !promo.isActive
+  const statusColor: ChipProps['color'] = !promo.isActive
     ? 'default'
     : expired
       ? 'warning'
@@ -532,7 +533,7 @@ const PromoCodeTableRow: React.FC<{
         <Chip
           size="small"
           label={statusLabel}
-          color={statusColor as any}
+          color={statusColor}
           variant={!promo.isActive || expired ? 'outlined' : 'filled'}
         />
       </TableCell>
@@ -575,7 +576,7 @@ const PromoCodeCard: React.FC<{
     : expired
       ? 'Истёк'
       : 'Активен';
-  const statusColor = !promo.isActive
+  const statusColor: ChipProps['color'] = !promo.isActive
     ? 'default'
     : expired
       ? 'warning'
@@ -627,7 +628,7 @@ const PromoCodeCard: React.FC<{
           <Chip
             size="small"
             label={statusLabel}
-            color={statusColor as any}
+            color={statusColor}
             variant={!promo.isActive || expired ? 'outlined' : 'filled'}
           />
         </Box>

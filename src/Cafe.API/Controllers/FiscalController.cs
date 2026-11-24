@@ -34,8 +34,6 @@ namespace Cafe.API.Controllers
             public string PaymentObject { get; set; } = "commodity";
             public string? CashierInn { get; set; }
             public bool SendToCustomer { get; set; } = true;
-            public bool StaffChecks { get; set; }
-            public bool StaffChecksManagersOnly { get; set; } = true;
         }
 
         // GET: api/fiscal/status — настройки; с ?shift=true ещё и состояние смены на кассе
@@ -56,7 +54,6 @@ namespace Cafe.API.Controllers
             return Ok(new
             {
                 o.Enabled, o.Url, o.TaxationType, o.Vat, o.PaymentObject, o.CashierInn, o.SendToCustomer,
-                o.StaffChecks, o.StaffChecksManagersOnly,
                 layout = o.Layout ?? ReceiptLayout.Default(),
                 shiftState, shiftNumber, shiftError,
                 failedReceipts = failed
@@ -175,8 +172,6 @@ namespace Cafe.API.Controllers
             PaymentObject = r.PaymentObject,
             CashierInn = string.IsNullOrWhiteSpace(r.CashierInn) ? null : r.CashierInn.Trim(),
             SendToCustomer = r.SendToCustomer,
-            StaffChecks = r.StaffChecks,
-            StaffChecksManagersOnly = r.StaffChecksManagersOnly
         };
 
         private static string? Validate(FiscalOptions o)

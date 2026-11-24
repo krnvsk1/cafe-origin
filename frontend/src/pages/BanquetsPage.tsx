@@ -159,12 +159,11 @@ const PrepayDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t
 
 const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t: string) => void }> = ({ banquet, onClose, onDone }) => {
   const close = useCloseBanquet();
-  const print = usePrintBanquet();
   const t = banquet.totals;
-  const [method, setMethod] = React.useState<'cash' | 'card' | 'staff'>('card');
+  const [method, setMethod] = React.useState<'cash' | 'card'>('card');
   const [cash, setCash] = React.useState('');
   const received = Number(cash.replace(',', '.'));
-  const change = (method === 'cash' || method === 'staff') && cash.trim() !== '' && !Number.isNaN(received)
+  const change = method === 'cash' && cash.trim() !== '' && !Number.isNaN(received)
   ? Math.round((received - t.due) * 100) / 100
   : null;
   const [err, setErr] = React.useState('');
@@ -172,10 +171,7 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
     setErr('');
     try {
       const r = await close.mutateAsync({ id: banquet.id, method });
-      if (method === 'staff') {
-        try { await print.mutateAsync(banquet.id); } catch { /* банкет уже закрыт — пред чек можно распечатать кнопкой */ }
-      }
-      onDone(`Банкет закрыт · ${money(r.total)}. ${atolText(r.fiscal, r.fiscalSkipped, r.staff)}`);
+      onDone(`Банкет закрыт · ${money(r.total)}. ${atolText(r.fiscal, r.fiscalSkipped)}`);
     } catch (e) { setErr(apiError(e)); }
   };
   return (
@@ -191,7 +187,6 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
           <>
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
-            <ToggleButton value="staff">Наличные (Принтер)</ToggleButton>
             <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
             {method === 'cash' && (
@@ -199,12 +194,6 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
             helperText={change === null ? 'Можно не заполнять' : change < 0 ? `Не хватает ${money(-change)}` : `Сдача ${money(change)}`}
             error={change !== null && change < 0}
             slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
-            )}
-            {method === 'staff' && (
-            <TextField label="Получено" value={cash} onChange={e => setCash(e.target.value)}
-                helperText={change === null ? 'Можно не заполнять' : change < 0 ? `Не хватает ${money(-change)}` : `Сдача ${money(change)}`}
-                error={change !== null && change < 0}
-                slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
             )}
             </>
         )}
@@ -214,7 +203,7 @@ const CloseDialog: React.FC<{ banquet: Banquet; onClose: () => void; onDone: (t:
         <Button onClick={onClose} disabled={close.isPending} sx={{ color: 'text.secondary' }}>Отмена</Button>
         <Button variant="contained" color="secondary" onClick={submit} disabled={close.isPending}
           startIcon={close.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}>
-          {t.due <= 0 ? 'Закрыть' : method === 'staff' ? 'Оплачено' : 'Оплачено'}
+          {t.due <= 0 ? 'Закрыть' : 'Оплачено'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -398,7 +387,7 @@ const BanquetView: React.FC<{ id: number }> = ({ id }) => {
             <Box key={p.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5, borderTop: 1, borderColor: 'divider', flexWrap: 'wrap', opacity: p.refundedAt ? 0.55 : 1 }}>
               <Box sx={{ flex: 1, minWidth: 200 }}>
                 <Typography sx={{ fontWeight: 600 }}>
-                  {p.kind === 'prepay' ? 'Предоплата' : 'Расчёт'} · {p.method === 'prepaid' ? 'зачёт предоплаты' : payLabel(p.method)}{p.staffName ? ` (${p.staffName})` : ''}
+                  {p.kind === 'prepay' ? 'Предоплата' : 'Расчёт'} · {p.method === 'prepaid' ? 'зачёт предоплаты' : payLabel(p.method)}
                   {p.refundedAt ? ' · возвращена' : ''}
                 </Typography>
                 <Typography variant="caption" color={bad ? 'error.main' : 'text.secondary'}>

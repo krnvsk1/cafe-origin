@@ -6,6 +6,7 @@ import {
 import { StarBorder as StarBorderIcon } from '@mui/icons-material';
 import type { Order } from '../types';
 import { useMyReviews, useCreateReview } from '../api/reviews';
+import { apiError } from '../api/inventory';
 
 const COMPLETED = ['Доставлен', 'Выполнен'];
 const LABELS: Record<number, string> = { 1: 'Ужасно', 2: 'Плохо', 3: 'Нормально', 4: 'Хорошо', 5: 'Отлично' };
@@ -53,8 +54,8 @@ const OrderReviewBlock: React.FC<{ order: Order }> = ({ order }) => {
     try {
       await createReview.mutateAsync({ orderId: order.id, rating, comment: comment.trim() || undefined });
       setOpen(false);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || 'Не удалось отправить отзыв');
+    } catch (e: unknown) {
+      setError(apiError(e, 'Не удалось отправить отзыв'));
     }
   };
 

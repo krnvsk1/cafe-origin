@@ -19,7 +19,7 @@ import {
   useAllTables, useSaveTables, useUpdateCheck, useMoveCheck, useSplitCheck, useVoidItem, useFloorPlan, parseUtc,
   useServeItem, useMyChecks, useSetItemWeight, usePrintCheck, fetchPrintJob, useCheckFiscal,
   useShiftCurrent, useOpenVenueShift, useCloseVenueShift, useVenueReport, useOpenMyShift, useCloseMyShift, useAssignCheck, type ShiftCurrent,
-  useStaffChecksInfo, payLabel, useChangePayment, useApproveShift, useRejectShift, useCheckDiscount, type CheckPayment, type CloseCheckResult,
+  payLabel, useChangePayment, useApproveShift, useRejectShift, useCheckDiscount, type CheckPayment, type CloseCheckResult,
   type WaiterTable, type CheckOrder, type TableSetting, type TableCheck, type TableCheckSummary, type CheckItem, type FloorPlan,
 } from '../api/waiter';
 import { apiError } from '../api/inventory';
@@ -31,7 +31,7 @@ import WeightEditDialog from '../components/WeightEditDialog';
 import { useCan, P } from '../auth/permissions';
 import { resolveMediaUrl } from '../utils/media';
 import { allowedOrderTypes, isAllowedFor } from '../utils/orderTypes';
-import { plural } from '../components/CartPanel';
+import { plural } from '../utils/plural';
 import type { Dish, SelectedAddon } from '../types';
 import { tokens } from '../theme';
 import FullscreenButton from '../components/FullscreenButton';
@@ -371,7 +371,7 @@ export const ShiftBar: React.FC<{ shift: ShiftCurrent; hideMine?: boolean }> = (
   );
 };
 
-/** Итоги смены заведения перед закрытием: сверить нал, безнал и «Наличные (Принтер)» */
+/** Итоги смены заведения перед закрытием: сверить нал и безнал */
 const VenueReportView: React.FC = () => {
   const { data: r, isLoading, error } = useVenueReport(true);
   if (isLoading) return <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}><CircularProgress size={28} /></Box>;
@@ -393,7 +393,6 @@ const VenueReportView: React.FC = () => {
         С {timeOf(r.openedAt)}{parts ? ` · ${parts}` : ''}
       </Typography>
       <Row label="Наличные (АТОЛ)" value={r.totals.cash} />
-      <Row label="Наличные (Принтер)" value={r.totals.staff} />
       <Row label="Безнал" value={r.totals.card} />
       {r.totals.online > 0 && <Row label="Онлайн-оплата на сайте" value={r.totals.online} />}
       <Divider sx={{ my: 0.75 }} />
@@ -679,8 +678,6 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const [method, setMethod] = React.useState<CheckPayment>('card');
   const [cash, setCash] = React.useState('');
   const [done, setDone] = React.useState<CloseCheckResult | null>(null);
-  // Закрытие Наличные (Принтер): без оплаты и без чека ККТ; записывается, кто закрыл
-  const { data: staffInfo } = useStaffChecksInfo(closing);
   const checkFiscal = useCheckFiscal();
   const retryFiscal = async () => {
     try {
@@ -703,9 +700,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       });
       setRepay(null);
       const ret = r.returned ? `Возврат пробит${r.returned.fiscalDocumentNumber ? ` (ФД ${r.returned.fiscalDocumentNumber})` : ''}. ` : '';
-      const sell = r.fiscalSkipped === 'staff'
-        ? 'Новый чек в АТОЛ не отправлялся — счёт Наличные (Принтер)'
-        : r.fiscal
+      const sell = r.fiscal
         ? (r.fiscal.status === 'done' ? `Новый чек отправлен в АТОЛ и пробит${r.fiscal.fiscalDocumentNumber ? ` (ФД ${r.fiscal.fiscalDocumentNumber})` : ''}`
           : r.fiscal.status === 'processing' ? 'Новый чек отправлен в АТОЛ, касса ещё печатает' : `Новый чек не пробит: ${r.fiscal.error ?? 'ошибка кассы'} — нажмите «Пробить»`)
         : 'В АТОЛ не отправлялось — онлайн-касса выключена';
@@ -722,7 +717,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
   const needPrint = !!check.printEnabled && !printedNow;
   const active = check.orders.filter(o => o.status !== 'Отменён');
   const received = Number(cash.replace(',', '.')) || 0;
-  const change = (method === 'cash' || method === 'staff') && received > 0 ? received - check.total : null;
+  const change = method === 'cash' && received > 0 ? received - check.total : null;
 
   const send = async (lines: DraftLine[], comment: string) => {
     await addRound.mutateAsync({
@@ -751,7 +746,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
       // Короткое уведомление: ушёл ли чек в АТОЛ
       setToast(r.fiscal
         ? (r.fiscal.status === 'done' ? 'Чек отправлен в АТОЛ и пробит' : r.fiscal.status === 'processing' ? 'Чек отправлен в АТОЛ, касса ещё печатает' : 'Чек в АТОЛ не пробит')
-        : r.fiscalSkipped === 'staff' ? 'В АТОЛ не отправлялся — счёт Наличные (Принтер)' : 'В АТОЛ не отправлялся — онлайн-касса выключена');
+        : 'В АТОЛ не отправлялся — онлайн-касса выключена');
     } catch (e) { setErr(apiError(e)); }
   };
 
@@ -821,14 +816,14 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
         action={check.status === 'closed'
           ? <Button color="inherit" size="small" onClick={() => { setRepayErr(''); setRepay(check.paymentMethod === 'cash' ? 'card' : 'cash'); }}>Сменить оплату</Button>
           : undefined}>{check.status === 'closed'
-        ? `Счёт закрыт · ${check.paymentMethod === 'staff' ? `Наличные (Принтер)${check.staffName ? ` · закрыл ${check.staffName}` : ''}` : payLabel(check.paymentMethod)}`
+        ? `Счёт закрыт · ${payLabel(check.paymentMethod)}`
         : 'Счёт отменён'}
         {check.paymentWas && check.paymentChangedAt && (
           <Typography variant="body2" sx={{ mt: 0.5 }}>
             Исправлено: {payLabel(check.paymentWas)} → {payLabel(check.paymentMethod)} · {check.paymentChangedBy ?? '—'}, {parseUtc(check.paymentChangedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
           </Typography>
         )}</Alert>}
-      {check.status === 'closed' && check.fiscalEnabled && check.paymentMethod !== 'staff' && (check.fiscal?.status === 'done'
+      {check.status === 'closed' && check.fiscalEnabled && (check.fiscal?.status === 'done'
         ? <Typography variant="body2" color="text.secondary">Кассовый чек пробит{check.fiscal.fiscalDocumentNumber ? ` · ФД ${check.fiscal.fiscalDocumentNumber}` : ''}</Typography>
         : (
           <Alert severity="warning" action={<Button color="inherit" size="small" onClick={retryFiscal} disabled={checkFiscal.isPending}>Пробить</Button>}>
@@ -983,16 +978,9 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           )}
           <ToggleButtonGroup exclusive fullWidth value={method} onChange={(_, v) => v && setMethod(v)}>
             <ToggleButton value="card">Карта</ToggleButton>
-            {staffInfo?.allowed && <ToggleButton value="staff">Наличные (Принтер)</ToggleButton>}
             <ToggleButton value="cash">Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
           {method === 'cash' && (
-            <TextField label="Получено" value={cash} onChange={e => setCash(e.target.value)}
-              helperText={change === null ? 'Можно не заполнять' : change < 0 ? `Не хватает ${money(-change)}` : `Сдача ${money(change)}`}
-              error={change !== null && change < 0}
-              slotProps={{ htmlInput: { inputMode: 'decimal' }, input: { endAdornment: <InputAdornment position="end">₽</InputAdornment> } }} />
-          )}
-          {method === 'staff' && (
             <TextField label="Получено" value={cash} onChange={e => setCash(e.target.value)}
               helperText={change === null ? 'Можно не заполнять' : change < 0 ? `Не хватает ${money(-change)}` : `Сдача ${money(change)}`}
               error={change !== null && change < 0}
@@ -1004,7 +992,7 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           <Button onClick={() => setClosing(false)} sx={{ color: 'text.secondary' }}>Назад</Button>
           <Button variant="contained" color="secondary" size="large" onClick={doClose}
             disabled={close.isPending || (change !== null && change < 0)}>
-            {method === 'staff' ? 'Оплачено' : 'Оплачено'}
+            Оплачено
           </Button>
         </DialogActions>
       </Dialog>
@@ -1015,13 +1003,10 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
           <Typography variant="body2" color="text.secondary">Сейчас: {payLabel(check.paymentMethod)}</Typography>
           <ToggleButtonGroup exclusive fullWidth value={repay} onChange={(_, v) => v && setRepay(v)}>
             <ToggleButton value="card" disabled={check.paymentMethod === 'card'}>Карта</ToggleButton>
-            {check.canFixToStaff && <ToggleButton value="staff">Наличные (Принтер)</ToggleButton>}
             <ToggleButton value="cash" disabled={check.paymentMethod === 'cash'}>Наличные (АТОЛ)</ToggleButton>
           </ToggleButtonGroup>
-          <Alert severity={repay === 'staff' ? 'warning' : 'info'}>
-            {repay === 'staff'
-              ? `Исправление ошибки: счёт будет закрыт Наличные (Принтер), в выручку и наличные не войдёт.${check.fiscalEnabled && check.fiscal?.status === 'done' ? ` В АТОЛ уйдёт чек возврата на ${money(check.total)}, новый чек не пробивается.` : ''} В истории останется, кто и когда исправил. Только пока смена открыта.`
-              : !check.fiscalEnabled
+          <Alert severity="info">
+            {!check.fiscalEnabled
               ? 'Онлайн-касса выключена — в АТОЛ ничего не отправится, изменится только способ оплаты.'
               : check.fiscal?.status === 'done'
                 ? `Чек уже в АТОЛ: сначала будет пробит чек возврата на ${money(check.total)} (${payLabel(check.paymentMethod)}), затем новый чек — ${payLabel(repay)}. Если возврат не пробьётся, оплата не изменится.`
@@ -1047,12 +1032,8 @@ const CheckView: React.FC<{ id: number }> = ({ id }) => {
             <Typography sx={{ fontWeight: 800, fontSize: '1.6rem', mt: 1.5 }}>Сдача {money(done.change)}</Typography>
           )}
           {/* Ушёл ли чек в АТОЛ */}
-          {done && !done.fiscal && (done.fiscalSkipped === 'staff'
-            ? <Alert severity="info" sx={{ mt: 2, textAlign: 'left' }}>
-                В АТОЛ не отправлялся — счёт закрыт Наличные (Принтер).
-                {done.printError ? ` ${done.printError}.` : done.printJobId ? ' Счёт отправлен на принтер.' : ''}
-              </Alert>
-            : <Alert severity="warning" sx={{ mt: 2, textAlign: 'left' }}>В АТОЛ не отправлялся — онлайн-касса выключена в «Настройке интеграций»</Alert>)}
+          {done && !done.fiscal && (
+            <Alert severity="warning" sx={{ mt: 2, textAlign: 'left' }}>В АТОЛ не отправлялся — онлайн-касса выключена в «Настройке интеграций»</Alert>)}
           {done?.fiscal && (done.fiscal.status === 'done'
             ? <Alert severity="success" sx={{ mt: 2, textAlign: 'left' }}>Отправлено в АТОЛ — кассовый чек пробит{done.fiscal.fiscalDocumentNumber ? ` · ФД ${done.fiscal.fiscalDocumentNumber}` : ''}</Alert>
             : (
@@ -1234,12 +1215,11 @@ const MyChecksDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         {error && <Alert severity="error">{apiError(error, 'Не удалось загрузить счета')}</Alert>}
         {data && (
           <>
-            <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${data.summary.staff ? 4 : 3}, 1fr)`, gap: 1 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
               {[
                 ['Выручка', money(data.summary.revenue)],
                 ['Наличные (АТОЛ)', money(data.summary.cash)],
                 ['Карта', money(data.summary.card)],
-                ...(data.summary.staff ? [['На сотрудн.', money(data.summary.staff)]] : []),
               ].map(([label, value]) => (
                 <Box key={label} sx={{ bgcolor: 'action.hover', borderRadius: '12px', p: 1 }}>
                   <Typography variant="caption" color="text.secondary">{label}</Typography>

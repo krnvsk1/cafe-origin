@@ -107,17 +107,17 @@ namespace Cafe.Tests
         }
 
         [Fact]
-        public async Task StaffCheck_IsNeverSentToAtol()
+        public async Task LegacyUnpaidCheck_IsNeverSentToAtol()
         {
             var (sp, atol) = Setup();
             await SeedOrderAsync(sp, checkId: 9);
             using var scope = sp.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            db.TableChecks.Add(new TableCheck { Id = 9, TableId = 1, Status = CheckStatuses.Closed, PaymentMethod = CheckPayments.Staff, Total = 300, StaffUserId = 5, StaffReason = "Питание персонала" });
+            db.TableChecks.Add(new TableCheck { Id = 9, TableId = 1, Status = CheckStatuses.Closed, PaymentMethod = CheckPayments.LegacyStaff, Total = 300, StaffUserId = 5, StaffReason = "Питание персонала" });
             await db.SaveChangesAsync();
             var ex = await Assert.ThrowsAsync<FiscalException>(() =>
                 scope.ServiceProvider.GetRequiredService<FiscalService>().PrintCheckAsync(9, FiscalKinds.Sell, null));
-            Assert.Contains("Наличные (Принтер)", ex.Message);
+            Assert.Contains("без оплаты", ex.Message);
             Assert.Equal(0, atol.Posts);
             Assert.Empty(db.FiscalReceipts);
         }

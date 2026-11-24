@@ -11,6 +11,7 @@ import { useCourierOrders, useCourierAction } from '../api/staff';
 import type { CourierOrder, CourierAction } from '../api/staff';
 import { useEventStream, useInvalidateOnOrderEvent } from '../hooks/useOrderEvents';
 import { formatScheduled } from '../utils/schedule';
+import { apiError } from '../api/inventory';
 
 const mapUrl = (address: string) => `https://yandex.ru/maps/?text=${encodeURIComponent(address)}`;
 
@@ -86,8 +87,8 @@ const CourierPage: React.FC = () => {
       await action.mutateAsync({ id, action: act });
       if (act === 'take') { setTab('mine'); setToast(`Заказ #${id} ваш`); }
       if (act === 'delivered') setToast(`Заказ #${id} доставлен 👍`);
-    } catch (e: any) {
-      setToast(e?.response?.data?.message || 'Не удалось выполнить действие');
+    } catch (e: unknown) {
+      setToast(apiError(e, 'Не удалось выполнить действие'));
     }
   };
 

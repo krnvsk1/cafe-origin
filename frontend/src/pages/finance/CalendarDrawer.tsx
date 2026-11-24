@@ -4,7 +4,8 @@ import { Close as CloseIcon, ChevronRight as ChevronRightIcon } from '@mui/icons
 import type { PaymentRow } from '../../api/finance';
 import { fmtMoney, fmtDate } from '../../api/inventory';
 import { DueLabel } from './DueLabel';
-import PaymentCalendar, { dateKey } from './PaymentCalendar';
+import PaymentCalendar from './PaymentCalendar';
+import { dateKey } from '../../utils/period';
 
 /** Выезжающий справа календарь платежей в большом размере; под ним — платежи выбранного дня */
 const CalendarDrawer: React.FC<{

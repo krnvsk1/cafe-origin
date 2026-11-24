@@ -79,16 +79,16 @@ namespace Cafe.API.Models
         [Column("closed_at")]
         public DateTime? ClosedAt { get; set; }
 
-        /// <summary>cash, card или staff (закрыт на сотрудника — без оплаты и без чека ККТ) — при закрытии</summary>
+        /// <summary>cash или card — при закрытии</summary>
         [MaxLength(20)]
         [Column("payment_method")]
         public string? PaymentMethod { get; set; }
 
-        /// <summary>Сотрудник, на которого закрыт счёт (питание персонала и т.п.) — сумма к удержанию с него</summary>
+        /// <summary>Исторические данные: закрытие счёта на сотрудника убрано, счёт на сотрудника больше не создаётся</summary>
         [Column("staff_user_id")]
         public int? StaffUserId { get; set; }
 
-        /// <summary>Причина закрытия на сотрудника: «Питание», «Домой», «Угощение», своя</summary>
+        /// <summary>Исторические данные: причина закрытия на сотрудника</summary>
         [MaxLength(60)]
         [Column("staff_reason")]
         public string? StaffReason { get; set; }
@@ -104,7 +104,7 @@ namespace Cafe.API.Models
         [Column("payment_changed_at")]
         public DateTime? PaymentChangedAt { get; set; }
 
-        /// <summary>Возврат счёта «Наличные (Принтер)» (ошибся официант): без денег и без чека — не Наличные (Принтер) и </summary>
+        /// <summary>Историческое: возврат без чека по счёту, закрытому на сотрудника (деньги и чек ККТ не проводились)</summary>
         [Column("refunded_at")]
         public DateTime? RefundedAt { get; set; }
 
@@ -149,8 +149,11 @@ namespace Cafe.API.Models
     {
         public const string Cash = "cash";
         public const string Card = "card";
-        /// <summary>На сотрудника: денег не принимают, чек ККТ не нужен — сумма удерживается с сотрудника</summary>
-        public const string Staff = "staff";
+        /// <summary>
+        /// Историческое значение способа оплаты «на сотрудника»: закрытие на сотрудника убрано,
+        /// но в старых записях оно осталось и не должно попадать в выручку
+        /// </summary>
+        public const string LegacyStaff = "staff";
     }
 
     public static class VoidStatuses

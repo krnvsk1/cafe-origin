@@ -90,7 +90,7 @@ namespace Cafe.API.Services.Fiscal
         private static decimal Round(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
 
         /// <summary>
-        /// Позиции с произвольной ценой (банкет): суммы пропорционально приводятся к target (скидка, часть на сотрудника);
+        /// Позиции с произвольной ценой (банкет): суммы пропорционально приводятся к target (скидка, обслуживание);
         /// копейки — на последнюю строку, строки с неделимой суммой делятся, как в Build.
         /// </summary>
         public static List<ReceiptLine> Scale(IReadOnlyList<(string Name, decimal Unit, int Qty, bool IsService)> raw, decimal target)

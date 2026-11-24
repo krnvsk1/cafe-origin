@@ -36,13 +36,11 @@ namespace Cafe.API.Controllers
         private readonly PrintService _print;
         private readonly BrandSettingsProvider _brand;
         private readonly FiscalService _fiscal;
-        private readonly FiscalSettingsProvider _fiscalSettings;
 
         public WaiterController(ApplicationDbContext context, IOrderStatusService statusService, IOrderEventBus events, VoidService voids, ShiftService shifts, ILogger<WaiterController> logger,
-            PrintService print, BrandSettingsProvider brand, FiscalService fiscal, FiscalSettingsProvider fiscalSettings)
+            PrintService print, BrandSettingsProvider brand, FiscalService fiscal)
         {
             _fiscal = fiscal;
-            _fiscalSettings = fiscalSettings;
             _print = print;
             _brand = brand;
             _voids = voids;
@@ -112,24 +110,16 @@ namespace Cafe.API.Controllers
 
         public class CloseRequest
         {
-            /// <summary>cash, card или staff (на сотрудника — без оплаты и без чека)</summary>
+            /// <summary>cash или card</summary>
             public string PaymentMethod { get; set; } = "cash";
             public decimal? CashReceived { get; set; }
-            /// <summary>Для staff: на кого закрыть и почему</summary>
-            public int? StaffUserId { get; set; }
-            public string? StaffReason { get; set; }
         }
 
         public class ChangePaymentRequest
         {
-            /// <summary>cash, card или staff (исправление ошибки — только менеджер и пока смена открыта)</summary>
+            /// <summary>cash или card (исправление ошибки — только менеджер и пока смена открыта)</summary>
             public string PaymentMethod { get; set; } = "cash";
-            public int? StaffUserId { get; set; }
-            public string? StaffReason { get; set; }
         }
-
-        /// <summary>Причины по умолчанию для закрытия на сотрудника</summary>
-        public static readonly string[] StaffReasons = { "Наличные (Принтер)" };
 
         // ==================== Доступ ====================
 
@@ -360,15 +350,9 @@ namespace Cafe.API.Controllers
                 c.OpenedAt,
                 c.ClosedAt,
                 c.PaymentMethod,
-                staffName = c.StaffUserId == null ? null : (await NamesAsync(new[] { c.StaffUserId })).GetValueOrDefault(c.StaffUserId.Value),
-                c.StaffReason,
                 c.PaymentWas,
                 paymentChangedBy = c.PaymentChangedBy == null ? null : (await NamesAsync(new[] { c.PaymentChangedBy })).GetValueOrDefault(c.PaymentChangedBy.Value),
                 c.PaymentChangedAt,
-                // Менеджер может исправить оплаченный счёт на сотрудника, пока смена открыта
-                canFixToStaff = c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff
-                    && (await _fiscalSettings.GetAsync()).StaffChecks && await SeesAllAsync()
-                    && c.VenueShiftId != null && await _context.VenueShifts.AnyAsync(v => v.Id == c.VenueShiftId && v.ClosedAt == null),
                 total = c.Status == CheckStatuses.Closed ? c.Total : Net(c, active.Sum(l => LineTotal(l.Item))),
                 // Скидка на счёт: сумма блюд, скидка, можно ли давать
                 subtotal = active.Sum(l => LineTotal(l.Item)),
@@ -608,18 +592,7 @@ namespace Cafe.API.Controllers
         public async Task<IActionResult> Close(int id, [FromBody] CloseRequest r)
         {
             var method = r.PaymentMethod?.Trim().ToLowerInvariant();
-            if (method is not (CheckPayments.Cash or CheckPayments.Card or CheckPayments.Staff)) return BadRequest(new { message = "Выберите способ оплаты" });
-            string? staffName = null, staffReason = null;
-            if (method == CheckPayments.Staff)
-            {
-                var fo = await _fiscalSettings.GetAsync();
-                if (fo.StaffChecksManagersOnly && !await SeesAllAsync()) return StatusCode(403, new { message = "Закрыть счёт Наличные (Принтер) может только менеджер" });
-                // «Наличные (Принтер)»: сотрудника не выбирают — записывается тот, кто закрыл
-                r.StaffUserId ??= User.GetUserId();
-                staffReason = r.StaffReason?.Trim();
-                if (string.IsNullOrEmpty(staffReason)) staffReason = StaffReasons[0];
-                if (staffReason.Length > 60) staffReason = staffReason[..60];
-            }
+            if (method is not (CheckPayments.Cash or CheckPayments.Card)) return BadRequest(new { message = "Выберите способ оплаты" });
             var c = await _context.TableChecks.Include(x => x.Table).FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Счёт не найден" });
             if (await DenyAsync(c) is { } deny) return deny;
@@ -636,11 +609,6 @@ namespace Cafe.API.Controllers
             c.ClosedAt = now;
             c.PaymentMethod = method;
             c.Total = total;
-            if (method == CheckPayments.Staff)
-            {
-                c.StaffUserId = r.StaffUserId;
-                c.StaffReason = staffReason;
-            }
             await _context.SaveChangesAsync();
 
             // Заказ кухни оплачен, когда закрыты все счета, куда попали его блюда
@@ -664,31 +632,7 @@ namespace Cafe.API.Controllers
                 if (await ClosedCheckOrders.CompleteIfPaidAsync(_context, _statusService, o)) completed.Add(o.Id);
             foreach (var o in orders.Where(o => !completed.Contains(o.Id)))
                 _events.Publish(new OrderEvent("updated", o.Id, o.UserId, o.Status, null, now));
-            _logger.LogInformation("🍽 Счёт #{CheckId} закрыт: {Total} ₽ ({Method}{Staff})", c.Id, total, method,
-                staffName == null ? "" : $": {staffName}, {staffReason}");
-
-            if (method == CheckPayments.Staff)
-            {
-                // Без оплаты — чек ККТ не нужен; на принтер счетов — счёт Наличные (Принтер) (с пометкой «»)
-                int? printJobId = null;
-                string? printError = null;
-                var settings = await _print.SettingsAsync();
-                if (settings.Enabled)
-                {
-                    var liness = PrecheckLines(await LinesAsync(new List<int> { id }));
-                    var waiter = (await NamesAsync(new[] { c.WaiterId })).GetValueOrDefault(c.WaiterId ?? 0);
-                    var label = string.IsNullOrWhiteSpace(c.Label) ? $"счёт №{c.Id}" : c.Label!;
-                    var full = liness.Sum(l => l.Amount);
-                    var disc = DiscountOf(c, full);
-                    var data = new PrecheckData((await _brand.GetAsync()).DisplayName, c.Table!.Name, label, waiter, c.Guests,
-                        c.OpenedAt, now, liness, settings.Footer,
-                        Adjustments: disc > 0 ? new[] { new PrecheckAdjustment(DiscountLabel(c.DiscountType, c.DiscountValue), -disc) } : null);
-                    var job = await _print.EnqueueAsync("precheck", c.Id, "", PrintService.Precheck(settings, data), User.GetUserId());
-                    printJobId = job.Id;
-                }
-                else printError = "Принтер счетов не настроен — счёт Наличные (Принтер) не напечатан";
-                return Ok(new { c.Id, total, change = (decimal?)null, orderIds, fiscal = (object?)null, fiscalSkipped = "staff", staff = staffName, printJobId, printError });
-            }
+            _logger.LogInformation("🍽 Счёт #{CheckId} закрыт: {Total} ₽ ({Method})", c.Id, total, method);
 
             // Онлайн-касса включена — сразу пробиваем чек на АТОЛ. Ошибка кассы не мешает закрытию: чек можно повторить
             object? fiscal = null;
@@ -704,29 +648,6 @@ namespace Cafe.API.Controllers
                 fiscal,
                 fiscalSkipped = fiscalEnabled ? null : "disabled"
             });
-        }
-
-        /// <summary>Сотрудники (все, у кого есть роль кроме «гость»): id → имя</summary>
-        private Task<Dictionary<int, string>> StaffAsync() => StaffListAsync(_context);
-
-        public static async Task<Dictionary<int, string>> StaffListAsync(ApplicationDbContext context)
-        {
-            var ids = await (from ur in context.UserRoles
-                             join role in context.Roles on ur.RoleId equals role.Id
-                             where role.Name != AppRoles.User
-                             select (int?)ur.UserId).Distinct().ToListAsync();
-            return await StaffNamesAsync(context, ids);
-        }
-
-        // GET: api/waiter/staff-checks — можно ли закрыть счёт на сотрудника, список сотрудников и причин
-        [HttpGet("staff-checks")]
-        [HasPermission(Permissions.Waiter, Permissions.ChecksAll)]
-        public async Task<IActionResult> StaffChecks()
-        {
-            var o = await _fiscalSettings.GetAsync();
-            var allowed = o.StaffChecks && (!o.StaffChecksManagersOnly || await SeesAllAsync());
-            var staff = allowed ? (await StaffAsync()).OrderBy(x => x.Value).Select(x => new { id = x.Key, name = x.Value }).ToList() : null;
-            return Ok(new { enabled = o.StaffChecks, allowed, managersOnly = o.StaffChecksManagersOnly, staff, reasons = StaffReasons, me = User.GetUserId() });
         }
 
         private async Task<object> FiscalAsync(int checkId)
@@ -749,28 +670,13 @@ namespace Cafe.API.Controllers
         public async Task<IActionResult> ChangePayment(int id, [FromBody] ChangePaymentRequest r)
         {
             var method = r.PaymentMethod?.Trim().ToLowerInvariant();
-            if (method is not (CheckPayments.Cash or CheckPayments.Card or CheckPayments.Staff))
+            if (method is not (CheckPayments.Cash or CheckPayments.Card))
                 return BadRequest(new { message = "Выберите способ оплаты" });
             var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
             if (c == null) return NotFound(new { message = "Счёт не найден" });
             if (await DenyAsync(c) is { } deny) return deny;
             if (c.Status != CheckStatuses.Closed) return BadRequest(new { message = "Способ оплаты меняют у закрытого счёта" });
             if (c.PaymentMethod == method) return BadRequest(new { message = "Этот способ оплаты уже выбран" });
-
-            // Оплаченный счёт → на сотрудника: только исправление ошибки менеджером, пока смена не закрыта
-            string? staffName = null, staffReason = null;
-            if (method == CheckPayments.Staff)
-            {
-                if (!await SeesAllAsync()) return StatusCode(403, new { message = "Перевести счёт Наличные (Принтер) может только менеджер" });
-                var shiftOpen = c.VenueShiftId != null && await _context.VenueShifts.AnyAsync(v => v.Id == c.VenueShiftId && v.ClosedAt == null);
-                if (!shiftOpen) return BadRequest(new { message = "Смена уже закрыта — исправить счёт Наличные (Принтер) нельзя" });
-                r.StaffUserId ??= User.GetUserId();
-                if (r.StaffUserId is not int staffId || !(await StaffAsync()).TryGetValue(staffId, out staffName))
-                    return BadRequest(new { message = "Выберите сотрудника" });
-                staffReason = r.StaffReason?.Trim();
-                if (string.IsNullOrEmpty(staffReason)) staffReason = StaffReasons[0];
-                if (staffReason.Length > 60) staffReason = staffReason[..60];
-            }
 
             var fiscalOn = await _fiscal.EnabledAsync();
             var receipts = await _context.FiscalReceipts.AsNoTracking().Where(x => x.CheckId == id).OrderBy(x => x.Id).ToListAsync();
@@ -802,8 +708,6 @@ namespace Cafe.API.Controllers
             c.PaymentMethod = method;
             c.RefundedAt = null;   // поменяли оплату — счёт снова действующий
             c.RefundedBy = null;
-            c.StaffUserId = method == CheckPayments.Staff ? r.StaffUserId : null;
-            c.StaffReason = method == CheckPayments.Staff ? staffReason : null;
             c.PaymentWas = was;
             c.PaymentChangedBy = User.GetUserId();
             c.PaymentChangedAt = DateTime.UtcNow;
@@ -818,32 +722,12 @@ namespace Cafe.API.Controllers
                 if (o.PaymentStatus == "paid") o.PaymentMethod = methods.Count == 1 ? methods[0] ?? method : "mixed";
             }
             await _context.SaveChangesAsync();
-            _logger.LogInformation("💳 Счёт #{CheckId}: оплата {Was} → {Now}{Staff}{Ret}, поменял {User}", id, was, method,
-                staffName == null ? "" : $" ({staffName}, {staffReason})", returned != null ? " (чек возврата пробит)" : "", User.GetUserId());
+            _logger.LogInformation("💳 Счёт #{CheckId}: оплата {Was} → {Now}{Ret}, поменял {User}", id, was, method,
+                returned != null ? " (чек возврата пробит)" : "", User.GetUserId());
 
-            // 3. Новый чек в АТОЛ — кроме счёта на сотрудника (без оплаты чек не нужен)
-            if (method == CheckPayments.Staff)
-                return Ok(new { id, paymentMethod = method, returned, fiscal = (object?)null, fiscalSkipped = "staff", staff = staffName });
+            // 3. Новый чек в АТОЛ
             object? fiscal = fiscalOn ? await FiscalAsync(id) : null;
             return Ok(new { id, paymentMethod = method, returned, fiscal, fiscalSkipped = fiscalOn ? null : "disabled" });
-        }
-
-        // POST: api/waiter/checks/{id}/house-refund — возврат счёта «Наличные (Принтер)» (официант ошибся):
-        // денег и кассового чека не было — просто помечаем, счёт больше не считается «Наличные (Принтер)»; видно, кто и когда
-        [HttpPost("checks/{id:int}/house-refund")]
-        [HasPermission(Permissions.ChecksAll)]
-        public async Task<IActionResult> HouseRefund(int id)
-        {
-            var c = await _context.TableChecks.FirstOrDefaultAsync(x => x.Id == id);
-            if (c == null) return NotFound(new { message = "Счёт не найден" });
-            if (c.Status != CheckStatuses.Closed || c.PaymentMethod != CheckPayments.Staff)
-                return BadRequest(new { message = "Возврат без чека — только для счёта, закрытого Наличные (Принтер)" });
-            if (c.RefundedAt != null) return BadRequest(new { message = "Возврат уже сделан" });
-            c.RefundedAt = DateTime.UtcNow;
-            c.RefundedBy = User.GetUserId();
-            await _context.SaveChangesAsync();
-            _logger.LogInformation("↩️ Счёт #{CheckId} Наличные (Принтер) — возврат ({Total} ₽), сделал {User}", id, c.Total, User.GetUserId());
-            return Ok(new { id, refundedAt = c.RefundedAt });
         }
 
         // POST: api/waiter/checks/{id}/fiscal/return — чек возврата по счёту (гость вернул деньги): зеркало чека продажи
@@ -1085,10 +969,10 @@ namespace Cafe.API.Controllers
                 summary = new
                 {
                     closed = closed.Count,
-                    revenue = closed.Where(c => c.PaymentMethod != CheckPayments.Staff).Sum(c => c.Total),
+                    // Старые счета «на сотрудника» — не выручка
+                    revenue = closed.Where(c => c.PaymentMethod != CheckPayments.LegacyStaff).Sum(c => c.Total),
                     cash = closed.Where(c => c.PaymentMethod == "cash").Sum(c => c.Total),
                     card = closed.Where(c => c.PaymentMethod == "card").Sum(c => c.Total),
-                    staff = closed.Where(c => c.PaymentMethod == CheckPayments.Staff).Sum(c => c.Total),
                     open = openIds.Count,
                 },
                 checks = checks.Select(c => new

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
@@ -144,12 +145,14 @@ namespace Cafe.API.Services
 
                     card.Name = name;
                     card.Category = Truncate(section.Title, 50);
-                    card.Description = Truncate(dish.Description, 500);
+                    if (!string.IsNullOrWhiteSpace(dish.Description))
+                        card.Description = Truncate(dish.Description, 500);
                     card.Badge = dish.Badge;
                     card.IsPromo = dish.Badge == "promo";
                     card.IsSpicy = spicy;
                     card.SortOrder = sortOrder;
-                    card.Price = dish.Sizes.Count > 0 ? dish.Sizes.Min(s => s.Price) : 0;
+                    if (dish.Sizes.Count > 0)
+                        card.Price = dish.Sizes.Min(s => s.Price);
                     card.UpdatedAt = DateTime.UtcNow;
                     await _context.SaveChangesAsync(ct);
 
@@ -275,10 +278,12 @@ namespace Cafe.API.Services
         private static readonly Regex DishName = new("class=\"ddish__link\"[^>]*>(.*?)</a>", RegexOptions.Compiled | RegexOptions.Singleline);
         private static readonly Regex DishIngredients = new("<div class=\"ddish__ingredients\">(.*?)</div>", RegexOptions.Compiled | RegexOptions.Singleline);
         private static readonly Regex DishBadge = new("ddish__badge--([a-z]+)", RegexOptions.Compiled);
+        private static readonly Regex ModifierDictionary = new("<script\\b[^>]*\\bdata-modifier-dictionary[^>]*>(.*?)</script\\s*>", RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase);
 
         public static List<SourceSection> Parse(string html)
         {
             var result = new List<SourceSection>();
+            using var modifierDictionary = ParseModifierDictionary(html);
             var starts = SectionStart.Matches(html).Select(m => m.Index).ToList();
             for (var i = 0; i < starts.Count; i++)
             {
@@ -292,7 +297,7 @@ namespace Cafe.API.Services
                 for (var j = 0; j < dishMatches.Count; j++)
                 {
                     var dEnd = j + 1 < dishMatches.Count ? dishMatches[j + 1].Index : chunk.Length;
-                    var dish = ParseDish(chunk[dishMatches[j].Index..dEnd], int.Parse(dishMatches[j].Groups[1].Value));
+                    var dish = ParseDish(chunk[dishMatches[j].Index..dEnd], int.Parse(dishMatches[j].Groups[1].Value), modifierDictionary?.RootElement ?? default);
                     if (dish != null) dishes.Add(dish);
                 }
                 if (dishes.Count > 0) result.Add(new SourceSection(title, dishes));
@@ -300,48 +305,68 @@ namespace Cafe.API.Services
             return result;
         }
 
-        private static SourceDish? ParseDish(string chunk, int id)
+        private static SourceDish? ParseDish(string chunk, int id, JsonElement modifierDictionary)
         {
             var name = Clean(DishName.Match(chunk).Groups[1].Value);
             if (string.IsNullOrEmpty(name)) return null;
 
-            var description = Clean(DishIngredients.Match(chunk).Groups[1].Value);
+            var descriptionMatch = DishIngredients.Match(chunk);
+            var description = Clean(descriptionMatch.Success ? descriptionMatch.Groups[1].Value : ElementContentByClass(chunk, "ddish__ingredients"));
             var badges = DishBadge.Matches(chunk).Select(m => m.Groups[1].Value).ToList();
             var badge = new[] { "promo", "hit", "new", "lean" }.FirstOrDefault(b => badges.Contains(b));
 
             var sizes = new List<SourceOption>();
             var groups = new List<SourceAddonGroup>();
+            var hasLegacyModifiers = false;
+            void AddModifier(JsonElement modifier)
+            {
+                var type = Str(modifier, "type");
+                var options = modifier.TryGetProperty("options", out var opts) && opts.ValueKind == JsonValueKind.Array
+                    ? opts.EnumerateArray()
+                        .Select(o => new SourceOption(Clean(Str(o, "name") ?? Str(o, "size") ?? ""), Money(o)))
+                        .Where(o => o.Name.Length > 0)
+                        .ToList()
+                    : new List<SourceOption>();
+
+                if (type == "sizes")
+                {
+                    sizes.AddRange(options);
+                }
+                else
+                {
+                    groups.Add(new SourceAddonGroup(
+                        Clean(Str(modifier, "title") ?? "Добавки"),
+                        type == "one_one",
+                        Bool(modifier, "required"),
+                        Int(modifier, "min"),
+                        Int(modifier, "max"),
+                        options));
+                }
+            }
+
+            // Старый шаблон помещал модификаторы в data-modifiers.
             using (var modifiers = ParseAttr(chunk, "data-modifiers"))
             {
                 if (modifiers?.RootElement.ValueKind == JsonValueKind.Array)
                 {
+                    hasLegacyModifiers = true;
                     foreach (var m in modifiers.RootElement.EnumerateArray())
-                    {
-                        var type = Str(m, "type");
-                        var options = m.TryGetProperty("options", out var opts) && opts.ValueKind == JsonValueKind.Array
-                            ? opts.EnumerateArray()
-                                .Select(o => new SourceOption(Clean(Str(o, "name") ?? Str(o, "size") ?? ""), Money(o)))
-                                .Where(o => o.Name.Length > 0)
-                                .ToList()
-                            : new List<SourceOption>();
-
-                        if (type == "sizes")
-                        {
-                            sizes.AddRange(options);
-                        }
-                        else
-                        {
-                            groups.Add(new SourceAddonGroup(
-                                Clean(Str(m, "title") ?? "Добавки"),
-                                type == "one_one",
-                                Bool(m, "required"),
-                                Int(m, "min"),
-                                Int(m, "max"),
-                                options));
-                        }
-                    }
+                        AddModifier(m);
                 }
             }
+
+            // В текущем шаблоне карточки содержат ссылки на общий JSON-словарь страницы.
+            if (!hasLegacyModifiers && modifierDictionary.ValueKind == JsonValueKind.Object)
+            {
+                var refs = ReadAttribute(chunk, "data-modifier-refs")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? Array.Empty<string>();
+                foreach (var reference in refs)
+                    if (modifierDictionary.TryGetProperty(reference, out var modifier) && modifier.ValueKind == JsonValueKind.Object)
+                        AddModifier(modifier);
+            }
+
+            // Если сайт не публикует группу размеров, берём базовую цену из карточки.
+            if (sizes.Count == 0 && decimal.TryParse(ReadAttribute(chunk, "data-price"), NumberStyles.Number, CultureInfo.InvariantCulture, out var basePrice))
+                sizes.Add(new SourceOption("Стандарт", basePrice));
 
             string? image = null;
             using (var media = ParseAttr(chunk, "data-media"))
@@ -352,17 +377,50 @@ namespace Cafe.API.Services
                     if (photo.ValueKind == JsonValueKind.Object)
                         image = Str(photo, "high") ?? Str(photo, "src");
                 }
+                image ??= ExtractImageUrl(chunk);
             }
 
             return new SourceDish(id, name, description, badge, sizes, groups, image);
         }
 
+        private static JsonDocument? ParseModifierDictionary(string html)
+        {
+            var match = ModifierDictionary.Match(html);
+            if (!match.Success) return null;
+            try { return JsonDocument.Parse(WebUtility.HtmlDecode(match.Groups[1].Value)); }
+            catch (JsonException) { return null; }
+        }
+
+        private static string? ExtractImageUrl(string chunk)
+        {
+            foreach (Match image in Regex.Matches(chunk, "<img\\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline))
+            {
+                var url = ReadAttribute(image.Value, "data-full") ?? ReadAttribute(image.Value, "data-src") ?? ReadAttribute(image.Value, "src");
+                if (!string.IsNullOrWhiteSpace(url) && !url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                    return url;
+            }
+            return null;
+        }
+
+        private static string ElementContentByClass(string html, string className)
+        {
+            var escapedClass = Regex.Escape(className);
+            var pattern = "<[a-z][^>]*\\bclass\\s*=\\s*(?:\"[^\"]*\\b" + escapedClass + "\\b[^\"]*\"|'[^']*\\b" + escapedClass + "\\b[^']*')[^>]*>(.*?)</[a-z][^>]*>";
+            return Regex.Match(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline).Groups[1].Value;
+        }
+
+        private static string? ReadAttribute(string html, string attribute)
+        {
+            var pattern = @"\b" + Regex.Escape(attribute) + @"\s*=\s*(?:""(?<value>[^""]*)""|'(?<value>[^']*)')";
+            var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            return match.Success ? WebUtility.HtmlDecode(match.Groups["value"].Value) : null;
+        }
+
         private static JsonDocument? ParseAttr(string chunk, string attr)
         {
-            var m = Regex.Match(chunk, attr + "='([^']*)'");
-            if (!m.Success) m = Regex.Match(chunk, attr + "=\"([^\"]*)\"");
-            if (!m.Success) return null;
-            try { return JsonDocument.Parse(WebUtility.HtmlDecode(m.Groups[1].Value)); }
+            var value = ReadAttribute(chunk, attr);
+            if (value == null) return null;
+            try { return JsonDocument.Parse(value); }
             catch (JsonException) { return null; }
         }
 

@@ -10,7 +10,7 @@ import {
 } from '@mui/icons-material';
 import type { Addon, AddonCategory } from '../types';
 import { Pill, EmptyState } from '../pages/inventory/ui';
-import { plural } from './CartPanel';
+import { plural } from '../utils/plural';
 import { tokens } from '../theme';
 
 interface AddonGroupsTabProps {

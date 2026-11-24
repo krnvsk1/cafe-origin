@@ -723,14 +723,14 @@ namespace Cafe.API.Controllers
             var (todayFrom, todayTo) = PeriodUtc(null, null, 1)!.Value;
             try
             {
-                // Выручка — как в аналитике: без отменённых, неоплаченных онлайн, закрытых Наличные (Принтер),
+                // Выручка — как в аналитике: без отменённых, неоплаченных онлайн, закрытых без оплаты,
                 // заказов кухни банкетов и возвращённых (деньги вернули гостю — они в «Возвратах»)
                 var refunds = await Refunds.LoadAsync(_context);
                 var refundedOrders = refunds.Orders.ToList();
                 var refundedChecks = refunds.Checks.ToList();
                 var valid = _context.Orders.Where(o => o.Status != OrderStatuses.Cancelled
                     && (o.PaymentMethod != "online" || o.PaymentStatus == "paid" || o.PaymentStatus == "refunded")
-                    && o.PaymentMethod != CheckPayments.Staff && o.Source != BanquetService.Source
+                    && o.PaymentMethod != CheckPayments.LegacyStaff && o.Source != BanquetService.Source
                     && !refundedOrders.Contains(o.Id) && (o.CheckId == null || !refundedChecks.Contains(o.CheckId.Value)));
                 var inPeriod = valid.Where(o => o.CreatedAt >= fromUtc && o.CreatedAt < toUtc);
                 var totalOrders = await inPeriod.CountAsync();
@@ -746,7 +746,7 @@ namespace Cafe.API.Controllers
                         .Select(x => x.Id).ToListAsync();
                     var sum = await _context.BanquetPayments.AsNoTracking()
                         .Where(p => ids.Contains(p.BanquetId) && p.RefundedAt == null
-                                    && (p.Method == CheckPayments.Cash || p.Method == CheckPayments.Card || p.Method == CheckPayments.Staff))
+                                    && (p.Method == CheckPayments.Cash || p.Method == CheckPayments.Card))
                         .SumAsync(p => (decimal?)p.Amount) ?? 0;
                     return (ids.Count, sum);
                 }

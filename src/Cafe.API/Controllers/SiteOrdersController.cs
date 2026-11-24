@@ -13,7 +13,7 @@ namespace Cafe.API.Controllers
 {
     /// <summary>
     /// Заказы с сайта (доставка и самовывоз): закрывает менеджер или администратор — выбирает оплату,
-    /// чек уходит в АТОЛ (или счёт на сотрудника без чека); отмена всего заказа — по правилам отмены блюд.
+    /// чек уходит в АТОЛ; отмена всего заказа — по правилам отмены блюд.
     /// </summary>
     [ApiController]
     [Route("api/site-orders")]
@@ -45,10 +45,8 @@ namespace Cafe.API.Controllers
 
         public class CloseRequest
         {
-            /// <summary>cash, card, staff; для оплаченных онлайн — online</summary>
+            /// <summary>cash, card; для оплаченных онлайн — online</summary>
             public string PaymentMethod { get; set; } = "cash";
-            public int? StaffUserId { get; set; }
-            public string? StaffReason { get; set; }
             /// <summary>Скидка при закрытии (право «Скидки»): percent или amount</summary>
             public string? DiscountType { get; set; }
             public decimal? DiscountValue { get; set; }
@@ -80,7 +78,7 @@ namespace Cafe.API.Controllers
             var receipts = await _context.FiscalReceipts.AsNoTracking().Where(r => r.OrderId != null && ids.Contains(r.OrderId.Value) && r.CheckId == null).OrderBy(r => r.Id).ToListAsync();
             var pending = await _context.OrderItemVoids.AsNoTracking().Where(v => ids.Contains(v.OrderId) && v.Status == VoidStatuses.Pending)
                 .GroupBy(v => v.OrderId).Select(g => new { g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.Count);
-            var names = await WaiterController.StaffNamesAsync(_context, orders.Select(o => o.ClosedBy).Concat(orders.Select(o => o.StaffUserId)));
+            var names = await WaiterController.StaffNamesAsync(_context, orders.Select(o => o.ClosedBy));
 
             return Ok(orders.Select(o =>
             {
@@ -101,8 +99,6 @@ namespace Cafe.API.Controllers
                     o.DeliveryPrice,
                     o.ClosedAt,
                     closedBy = o.ClosedBy == null ? null : names.GetValueOrDefault(o.ClosedBy.Value),
-                    staffName = o.StaffUserId == null ? null : names.GetValueOrDefault(o.StaffUserId.Value),
-                    o.StaffReason,
                     pendingVoids = pending.GetValueOrDefault(o.Id),
                     canClose = o.ClosedAt == null && o.Status != OrderStatuses.Cancelled && Handed.Contains(o.Status),
                     fiscal = last == null ? null : new { last.Kind, last.Status, last.Error, last.FiscalDocumentNumber, sold = FiscalService.IsSold(mine) },
@@ -110,7 +106,7 @@ namespace Cafe.API.Controllers
             }));
         }
 
-        // POST: api/site-orders/{id}/close — заказ выдан/доставлен: оплата, чек в АТОЛ или на сотрудника
+        // POST: api/site-orders/{id}/close — заказ выдан/доставлен: оплата и чек в АТОЛ
         [HttpPost("{id:int}/close")]
         public async Task<IActionResult> Close(int id, [FromBody] CloseRequest r)
         {
@@ -124,21 +120,12 @@ namespace Cafe.API.Controllers
 
             var method = r.PaymentMethod?.Trim().ToLowerInvariant();
             var fiscalOn = await _fiscal.EnabledAsync();
-            string? staffName = null;
             var now = DateTime.UtcNow;
 
             if (order.PaymentMethod == "online")
             {
                 if (order.PaymentStatus != "paid") return BadRequest(new { message = "Онлайн-оплата не прошла" });
                 if (method is not ("online" or null or "")) return BadRequest(new { message = "Заказ оплачен онлайн — способ оплаты не меняется" });
-            }
-            else if (method == CheckPayments.Staff)
-            {
-                r.StaffUserId ??= User.GetUserId();
-                var reason = r.StaffReason?.Trim();
-                if (string.IsNullOrEmpty(reason)) reason = WaiterController.StaffReasons[0];
-                order.PaymentMethod = CheckPayments.Staff;
-                order.StaffReason = reason.Length > 60 ? reason[..60] : reason;
             }
             else if (method is CheckPayments.Cash or CheckPayments.Card)
             {
@@ -171,11 +158,8 @@ namespace Cafe.API.Controllers
             var final = order.DeliveryType == "Доставка" ? OrderStatuses.Delivered : OrderStatuses.Completed;
             if (!OrderStatuses.IsCompleted(order.Status)) await _statusService.ChangeStatusAsync(order, final);
 
-            _logger.LogInformation("📦 Заказ с сайта #{OrderId} закрыт: {Total} ₽ ({Method}{Staff}), закрыл {User}", id, order.Total, order.PaymentMethod,
-                staffName == null ? "" : $": {staffName}", User.GetUserId());
+            _logger.LogInformation("📦 Заказ с сайта #{OrderId} закрыт: {Total} ₽ ({Method}), закрыл {User}", id, order.Total, order.PaymentMethod, User.GetUserId());
 
-            if (order.PaymentMethod == CheckPayments.Staff)
-                return Ok(new { id, fiscal = (object?)null, fiscalSkipped = "staff", staff = staffName });
             if (order.PaymentMethod == "online" && !OnlineViaAtol)
                 return Ok(new { id, fiscal = (object?)null, fiscalSkipped = "yookassa" });
             if (!fiscalOn)

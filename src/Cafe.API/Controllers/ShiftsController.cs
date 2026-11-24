@@ -181,12 +181,12 @@ namespace Cafe.API.Controllers
 
         // POST: api/shifts/venue/close — закрыть смену заведения (открытых счетов быть не должно)
         public record BanquetRow(int Id, string CustomerName, DateTime EventAt, decimal Total, DateTime? ClosedAt, string? ClosedBy,
-            decimal Cash, decimal Card, decimal Staff, decimal Prepaid);
+            decimal Cash, decimal Card, decimal Prepaid);
 
         public class BanquetTotals
         {
             public static readonly BanquetTotals Empty = new();
-            public decimal Cash, Card, Staff;
+            public decimal Cash, Card;
             public int Closed;
             public List<BanquetRow> List = new();
         }
@@ -217,7 +217,6 @@ namespace Cafe.API.Controllers
                 {
                     if (p.Method == CheckPayments.Cash) t.Cash += p.Amount;
                     else if (p.Method == CheckPayments.Card) t.Card += p.Amount;
-                    else if (p.Method == CheckPayments.Staff) t.Staff += p.Amount;
                 }
                 foreach (var b in closed.Where(b => b.ClosedAt >= s.OpenedAt && b.ClosedAt <= end).OrderBy(b => b.ClosedAt))
                 {
@@ -225,16 +224,15 @@ namespace Cafe.API.Controllers
                     t.List.Add(new BanquetRow(b.Id, b.CustomerName, b.EventAt, b.Total, b.ClosedAt, b.ClosedBy == null ? null : names.GetValueOrDefault(b.ClosedBy.Value),
                         mine.Where(p => p.Kind != BanquetPaymentKinds.Prepay && p.Method == CheckPayments.Cash).Sum(p => p.Amount),
                         mine.Where(p => p.Kind != BanquetPaymentKinds.Prepay && p.Method == CheckPayments.Card).Sum(p => p.Amount),
-                        mine.Where(p => p.Method == CheckPayments.Staff).Sum(p => p.Amount),
-                        mine.Where(p => p.Kind == BanquetPaymentKinds.Prepay && p.Method != CheckPayments.Staff).Sum(p => p.Amount)));
+                        mine.Where(p => p.Kind == BanquetPaymentKinds.Prepay && p.Method != CheckPayments.LegacyStaff).Sum(p => p.Amount)));
                 }
                 t.Closed = t.List.Count;
-                if (t.Cash != 0 || t.Card != 0 || t.Staff != 0 || t.Closed > 0) result[s.Id] = t;
+                if (t.Cash != 0 || t.Card != 0 || t.Closed > 0) result[s.Id] = t;
             }
             return result;
         }
 
-        // GET: api/shifts/venue/report — итоги текущей смены перед закрытием: нал, безнал, Наличные (Принтер), возвраты
+        // GET: api/shifts/venue/report — итоги текущей смены перед закрытием: нал, безнал, возвраты
         [HttpGet("venue/report")]
         [HasPermission(Permissions.Shift)]
         public async Task<IActionResult> VenueReport()
@@ -255,7 +253,6 @@ namespace Cafe.API.Controllers
                 checks = closed.Count,
                 cash = live.Where(c => c.PaymentMethod == CheckPayments.Cash).Sum(c => c.Total),
                 card = live.Where(c => c.PaymentMethod == CheckPayments.Card).Sum(c => c.Total),
-                staff = live.Where(c => c.PaymentMethod == CheckPayments.Staff).Sum(c => c.Total),
                 refunds = closed.Where(c => refunds.Checks.Contains(c.Id)).Sum(c => c.Total),
                 open = open.Count,
                 openTotal = openTotals.Values.Sum(),
@@ -272,7 +269,6 @@ namespace Cafe.API.Controllers
                 cash = siteLive.Where(o => o.PaymentMethod == CheckPayments.Cash).Sum(o => o.Total),
                 card = siteLive.Where(o => o.PaymentMethod == CheckPayments.Card).Sum(o => o.Total),
                 online = siteLive.Where(o => o.PaymentMethod == "online").Sum(o => o.Total),
-                staff = siteLive.Where(o => o.PaymentMethod == CheckPayments.Staff).Sum(o => o.Total),
                 refunds = siteOrders.Where(o => refunds.Orders.Contains(o.Id)).Sum(o => o.Total),
             };
 
@@ -284,7 +280,6 @@ namespace Cafe.API.Controllers
                 payments = pays.Count,
                 cash = pays.Where(p => p.Method == CheckPayments.Cash).Sum(p => p.Amount),
                 card = pays.Where(p => p.Method == CheckPayments.Card).Sum(p => p.Amount),
-                staff = pays.Where(p => p.Method == CheckPayments.Staff).Sum(p => p.Amount),
             };
 
             var cash = hall.cash + site.cash + banquets.cash;
@@ -302,9 +297,8 @@ namespace Cafe.API.Controllers
                     cash,
                     card,
                     online = site.online,
-                    staff = hall.staff + site.staff + banquets.staff,
                     refunds = hall.refunds + site.refunds,
-                    revenue = cash + card + site.online + hall.staff + site.staff + banquets.staff,
+                    revenue = cash + card + site.online,
                 },
             });
         }
@@ -435,10 +429,10 @@ namespace Cafe.API.Controllers
                     ShiftId = g.Key,
                     Checks = g.Count(),
                     Open = g.Count(c => c.Status == CheckStatuses.Open),
-                    Revenue = g.Sum(c => c.Status == CheckStatuses.Closed && !refunded.Contains(c.Id) ? c.Total : 0m),
+                    // Старые счета «на сотрудника» (без оплаты) — не выручка, как в аналитике
+                    Revenue = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.LegacyStaff && !refunded.Contains(c.Id) ? c.Total : 0m),
                     Cash = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Cash && !refunded.Contains(c.Id) ? c.Total : 0m),
                     Card = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Card && !refunded.Contains(c.Id) ? c.Total : 0m),
-                    Staff = g.Sum(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff && c.RefundedAt == null ? c.Total : 0m),
                     Refunds = g.Sum(c => c.Status == CheckStatuses.Closed && refunded.Contains(c.Id) ? c.Total : 0m),
                 })
                 .ToDictionaryAsync(x => x.ShiftId);
@@ -464,13 +458,12 @@ namespace Cafe.API.Controllers
                     waiters = waiters.GetValueOrDefault(s.Id),
                     checks = x?.Checks ?? 0,
                     openChecks = x?.Open ?? 0,
-                    revenue = (x?.Revenue ?? 0) + b.Cash + b.Card + b.Staff,
+                    revenue = (x?.Revenue ?? 0) + b.Cash + b.Card,
                     cash = (x?.Cash ?? 0) + b.Cash,
                     card = (x?.Card ?? 0) + b.Card,
-                    staff = (x?.Staff ?? 0) + b.Staff,
                     refunds = x?.Refunds ?? 0,
                     banquets = b.Closed,
-                    banquetRevenue = b.Cash + b.Card + b.Staff,
+                    banquetRevenue = b.Cash + b.Card,
                 };
             }));
         }
@@ -485,9 +478,8 @@ namespace Cafe.API.Controllers
             var checks = await _context.TableChecks.AsNoTracking().Include(c => c.Table).Where(c => c.VenueShiftId == id).OrderBy(c => c.OpenedAt).ToListAsync();
             var waiters = await _context.WaiterShifts.AsNoTracking().Where(w => w.VenueShiftId == id && w.ApprovedAt != null).OrderBy(w => w.OpenedAt).ToListAsync();
             var names = await WaiterController.StaffNamesAsync(_context,
-                waiters.Select(w => (int?)w.UserId).Concat(waiters.Select(w => w.ApprovedBy)).Concat(checks.Select(c => c.WaiterId)).Concat(checks.Select(c => c.StaffUserId)).Concat(checks.Select(c => c.PaymentChangedBy)).Concat(checks.Select(c => c.RefundedBy))
+                waiters.Select(w => (int?)w.UserId).Concat(waiters.Select(w => w.ApprovedBy)).Concat(checks.Select(c => c.WaiterId)).Concat(checks.Select(c => c.PaymentChangedBy)).Concat(checks.Select(c => c.RefundedBy))
                     .Append(s.OpenedByUserId).Append(s.ClosedByUserId));
-            var staffChecks = checks.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod == CheckPayments.Staff && c.RefundedAt == null).ToList();
             var openTotals = await OpenTotalsAsync(checks.Where(c => c.Status == CheckStatuses.Open).Select(c => c.Id).ToList());
             var ids = checks.Select(c => (int?)c.Id).ToList();
             var receipts = await _context.FiscalReceipts.AsNoTracking().Where(r => ids.Contains(r.CheckId)).OrderBy(r => r.Id).ToListAsync();
@@ -537,20 +529,12 @@ namespace Cafe.API.Controllers
                         w.ClosedAt,
                         approvedBy = w.ApprovedBy == null || w.ApprovedBy == w.UserId ? null : names.GetValueOrDefault(w.ApprovedBy.Value),
                         checks = mine.Count,
-                        revenue = mine.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.Staff && !Refunded(c.Id)).Sum(c => c.Total),
+                        revenue = mine.Where(c => c.Status == CheckStatuses.Closed && c.PaymentMethod != CheckPayments.LegacyStaff && !Refunded(c.Id)).Sum(c => c.Total),
                     };
                 }),
-                // На сотрудников: без оплаты и без чека — суммы к удержанию по людям
-                staff = staffChecks.GroupBy(c => c.StaffUserId ?? 0).Select(g => new
-                {
-                    userId = g.Key,
-                    name = names.GetValueOrDefault(g.Key) ?? "—",
-                    checks = g.Count(),
-                    total = g.Sum(c => c.Total),
-                }).OrderByDescending(x => x.total),
                 // Банкеты, закрытые в эту смену, и деньги по банкетам, внесённые за смену
                 banquets = bq.List,
-                banquetMoney = new { cash = bq.Cash, card = bq.Card, staff = bq.Staff },
+                banquetMoney = new { cash = bq.Cash, card = bq.Card },
                 checks = checks.Select(c => new
                 {
                     c.Id,
@@ -564,8 +548,6 @@ namespace Cafe.API.Controllers
                     c.OpenedAt,
                     c.ClosedAt,
                     c.PaymentMethod,
-                    staffName = c.StaffUserId == null ? null : names.GetValueOrDefault(c.StaffUserId.Value),
-                    c.StaffReason,
                     c.PaymentWas,
                     paymentChangedBy = c.PaymentChangedBy == null ? null : names.GetValueOrDefault(c.PaymentChangedBy.Value),
                     c.PaymentChangedAt,

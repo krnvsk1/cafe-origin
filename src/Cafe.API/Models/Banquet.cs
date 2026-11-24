@@ -170,7 +170,7 @@ namespace Cafe.API.Models
         [Column("kind")]
         public string Kind { get; set; } = BanquetPaymentKinds.Prepay;
 
-        /// <summary>cash, card или staff</summary>
+        /// <summary>cash или card</summary>
         [Required]
         [MaxLength(20)]
         [Column("method")]
@@ -179,6 +179,7 @@ namespace Cafe.API.Models
         [Column("amount", TypeName = "numeric(12,2)")]
         public decimal Amount { get; set; }
 
+        /// <summary>Исторические данные: оплата «на сотрудника» убрана, новые записи не создаются</summary>
         [Column("staff_user_id")]
         public int? StaffUserId { get; set; }
 

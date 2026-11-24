@@ -6,32 +6,10 @@ import {
   ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
 import type { Dish } from '../types';
+import type { MenuSection } from '../utils/menuSections';
 
 /** Раздел витрины: название (поле category карточек) и карточки по порядку */
-export interface MenuSection {
-  name: string;
-  cards: Dish[];
-}
-
 const NO_SECTION = 'Без раздела';
-
-/** Разделы в порядке витрины: по первой карточке, карточки — по sortOrder */
-export const buildSections = (parents: Dish[]): MenuSection[] => {
-  const sorted = [...parents].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
-  const map = new Map<string, Dish[]>();
-  sorted.forEach(p => {
-    const key = p.category?.trim() ?? '';
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(p);
-  });
-  return Array.from(map, ([name, cards]) => ({ name, cards }));
-};
-
-/** Сквозная нумерация: порядок разделов на витрине задаётся первой карточкой раздела */
-export const toReorderItems = (sections: MenuSection[]) =>
-  sections
-    .flatMap(s => s.cards.map(c => ({ id: c.id, category: s.name })))
-    .map((c, i) => ({ ...c, sortOrder: (i + 1) * 10 }));
 
 type Drag =
   | { kind: 'section'; from: number }

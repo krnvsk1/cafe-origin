@@ -20,7 +20,8 @@ import {
   useFiscalState, fiscalShift, fiscalSell, fiscalReturn, SHIFT_TEXT, type FiscalReceiptResult,
 } from '../api/fiscal';
 import ProductModal from '../components/ProductModal';
-import DiscountDialog, { discountOf, type DiscountType } from '../components/DiscountDialog';
+import DiscountDialog from '../components/DiscountDialog';
+import { discountOf, type DiscountType } from '../utils/discount';
 import { useCan, P } from '../auth/permissions';
 import FullscreenButton from '../components/FullscreenButton';
 import { useIsFullscreen, useWorkScreen } from '../hooks/useFullscreen';

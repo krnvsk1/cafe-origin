@@ -75,10 +75,8 @@ namespace Cafe.API.Controllers
 
         public class CloseRequest
         {
-            /// <summary>Остаток: cash, card или staff (на сотрудника — без оплаты)</summary>
+            /// <summary>Остаток: cash или card</summary>
             public string Method { get; set; } = "cash";
-            public int? StaffUserId { get; set; }
-            public string? StaffReason { get; set; }
         }
 
         public class CancelRequest
@@ -157,9 +155,8 @@ namespace Cafe.API.Controllers
             var orderIds = items.Where(i => i.OrderId != null).Select(i => i.OrderId!.Value).Distinct().ToList();
             var orderStatus = await _context.Orders.AsNoTracking().Where(o => orderIds.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.Status);
             var names = await WaiterController.StaffNamesAsync(_context,
-                payments.Select(p => p.CreatedBy).Concat(payments.Select(p => p.StaffUserId)).Append(b.CreatedBy).Append(b.ClosedBy).Append(b.DiscountBy));
+                payments.Select(p => p.CreatedBy).Append(b.CreatedBy).Append(b.ClosedBy).Append(b.DiscountBy));
             var t = BanquetService.Totals(b, items, payments);
-            var fo = await _fiscalSettings.GetAsync();
             var table = b.TableId == null ? null : await _context.DiningTables.AsNoTracking().Where(x => x.Id == b.TableId).Select(x => x.Name).FirstOrDefaultAsync();
 
             return Ok(new
@@ -183,19 +180,13 @@ namespace Cafe.API.Controllers
                     var last = mine.LastOrDefault();
                     return new
                     {
-                        p.Id, p.Kind, p.Method, p.Amount, p.CreatedAt, p.RefundedAt, p.StaffReason,
-                        staffName = p.StaffUserId == null ? null : names.GetValueOrDefault(p.StaffUserId.Value),
+                        p.Id, p.Kind, p.Method, p.Amount, p.CreatedAt, p.RefundedAt,
                         createdBy = p.CreatedBy == null ? null : names.GetValueOrDefault(p.CreatedBy.Value),
                         fiscal = last == null ? null : new { last.Id, last.Kind, last.Status, last.Error, last.FiscalDocumentNumber, sold = FiscalService.IsSold(mine) },
                     };
                 }),
                 canDiscount = b.Status == BanquetStatuses.Open && User.HasPermission(Permissions.Discounts),
-                staffAllowed = fo.StaffChecks,
-                staff = fo.StaffChecks && b.Status == BanquetStatuses.Open
-                    ? (await WaiterController.StaffListAsync(_context)).OrderBy(x => x.Value).Select(x => new { id = x.Key, name = x.Value }).ToList()
-                    : null,
-                me = User.GetUserId(),
-                fiscalEnabled = fo.Enabled,
+                fiscalEnabled = (await _fiscalSettings.GetAsync()).Enabled,
                 printEnabled = (await _print.SettingsAsync()).Enabled,
             });
         }
@@ -434,7 +425,7 @@ namespace Cafe.API.Controllers
             return (list, prepaid + cash + card);
         }
 
-        // POST: api/banquets/{id}/close — расчёт: остаток наличными, картой или на сотрудника; чек с зачётом предоплаты
+        // POST: api/banquets/{id}/close — расчёт: остаток наличными или картой; чек с зачётом предоплаты
         [HttpPost("{id:int}/close")]
         public async Task<IActionResult> Close(int id, [FromBody] CloseRequest r)
         {
@@ -452,14 +443,13 @@ namespace Cafe.API.Controllers
                 return BadRequest(new { message = "Касса ещё не ответила по чеку предоплаты — сначала проверьте его" });
 
             var method = r.Method?.Trim().ToLowerInvariant();
-            if (method is not (CheckPayments.Cash or CheckPayments.Card or CheckPayments.Staff)) return BadRequest(new { message = "Выберите способ оплаты" });
-            string? staffName = null, staffReason = null;
+            if (method is not (CheckPayments.Cash or CheckPayments.Card)) return BadRequest(new { message = "Выберите способ оплаты" });
 
             var final = new BanquetPayment
             {
                 BanquetId = id, Kind = BanquetPaymentKinds.Final,
                 Method = t.Due > 0 ? method! : "prepaid",
-                Amount = t.Due, StaffUserId = staffName == null ? null : r.StaffUserId, StaffReason = staffReason,
+                Amount = t.Due,
                 CreatedAt = DateTime.UtcNow, CreatedBy = User.GetUserId(),
             };
             _context.BanquetPayments.Add(final);
@@ -475,17 +465,18 @@ namespace Cafe.API.Controllers
             await _context.SaveChangesAsync();
             _logger.LogInformation("🎉 Банкет #{Id} закрыт: {Total} ₽, предоплата {Prepaid}, остаток {Due} ({Method})", id, t.Total, t.Prepaid, t.Due, final.Method);
 
-            // Один чек на всё, что заплатили деньгами: предоплаты и остаток (часть на сотрудника — без чека)
+            // Один чек на всё, что заплатили: предоплаты и остаток
             var (pays, fiscalSum) = await FinalPaymentsAsync(id, payments, final);
             object? fiscal = null;
             string? skipped = null;
-            if (fiscalSum <= 0) skipped = "staff";
-            else
+            // Сумма к оплате нулевая (остатка нет, предоплаты без денег) — чек ККТ не нужен
+            if (fiscalSum > 0)
             {
                 fiscal = await FiscalSellAsync(b, final, BanquetService.FinalLines(items, t, fiscalSum), pays.Any(x => x.Item1 == "cash") ? "cash" : "card", pays);
                 if (fiscal == null) skipped = "disabled";
             }
-            return Ok(new { t.Total, t.Prepaid, t.Due, fiscal, fiscalSkipped = skipped, staff = staffName });
+            else skipped = "empty";
+            return Ok(new { t.Total, t.Prepaid, t.Due, fiscal, fiscalSkipped = skipped });
         }
 
         // POST: api/banquets/receipts/{receiptId}/retry — пробить (проверить) чек банкета, который не пробился

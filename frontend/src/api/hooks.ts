@@ -288,7 +288,7 @@ export const useDeleteImage = () => {
     mutationFn: async (imageId: number) => {
       await apiClient.delete(`/api/image/${imageId}`);
     },
-    onSuccess: (_) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dishes'] });
     },
   });

@@ -50,7 +50,9 @@ import {
 } from '../api/hooks';
 import type { CreateDishDto, Dish, DishImage } from '../types';
 import { resolveMediaUrl } from '../utils/media';
-import MenuItemCard, { BADGES } from '../components/MenuItemCard';
+import MenuItemCard from '../components/MenuItemCard';
+import { BADGES } from '../utils/menuBadges';
+import { apiError } from '../api/inventory';
 import { tokens } from '../theme';
 import { ORDER_TYPES, describeOrderTypes } from '../utils/orderTypes';
 
@@ -403,8 +405,8 @@ const CreateMenuItemPage: React.FC = () => {
       await deleteImage.mutateAsync(imageId);
       await refetchImages();
       showSnackbar('Фото удалено', 'success');
-    } catch (error: any) {
-      showSnackbar(`Не удалось удалить фото: ${error.message}`, 'error');
+    } catch (error: unknown) {
+      showSnackbar(`Не удалось удалить фото: ${apiError(error)}`, 'error');
     }
   };
 
@@ -449,9 +451,8 @@ const CreateMenuItemPage: React.FC = () => {
       }
       setSaved(true);
       setTimeout(() => navigate('/admin/menu'), 900);
-    } catch (error: any) {
-      const message = error?.response?.data?.message || error?.response?.data?.Message || error.message;
-      showSnackbar(`Не удалось сохранить: ${message || 'неизвестная ошибка'}`, 'error');
+    } catch (error: unknown) {
+      showSnackbar(`Не удалось сохранить: ${apiError(error, 'неизвестная ошибка')}`, 'error');
     }
   };
 
@@ -462,9 +463,9 @@ const CreateMenuItemPage: React.FC = () => {
       showSnackbar('Блюдо удалено', 'success');
       setSaved(true);
       setTimeout(() => navigate('/admin/menu'), 900);
-    } catch (error: any) {
+    } catch (error: unknown) {
       setConfirmDelete(false);
-      showSnackbar(`Не удалось удалить: ${error.message}`, 'error');
+      showSnackbar(`Не удалось удалить: ${apiError(error)}`, 'error');
     }
   };
 

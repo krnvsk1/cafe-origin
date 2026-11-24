@@ -4,7 +4,8 @@ import { ChevronLeft as PrevIcon, ChevronRight as NextIcon } from '@mui/icons-ma
 import type { PaymentRow } from '../../api/finance';
 import { fmtMoney } from '../../api/inventory';
 import { tokens } from '../../theme';
-import { plural } from '../../components/CartPanel';
+import { plural } from '../../utils/plural';
+import { dateKey } from '../../utils/period';
 
 const DOC_FORMS: [string, string, string] = ['накладная', 'накладные', 'накладных'];
 
@@ -16,9 +17,6 @@ const SOON_DAYS = 7;
 // В клетке мало места — суммы коротко: «20,2 тыс.»
 const compact = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 });
 const monthTitle = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' });
-
-/** Ключ даты «2026-10-26» — сравниваем строками, без часовых поясов */
-export const dateKey = (iso: string) => iso.slice(0, 10);
 
 const keyOf = (year: number, month: number, day: number) =>
   `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
